@@ -1,0 +1,434 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#E8DDCD" />
+    <title>MS-708 — Manage relationships on Relations Viewer (prototype)</title>
+
+    <link rel="stylesheet" href="../../../public/fonts.css" />
+    <link rel="stylesheet" href="../../../public/mosaic.css" />
+
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="stylesheet"
+        href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" />
+    <link rel="stylesheet"
+        href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400..900&amp;family=EB+Garamond:ital,wght@0,400..800;1,400..800&amp;family=Libre+Franklin:ital,wght@0,100..900;1,100..900&amp;display=swap" />
+
+    <style>
+        @font-face { font-family: 'Proto EB Garamond'; font-style: normal; font-weight: 400 800; font-display: swap;
+            src: url(https://raw.githubusercontent.com/JonathanHarris15/mosaic-website/main/public/fonts/files/SlGUmQSNjdsmc35JDF1K5GR1SDk.woff2) format('woff2'); }
+        @font-face { font-family: 'Proto Libre Franklin'; font-style: normal; font-weight: 300 700; font-display: swap;
+            src: url(https://raw.githubusercontent.com/JonathanHarris15/mosaic-website/main/public/fonts/files/jizDREVItHgc8qDIbSTKq4XkRiUf2zc.woff2) format('woff2'); }
+        @font-face { font-family: 'Proto Cinzel'; font-style: normal; font-weight: 400 800; font-display: swap;
+            src: url(https://raw.githubusercontent.com/JonathanHarris15/mosaic-website/main/public/fonts/files/8vIJ7ww63mVu7gt79mT7.woff2) format('woff2'); }
+        html:root {
+            --font-serif: 'Proto EB Garamond', 'EB Garamond', Georgia, serif;
+            --font-sans: 'Proto Libre Franklin', 'Libre Franklin', system-ui, sans-serif;
+            --font-display: 'Proto Cinzel', 'Cinzel', Georgia, serif;
+        }
+
+        .proto-body { margin: 0; background: var(--surface-container-highest); color: var(--on-background);
+            font-family: var(--font-sans); font-size: var(--body-md-size); line-height: var(--body-md-line);
+            -webkit-font-smoothing: antialiased; }
+        .proto-skip { position: absolute; left: var(--space-sm); top: -3rem; z-index: 100; padding: var(--space-base) var(--space-sm);
+            border-radius: var(--radius); background: var(--primary); color: var(--on-primary); font-weight: 600; text-decoration: none; }
+        .proto-skip:focus-visible { top: var(--space-sm); outline: 2px solid var(--tertiary); outline-offset: 2px; }
+        .proto-bar { padding: var(--space-sm) var(--space-md); background: var(--primary); color: var(--on-primary); }
+        .proto-bar__title { margin: 0; font-family: var(--font-serif); font-size: var(--headline-md-size); font-weight: var(--headline-md-weight); }
+        .proto-bar__sub { margin: 4px 0 0; color: var(--primary-fixed-dim); font-size: 14px; max-width: 72ch; }
+        .proto-jump { display: flex; flex-wrap: wrap; gap: var(--space-base); margin-top: var(--space-sm); }
+        .proto-jump a { padding: 6px 12px; border: 1px solid var(--primary-fixed-dim); border-radius: var(--radius-full);
+            color: var(--on-primary); font-size: 13px; font-weight: 600; text-decoration: none; }
+        .proto-jump a:hover { background: var(--primary-fixed); color: var(--primary); }
+        .proto-main { max-width: 1320px; margin: 0 auto; padding: var(--space-md) var(--space-sm) var(--space-xl); }
+        .proto-section { margin-top: var(--space-lg); scroll-margin-top: var(--space-md); }
+        .proto-section > h2 { margin: 0 0 var(--space-xs); font-family: var(--font-serif); font-size: var(--headline-lg-size);
+            color: var(--primary); text-wrap: balance; }
+        .proto-note { max-width: 70ch; margin: 0 0 var(--space-sm); font-size: 15px; color: var(--on-surface-variant); line-height: 1.55; }
+        .proto-stage { background: var(--background); border: 1px solid var(--outline-variant); border-radius: var(--radius-xl);
+            overflow: hidden; }
+        .proto-stage__label { display: block; margin: 0; padding: var(--space-xs) var(--space-sm); font-size: var(--label-xs-size);
+            font-weight: var(--label-xs-weight); letter-spacing: var(--label-xs-spacing); color: var(--on-surface-variant);
+            background: var(--surface-container-low); border-bottom: 1px solid var(--outline-variant); }
+        .proto-ask { margin: var(--space-sm) 0 0; padding-left: 1.25rem; max-width: 72ch; }
+        .proto-ask li { margin-bottom: var(--space-xs); line-height: 1.5; }
+
+        .msy { font-family: 'Material Symbols Outlined'; font-weight: normal; font-style: normal; line-height: 1;
+            letter-spacing: normal; text-transform: none; display: inline-block; white-space: nowrap; direction: ltr;
+            -webkit-font-feature-settings: 'liga'; font-feature-settings: 'liga'; vertical-align: middle; }
+
+        /* ── Relations Viewer shell (matches shipped viewer density) ── */
+        .rv-tool { display: flex; flex-direction: column; height: min(720px, 85vh); min-height: 420px;
+            background: var(--background); font-family: var(--font-sans); color: var(--on-surface); }
+        .rv-tool__bar { flex: 0 0 auto; height: 56px; display: flex; align-items: center; gap: 14px; padding: 0 16px;
+            background: var(--surface-container-lowest); border-bottom: 1px solid var(--outline-variant); }
+        .rv-tool__back { width: 36px; height: 36px; border: 1px solid var(--outline-variant); border-radius: 9px;
+            background: var(--surface-container-lowest); color: var(--primary); display: inline-flex; align-items: center; justify-content: center; }
+        .rv-tool__title { margin: 0; font-family: var(--font-display); font-size: 18px; font-weight: 600; color: var(--primary); }
+        .rv-tool__sub { font-size: 9px; font-weight: 600; letter-spacing: .14em; text-transform: uppercase; color: var(--on-surface-variant); }
+        .rv-tool__search { flex: 1; max-width: 360px; margin: 0 auto; position: relative; }
+        .rv-tool__search input { width: 100%; height: 38px; padding: 0 12px 0 36px; border: 1px solid var(--outline-variant);
+            border-radius: 9px; background: var(--surface-container-low); font-size: 13px; font-weight: 500; color: var(--primary); }
+        .rv-tool__search .msy { position: absolute; left: 10px; top: 50%; transform: translateY(-50%); font-size: 18px; color: var(--on-surface-variant); }
+        .rv-tool__body { flex: 1 1 auto; display: flex; min-height: 0; position: relative; }
+        .rv-rail { flex: 0 0 260px; width: 260px; overflow: auto; background: var(--surface-container-lowest);
+            border-right: 1px solid var(--outline-variant); padding: 14px 12px 18px; font-size: 12.5px; }
+        .rv-rail h3 { margin: 0 0 8px; font-size: 10px; font-weight: 600; letter-spacing: .14em; text-transform: uppercase;
+            color: var(--on-surface-variant); }
+        .rv-graph { flex: 1 1 auto; position: relative; min-width: 0; background: var(--surface-container-low); overflow: hidden; }
+        .rv-graph__fake { position: absolute; inset: 0; opacity: .92; }
+        .rv-panel { flex: 0 0 320px; width: 320px; overflow: auto; background: var(--surface-container-lowest);
+            border-left: 1px solid var(--outline-variant); }
+        .rv-panel--wide { flex: 0 0 400px; width: 400px; }
+        .rv-panel__tabs { display: flex; gap: 4px; padding: 10px 12px 0; border-bottom: 1px solid var(--outline-variant); }
+        .rv-panel__tab { flex: 1; border: none; background: transparent; padding: 8px 6px 10px; font-size: 10px;
+            font-weight: 600; letter-spacing: .1em; text-transform: uppercase; color: var(--on-surface-variant); cursor: pointer;
+            border-bottom: 2px solid transparent; margin-bottom: -1px; }
+        .rv-panel__tab[aria-selected="true"] { color: var(--primary); border-bottom-color: var(--primary); }
+        .rv-panel__tab:focus-visible { outline: 2px solid var(--tertiary); outline-offset: 2px; }
+        .rv-chip { display: inline-flex; align-items: center; gap: 3px; padding: 2px 7px; border-radius: 4px;
+            font-size: 10.5px; font-weight: 600; background: var(--secondary-container); color: var(--on-secondary-container); }
+        .rv-row { display: flex; align-items: center; gap: 8px; padding: 7px 8px; border-radius: 8px; font-size: 13px; }
+        .rv-row--sel { background: var(--surface-container-low); border: 1px solid var(--outline-variant); }
+        .rv-avatar { width: 28px; height: 28px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center;
+            font-size: 10px; font-weight: 600; flex-shrink: 0; }
+        .rv-avatar--navy { background: var(--primary); color: var(--on-primary); }
+        .rv-avatar--ocean { background: var(--tertiary); color: var(--on-tertiary); }
+        .rv-manage-cols { display: grid; grid-template-columns: 118px 1fr; gap: 8px; padding: 10px 10px 14px; min-height: 280px; }
+        .rv-types { display: flex; flex-direction: column; gap: 5px; }
+        .rv-type { padding: 8px 7px; border-radius: 8px; border: 1px solid transparent; cursor: pointer; font-size: 12.5px; }
+        .rv-type:hover { background: var(--surface-container-low); }
+        .rv-type--on { background: var(--surface-container-low); border-color: var(--outline-variant); box-shadow: inset 3px 0 0 var(--primary); }
+        .rv-manage-main { border: 1px solid var(--outline-variant); border-radius: 10px; padding: 10px; background: var(--surface-container-lowest); }
+        .rv-manage-main h4 { margin: 0 0 4px; font-family: var(--font-display); font-size: 16px; font-weight: 600; color: var(--primary); }
+        .rv-muted { font-size: 11.5px; color: var(--on-surface-variant); line-height: 1.45; }
+        .rv-btn { display: inline-flex; align-items: center; gap: 4px; border: none; border-radius: 8px; padding: 7px 11px;
+            font-size: 10px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; cursor: pointer; }
+        .rv-btn--primary { background: var(--primary); color: var(--on-primary); }
+        .rv-btn--ghost { background: transparent; border: 1px solid var(--outline-variant); color: var(--on-surface-variant); }
+        .rv-input { width: 100%; border: 1px solid var(--outline-variant); border-radius: 8px; padding: 8px 10px;
+            font-size: 13px; background: var(--surface-container-lowest); }
+        .rv-notice { display: flex; gap: 8px; padding: 8px 10px; border-radius: 8px; font-size: 12.5px;
+            background: var(--error-container); color: var(--on-error-container); border: 1px solid var(--error); }
+        .rv-empty { padding: 16px 12px; border: 1px dashed var(--outline-variant); border-radius: 8px; text-align: center;
+            font-size: 12.5px; color: var(--on-surface-variant); }
+        .rv-overlay { position: absolute; top: 0; right: 0; bottom: 0; width: min(420px, 92%); z-index: 5;
+            background: var(--surface-container-lowest); border-left: 1px solid var(--outline-variant);
+            box-shadow: -8px 0 28px rgba(14, 28, 54, .12); display: flex; flex-direction: column; }
+        .rv-overlay__head { display: flex; align-items: center; justify-content: space-between; padding: 12px 14px;
+            border-bottom: 1px solid var(--outline-variant); }
+        .rv-seg { display: flex; gap: 3px; padding: 3px; background: var(--surface-container); border-radius: 8px;
+            border: 1px solid var(--outline-variant); margin-bottom: 10px; }
+        .rv-seg button { flex: 1; border: none; background: transparent; padding: 6px 4px; font-size: 11px;
+            font-weight: 600; border-radius: 6px; color: var(--on-surface-variant); cursor: pointer; }
+        .rv-seg button[aria-pressed="true"] { background: var(--surface-container-lowest); color: var(--primary); box-shadow: 0 1px 2px rgba(14,28,54,.08); }
+        @media (max-width: 899px) {
+            .rv-rail { display: none; }
+            .rv-panel, .rv-panel--wide { flex: 0 0 100%; width: 100%; max-width: 100%; }
+            .rv-manage-cols { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+
+<body class="proto-body">
+    <a class="proto-skip" href="#main">Skip to prototype</a>
+    <header class="proto-bar">
+        <h1 class="proto-bar__title">MS-708 — Manage relationships on Relations Viewer</h1>
+        <p class="proto-bar__sub">Prototype only. Elders manage Relationship Types, pairs, and named groups (book study / Dibs spirit) from the viewer — same model and controls as Manage Tags and Relationships, not a new schema.</p>
+        <nav class="proto-jump" aria-label="Jump to sections">
+            <a href="#variant-a">A — Panel tabs</a>
+            <a href="#variant-b">B — Overlay drawer</a>
+            <a href="#variant-c">C — Rail mode switch</a>
+            <a href="#states">Data states</a>
+        </nav>
+    </header>
+
+    <main id="main" class="proto-main">
+        <p class="proto-note"><strong>Fictional congregation only.</strong> Dense desktop tool UI at ~1280px; stacks at 390px. Graph area is decorative — focus is the manage panel placement and reuse of the Relationships tab patterns.</p>
+
+        <section id="variant-a" class="proto-section" aria-labelledby="h-a">
+            <h2 id="h-a">Variant A — Right panel tabs (Profile · Manage)</h2>
+            <p class="proto-note">Keeps today’s 320px detail column. A segmented control swaps member context (read-only relationships list + existing MS-280 fields) for a compressed Relationships tab: type list + instance editor. Default tab could follow selection (member → Profile; bubble click → Manage on that type).</p>
+            <div class="proto-stage" role="region" aria-label="Variant A desktop">
+                <span class="proto-stage__label">1280×720 — member selected, Manage tab active (group type)</span>
+                <div class="rv-tool">
+                    <div class="rv-tool__bar">
+                        <span class="rv-tool__back" aria-hidden="true"><span class="msy">arrow_back</span></span>
+                        <div>
+                            <div class="rv-tool__sub">Shepherd Dashboard</div>
+                            <h2 class="rv-tool__title">Relations Viewer</h2>
+                        </div>
+                        <div class="rv-tool__search">
+                            <span class="msy" aria-hidden="true">search</span>
+                            <input type="search" aria-label="Search members" placeholder="Search a member by name…" value="Morgan Ellis" />
+                        </div>
+                        <span class="rv-muted" style="font-size:11px">48 people · 112 links</span>
+                    </div>
+                    <div class="rv-tool__body">
+                        <aside class="rv-rail" aria-label="Graph filters">
+                            <h3>View preset</h3>
+                            <div class="rv-seg" role="group" aria-label="Preset">
+                                <button type="button" aria-pressed="true">Full</button>
+                                <button type="button" aria-pressed="false">Household</button>
+                                <button type="button" aria-pressed="false">Elder</button>
+                            </div>
+                            <h3 style="margin-top:14px">Relationship types</h3>
+                            <div class="rv-row"><span style="width:14px;height:3px;background:var(--primary);border-radius:2px"></span> Family <span class="rv-muted">62</span></div>
+                            <div class="rv-row"><span style="width:14px;height:3px;background:var(--gold);border-radius:2px"></span> Book study <span class="rv-muted">4 groups</span></div>
+                        </aside>
+                        <div class="rv-graph" aria-hidden="true">
+                            <svg class="rv-graph__fake" viewBox="0 0 800 500" xmlns="http://www.w3.org/2000/svg">
+                                <ellipse cx="400" cy="260" rx="180" ry="120" fill="color-mix(in srgb, var(--gold) 18%, transparent)" stroke="var(--gold)" stroke-width="1.5" stroke-dasharray="7 5" />
+                                <circle cx="320" cy="240" r="18" fill="var(--surface-container-lowest)" stroke="var(--primary)" />
+                                <circle cx="400" cy="270" r="22" fill="var(--primary)" stroke="var(--gold)" stroke-width="2" />
+                                <circle cx="470" cy="250" r="18" fill="var(--surface-container-lowest)" stroke="var(--primary)" />
+                                <text x="400" y="400" text-anchor="middle" fill="var(--on-surface-variant)" font-size="13" font-family="var(--font-sans)">Graph canvas (unchanged)</text>
+                            </svg>
+                        </div>
+                        <aside class="rv-panel" aria-label="Member and manage panel">
+                            <div class="rv-panel__tabs" role="tablist" aria-label="Panel mode">
+                                <button type="button" class="rv-panel__tab" role="tab" aria-selected="false" id="tab-a-profile">Profile</button>
+                                <button type="button" class="rv-panel__tab" role="tab" aria-selected="true" id="tab-a-manage">Manage</button>
+                            </div>
+                            <div class="rv-manage-cols" role="tabpanel" aria-labelledby="tab-a-manage">
+                                <div class="rv-types" aria-label="Relationship types">
+                                    <button type="button" class="rv-type">Discipleship <span class="rv-muted">12</span></button>
+                                    <button type="button" class="rv-type rv-type--on">Book study <span class="rv-muted">4</span></button>
+                                    <button type="button" class="rv-type">Dibs <span class="rv-muted">2</span></button>
+                                    <button type="button" class="rv-btn rv-btn--ghost" style="margin-top:6px;width:100%;justify-content:center"><span class="msy" style="font-size:16px">add</span> New type</button>
+                                </div>
+                                <div class="rv-manage-main">
+                                    <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:8px">
+                                        <h4>Book study</h4>
+                                        <span class="rv-chip"><span class="msy" style="font-size:13px">groups</span> Group</span>
+                                        <span class="rv-chip"><span class="msy" style="font-size:13px">workspace_premium</span> Prioritized</span>
+                                    </div>
+                                    <p class="rv-muted" style="margin:0 0 10px">Leader leads members — same vocabulary as Manage Tags and Relationships.</p>
+                                    <div style="display:flex;gap:6px;margin-bottom:10px">
+                                        <input class="rv-input" type="text" aria-label="New group name" placeholder="New group name — e.g. Tuesday cohort" value="North hall cohort" />
+                                        <button type="button" class="rv-btn rv-btn--primary" style="flex-shrink:0">Create</button>
+                                    </div>
+                                    <article style="border:1px solid var(--outline-variant);border-radius:8px;overflow:hidden">
+                                        <header style="display:flex;justify-content:space-between;align-items:center;padding:8px 10px;background:var(--surface-container-low);border-bottom:1px solid var(--outline-variant)">
+                                            <strong style="font-size:13px">North hall cohort</strong>
+                                            <button type="button" class="rv-btn rv-btn--ghost" style="padding:4px 8px" aria-label="Delete group"><span class="msy">delete</span></button>
+                                        </header>
+                                        <div style="padding:8px 10px">
+                                            <div class="rv-muted" style="font-size:10px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;margin-bottom:6px">Leader</div>
+                                            <div class="rv-row rv-row--sel">
+                                                <span class="rv-avatar rv-avatar--navy">ME</span>
+                                                <span style="font-weight:600;font-size:13px">Morgan Ellis</span>
+                                                <button type="button" class="rv-btn rv-btn--ghost" style="margin-left:auto;padding:4px 7px;font-size:9px">Change</button>
+                                            </div>
+                                            <div class="rv-muted" style="font-size:10px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;margin:10px 0 6px">Members</div>
+                                            <div class="rv-row"><span class="rv-avatar rv-avatar--ocean">AR</span> Avery Reed <button type="button" class="rv-btn rv-btn--ghost" style="margin-left:auto;padding:2px 6px" aria-label="Remove Avery"><span class="msy" style="font-size:16px">close</span></button></div>
+                                            <div class="rv-row"><span class="rv-avatar rv-avatar--ocean">JL</span> Jordan Lee <button type="button" class="rv-btn rv-btn--ghost" style="margin-left:auto;padding:2px 6px" aria-label="Remove Jordan"><span class="msy" style="font-size:16px">close</span></button></div>
+                                            <button type="button" class="rv-btn rv-btn--ghost" style="margin-top:8px;width:100%;justify-content:center"><span class="msy">person_add</span> Add member</button>
+                                        </div>
+                                    </article>
+                                </div>
+                            </div>
+                        </aside>
+                    </div>
+                </div>
+            </div>
+            <ul class="proto-ask">
+                <li>Is Profile · Manage the right split, or should manage open only from a graph affordance?</li>
+                <li>Is the nested type list too tight at 320px, or acceptable for elders who already use the manager page?</li>
+            </ul>
+        </section>
+
+        <section id="variant-b" class="proto-section" aria-labelledby="h-b">
+            <h2 id="h-b">Variant B — Manage drawer over the graph</h2>
+            <p class="proto-note">Header action <strong>Manage relationships</strong> opens a 420px drawer (does not shrink the filter rail). Profile panel can stay open on the left edge of the drawer or close — shown here with profile closed so the drawer is the focus.</p>
+            <div class="proto-stage" role="region" aria-label="Variant B desktop">
+                <span class="proto-stage__label">1280×720 — manage drawer open (pairwise type)</span>
+                <div class="rv-tool">
+                    <div class="rv-tool__bar">
+                        <span class="rv-tool__back" aria-hidden="true"><span class="msy">arrow_back</span></span>
+                        <h2 class="rv-tool__title">Relations Viewer</h2>
+                        <div class="rv-tool__search"><span class="msy" aria-hidden="true">search</span><input type="search" aria-label="Search members" placeholder="Search a member by name…" /></div>
+                        <button type="button" class="rv-btn rv-btn--primary" aria-pressed="true"><span class="msy">hub</span> Manage relationships</button>
+                    </div>
+                    <div class="rv-tool__body">
+                        <aside class="rv-rail" aria-label="Graph filters"><h3>Filters</h3><p class="rv-muted">Unchanged while drawer is open.</p></aside>
+                        <div class="rv-graph" style="position:relative">
+                            <svg class="rv-graph__fake" viewBox="0 0 800 500" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                                <line x1="200" y1="300" x2="500" y2="200" stroke="var(--tertiary)" stroke-width="2" stroke-dasharray="8 6" />
+                                <circle cx="200" cy="300" r="16" fill="var(--surface-container-lowest)" stroke="var(--primary)" />
+                                <circle cx="500" cy="200" r="16" fill="var(--surface-container-lowest)" stroke="var(--primary)" />
+                            </svg>
+                            <div class="rv-overlay" role="dialog" aria-modal="true" aria-labelledby="drawer-b-title">
+                                <div class="rv-overlay__head">
+                                    <div>
+                                        <div class="rv-muted" style="font-size:10px;font-weight:600;letter-spacing:.12em;text-transform:uppercase">Manage relationships</div>
+                                        <h3 id="drawer-b-title" style="margin:2px 0 0;font-family:var(--font-display);font-size:17px;color:var(--primary)">Same controls as the manager page</h3>
+                                    </div>
+                                    <button type="button" class="rv-btn rv-btn--ghost" aria-label="Close manage drawer"><span class="msy">close</span></button>
+                                </div>
+                                <div class="rv-manage-cols" style="flex:1;grid-template-columns:140px 1fr;padding:12px 14px 16px">
+                                    <div class="rv-types">
+                                        <button type="button" class="rv-type rv-type--on">Accountability <span class="rv-muted">8</span></button>
+                                        <button type="button" class="rv-type">Book study <span class="rv-muted">4</span></button>
+                                        <button type="button" class="rv-type">Dibs <span class="rv-muted">2</span></button>
+                                    </div>
+                                    <div class="rv-manage-main">
+                                        <h4>Accountability</h4>
+                                        <p class="rv-muted" style="margin:0 0 10px">Pairwise · Prioritized — holder → counterpart.</p>
+                                        <div style="display:flex;gap:6px;align-items:flex-end;margin-bottom:10px;flex-wrap:wrap">
+                                            <div style="flex:1;min-width:100px">
+                                                <label class="rv-muted" style="display:block;font-size:9px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;margin-bottom:4px">Holder</label>
+                                                <button type="button" class="rv-input" style="text-align:left;display:flex;align-items:center;gap:6px"><span class="rv-avatar rv-avatar--navy">ME</span> Morgan Ellis</button>
+                                            </div>
+                                            <span class="msy" style="color:var(--tertiary);padding-bottom:8px" aria-hidden="true">arrow_right_alt</span>
+                                            <div style="flex:1;min-width:100px">
+                                                <label class="rv-muted" style="display:block;font-size:9px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;margin-bottom:4px">Counterpart</label>
+                                                <button type="button" class="rv-input" style="text-align:left;color:var(--on-surface-variant)">Choose someone…</button>
+                                            </div>
+                                            <button type="button" class="rv-btn rv-btn--primary" aria-label="Add pair"><span class="msy">add</span></button>
+                                        </div>
+                                        <div class="rv-row rv-row--sel" style="margin-bottom:4px">
+                                            <span class="rv-avatar rv-avatar--navy">ME</span> Morgan Ellis
+                                            <span class="msy" style="color:var(--tertiary)">arrow_right_alt</span>
+                                            <span class="rv-avatar rv-avatar--ocean">AR</span> Avery Reed
+                                            <button type="button" class="rv-btn rv-btn--ghost" style="margin-left:auto;padding:2px 6px" aria-label="Remove pair"><span class="msy">close</span></button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <ul class="proto-ask">
+                <li>Does a drawer feel lighter than retabbing the profile column, or too disconnected from the selected node?</li>
+                <li>Should the drawer pin a link to the full Manage Tags page for type vocabulary work?</li>
+            </ul>
+        </section>
+
+        <section id="variant-c" class="proto-section" aria-labelledby="h-c">
+            <h2 id="h-c">Variant C — Left rail mode (Filters · Manage)</h2>
+            <p class="proto-note">Swaps the 260px rail between today’s toggles and a full-height manage surface; graph gains horizontal space; member detail stays in the right 320px column. Manage mode could be entered from the rail or a keyboard shortcut.</p>
+            <div class="proto-stage" role="region" aria-label="Variant C desktop">
+                <span class="proto-stage__label">1280×720 — rail in Manage mode, member profile still on the right</span>
+                <div class="rv-tool">
+                    <div class="rv-tool__bar">
+                        <span class="rv-tool__back" aria-hidden="true"><span class="msy">arrow_back</span></span>
+                        <h2 class="rv-tool__title">Relations Viewer</h2>
+                        <div class="rv-tool__search"><span class="msy" aria-hidden="true">search</span><input type="search" aria-label="Search members" placeholder="Search a member by name…" /></div>
+                    </div>
+                    <div class="rv-tool__body">
+                        <aside class="rv-rail" style="flex:0 0 300px;width:300px" aria-label="Manage relationships rail">
+                            <div class="rv-seg" role="group" aria-label="Rail mode">
+                                <button type="button" aria-pressed="false">Filters</button>
+                                <button type="button" aria-pressed="true">Manage</button>
+                            </div>
+                            <div class="rv-manage-cols" style="grid-template-columns:1fr;padding:10px 0 0;display:block">
+                                <div class="rv-types" style="flex-direction:row;flex-wrap:wrap;margin-bottom:8px">
+                                    <button type="button" class="rv-type rv-type--on">Dibs</button>
+                                    <button type="button" class="rv-type">Book study</button>
+                                    <button type="button" class="rv-type">Discipleship</button>
+                                </div>
+                                <div class="rv-manage-main">
+                                    <h4>Dibs</h4>
+                                    <p class="rv-muted" style="margin:0 0 8px">Group · Symmetric roster — spoken commitments, no new fields.</p>
+                                    <input class="rv-input" type="text" aria-label="New Dibs group name" placeholder="New group name" style="margin-bottom:8px" />
+                                    <button type="button" class="rv-btn rv-btn--primary" style="width:100%;justify-content:center;margin-bottom:10px">Create group</button>
+                                    <div class="rv-empty" style="margin-top:4px"><span class="msy" style="font-size:22px;color:var(--outline)">group_add</span><br />No groups yet for this type.</div>
+                                </div>
+                            </div>
+                        </aside>
+                        <div class="rv-graph" aria-hidden="true">
+                            <svg class="rv-graph__fake" viewBox="0 0 600 500"><text x="300" y="250" text-anchor="middle" fill="var(--on-surface-variant)" font-size="13">Wider graph</text></svg>
+                        </div>
+                        <aside class="rv-panel" aria-label="Member profile">
+                            <div style="padding:14px 16px">
+                                <div style="text-align:center;margin-bottom:12px">
+                                    <span class="rv-avatar rv-avatar--navy" style="width:56px;height:56px;font-size:15px">ME</span>
+                                    <h3 style="margin:8px 0 0;font-family:var(--font-display);font-size:18px;color:var(--primary)">Morgan Ellis</h3>
+                                </div>
+                                <div class="rv-muted" style="font-size:10px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;margin-bottom:8px">Relationships (read-only)</div>
+                                <div class="rv-row"><span style="width:8px;height:8px;border-radius:50%;background:var(--gold)"></span> North hall cohort · Member</div>
+                                <button type="button" class="rv-btn rv-btn--ghost" style="width:100%;margin-top:12px;justify-content:center">Edit in Manage →</button>
+                            </div>
+                        </aside>
+                    </div>
+                </div>
+            </div>
+            <ul class="proto-ask">
+                <li>Is losing filter toggles while managing acceptable if mode switch is obvious?</li>
+                <li>Does “Edit in Manage →” from the profile bridge the two surfaces enough?</li>
+            </ul>
+        </section>
+
+        <section id="states" class="proto-section" aria-labelledby="h-states">
+            <h2 id="h-states">Data states (manage panel excerpts)</h2>
+            <p class="proto-note">Same manage UI fragments labelled for empty, single instance, many instances, and load error — independent of variant A/B/C.</p>
+            <div class="proto-stage" style="display:grid;gap:0">
+                <span class="proto-stage__label">Four labelled states</span>
+                <div style="display:grid;gap:12px;padding:14px">
+                    <div>
+                        <strong style="font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--on-surface-variant)">Empty — no types</strong>
+                        <div class="rv-empty" style="margin-top:6px">
+                            <span class="msy" style="font-size:28px;color:var(--outline-variant)">hub</span>
+                            <p style="margin:8px 0 10px">No relationship types yet.</p>
+                            <button type="button" class="rv-btn rv-btn--primary"><span class="msy">add</span> New relationship type</button>
+                        </div>
+                    </div>
+                    <div>
+                        <strong style="font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--on-surface-variant)">One — single pair</strong>
+                        <div class="rv-manage-main" style="margin-top:6px">
+                            <h4>Mentoring</h4>
+                            <div class="rv-row rv-row--sel"><span class="rv-avatar rv-avatar--navy">SK</span> Skylar Knox <span class="msy">sync_alt</span> <span class="rv-avatar rv-avatar--ocean">TR</span> Taylor Ross</div>
+                        </div>
+                    </div>
+                    <div>
+                        <strong style="font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--on-surface-variant)">Many — group list</strong>
+                        <div class="rv-manage-main" style="margin-top:6px;display:flex;flex-direction:column;gap:6px">
+                            <div class="rv-row rv-row--sel" style="justify-content:space-between"><span>East wing cohort</span><span class="rv-muted">6 members</span></div>
+                            <div class="rv-row rv-row--sel" style="justify-content:space-between"><span>North hall cohort</span><span class="rv-muted">4 members</span></div>
+                            <div class="rv-row rv-row--sel" style="justify-content:space-between"><span>Wednesday cohort</span><span class="rv-muted">5 members</span></div>
+                        </div>
+                    </div>
+                    <div>
+                        <strong style="font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--on-surface-variant)">Error — could not load</strong>
+                        <div class="rv-notice" style="margin-top:6px" role="alert">
+                            <span class="msy" aria-hidden="true">error</span>
+                            <span>Relationships could not load. Check permissions or try again from Manage Tags and Relationships.</span>
+                            <button type="button" class="rv-btn rv-btn--ghost" style="margin-left:auto;padding:4px 8px">Dismiss</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="proto-section" aria-labelledby="h-mobile">
+            <h2 id="h-mobile">390px — Variant A (manage tab)</h2>
+            <div class="proto-stage" style="max-width:390px;margin:0 auto">
+                <span class="proto-stage__label">Phone width — rail hidden; manage tab fills width</span>
+                <div class="rv-tool" style="height:640px;min-height:640px">
+                    <div class="rv-tool__bar" style="flex-wrap:wrap;height:auto;padding:10px 12px;gap:8px">
+                        <h2 class="rv-tool__title" style="font-size:16px">Relations Viewer</h2>
+                        <div class="rv-tool__search" style="max-width:none;flex:1 1 100%"><span class="msy">search</span><input type="search" aria-label="Search" placeholder="Search…" /></div>
+                    </div>
+                    <div class="rv-tool__body" style="flex-direction:column">
+                        <div class="rv-graph" style="flex:1 1 45%;min-height:180px"><svg class="rv-graph__fake" viewBox="0 0 390 200"><circle cx="195" cy="100" r="20" fill="var(--primary)" /></svg></div>
+                        <aside class="rv-panel" style="flex:1 1 55%;width:100%;border-left:none;border-top:1px solid var(--outline-variant)">
+                            <div class="rv-panel__tabs" role="tablist"><button type="button" class="rv-panel__tab" role="tab" aria-selected="false">Profile</button><button type="button" class="rv-panel__tab" role="tab" aria-selected="true">Manage</button></div>
+                            <div style="padding:10px">
+                                <label class="rv-muted" style="font-size:10px;font-weight:600;letter-spacing:.1em;text-transform:uppercase">Type</label>
+                                <select class="rv-input" aria-label="Relationship type" style="margin:6px 0 10px"><option>Book study</option><option>Dibs</option></select>
+                                <button type="button" class="rv-btn rv-btn--primary" style="width:100%;justify-content:center"><span class="msy">group_add</span> New group</button>
+                            </div>
+                        </aside>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+</body>
+
+</html>
