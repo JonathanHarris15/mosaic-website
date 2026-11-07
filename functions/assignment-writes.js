@@ -135,13 +135,29 @@ async function sweepCover(db, spec) {
   // gap to fill.
   if (row && (row.state || null) === aa.STATES.DECLINED) return false;
 
+  // ⚠ THE TRIGGER'S COPY IS ONLY WHAT WAS TRUE WHEN IT FIRED (MS-819).
+  // Triggers arrive late and out of order: a confirm's sweep delivered after
+  // the decline that followed it would delete the advertisement that decline
+  // just put up. So the place is read again, in a transaction with the delete,
+  // and the entry goes only if nothing on the place is declined NOW.
   const ref = db.collection(COVER)
       .doc(aa.coverId(s.occurrenceId, s.roleSlug, s.slotId));
-  const snap = await ref.get();
-  if (!snap.exists) return false;
+  const placeRows = db.collection(OCCURRENCES).doc(s.occurrenceId)
+      .collection("roster").where("roleSlug", "==", s.roleSlug);
 
-  await ref.delete();
-  return true;
+  return db.runTransaction(async (tx) => {
+    const snap = await tx.get(ref);
+    if (!snap.exists) return false;
+    const now = await tx.get(placeRows);
+    const stillDeclined = now.docs.some((d) => {
+      const a = d.data() || {};
+      return (a.slotId || null) === (s.slotId || null) &&
+        a.state === aa.STATES.DECLINED;
+    });
+    if (stillDeclined) return false;
+    tx.delete(ref);
+    return true;
+  });
 }
 
 /**
