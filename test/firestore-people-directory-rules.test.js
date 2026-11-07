@@ -117,10 +117,12 @@ test('no directory read is gated on membership or any other rank', () => {
 test('writing the directory is still editor-only, except Add person', () => {
     // MS-197 changed who may READ. MS-727 moved create onto
     // directory.edit_identity so the Add person button and the rule agree.
-    // Update and delete stay on the editor ladder.
+    // MS-821 narrowed update and delete: any ONE edit key (hymns, printables)
+    // used to be enough. The other keys keep only the fields their pages write.
     assert.match(personBlock(), /allow create: if editsWith\('directory\.edit_identity'\)/);
-    assert.match(personBlock(), /allow delete: if isEditor\(\)/);
-    assert.match(personBlock(), /allow update: if isEditor\(\)/);
+    assert.match(personBlock(), /allow delete: if editsPeople\(\)/);
+    assert.match(personBlock(), /allow update: if editsPeople\(\)/);
+    assert.match(personBlock(), /hasOnly\(\['totalInvolvements', 'doesNotServe', 'updatedAt'\]\)\s*&& isEditor\(\)/);
     assert.match(DIRECTORY['Families'](), /allow create, update, delete: if isEditor\(\)/);
     assert.match(DIRECTORY['the directory tag vocabulary'](), /allow create, update, delete: if isEditor\(\)/);
 });

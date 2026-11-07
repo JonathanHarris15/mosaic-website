@@ -25,10 +25,21 @@ const OCC = "occ-oneoff";
 const EVENT = "ev-1";
 const PERSON = "person-away";
 
-// [label, key, path(uid, tag)] — tag keeps each attempt on its own doc.
+// A Role is held to its shape (roles/ rule), so its door writes a real one.
+const ROLE_FIELDS = {
+  name: {stringValue: "Greeters"},
+  slug: {stringValue: "greeters"},
+  family: {stringValue: "servant"},
+  slots: {arrayValue: {values: [{mapValue: {fields: {
+    id: {stringValue: "s1"}, requirement: {stringValue: "either"},
+  }}}]}},
+};
+
+// [label, key, path(uid, tag), fields?] — tag keeps each attempt on its own
+// doc; fields is the body when a door checks more than who is writing.
 const DOORS = [
   ["hymns", "hymns.edit", (u, t) => `hymns/h-${t}`],
-  ["roles", "roles.manager.edit", (u, t) => `roles/r-${t}`],
+  ["roles", "roles.manager.edit", (u, t) => `roles/r-${t}`, ROLE_FIELDS],
   ["events", "calendar.events.edit", (u, t) => `events/e-${t}`],
   ["events/announcements", "calendar.events.edit",
     (u, t) => `events/${EVENT}/announcements/a-${t}`],
@@ -78,14 +89,14 @@ function idToken(uid) {
 }
 
 /** Write one doc as `uid` (null = signed out); the HTTP status. */
-async function writeAs(uid, docPath) {
+async function writeAs(uid, docPath, fields) {
   const url = `http://${H.HOST}/v1/projects/${H.PROJECT_ID}` +
     `/databases/(default)/documents/${docPath}`;
   const headers = {"Content-Type": "application/json"};
   if (uid) headers.Authorization = "Bearer " + idToken(uid);
   const res = await fetch(url, {
     method: "PATCH", headers,
-    body: JSON.stringify({fields: {note: {stringValue: "ms-722"}}}),
+    body: JSON.stringify({fields: fields || {note: {stringValue: "ms-722"}}}),
   });
   await res.text();
   return res.status;
@@ -140,32 +151,32 @@ suite("MS-722: write doors honour the MS-695 key", () => {
     await H.seedPerson(db, PERSON, {name: "Away Person"});
   });
 
-  for (const [label, key, pathOf] of DOORS) {
+  for (const [label, key, pathOf, fields] of DOORS) {
     describe(`${label} (${key})`, () => {
       test("a custom level holding the key may write", async () => {
         const uid = uidFor("custom", key);
-        assert.equal(await writeAs(uid, pathOf(uid, "c")), 200);
+        assert.equal(await writeAs(uid, pathOf(uid, "c"), fields), 200);
       });
       test("Member may not", async () => {
-        assert.equal(await writeAs("member", pathOf("member", "m")), 403);
+        assert.equal(await writeAs("member", pathOf("member", "m"), fields), 403);
       });
       test("Viewer may not", async () => {
-        assert.equal(await writeAs("viewer", pathOf("viewer", "v")), 403);
+        assert.equal(await writeAs("viewer", pathOf("viewer", "v"), fields), 403);
       });
       test("signed out may not", async () => {
-        assert.equal(await writeAs(null, pathOf("anon", "s")), 403);
+        assert.equal(await writeAs(null, pathOf("anon", "s"), fields), 403);
       });
       test("a custom level with the key revoked may not", async () => {
         const uid = uidFor("revoked", key);
-        assert.equal(await writeAs(uid, pathOf(uid, "r")), 403);
+        assert.equal(await writeAs(uid, pathOf(uid, "r"), fields), 403);
       });
       test("a saved map with the key revoked may not, even as editor", async () => {
         const uid = uidFor("editorRevoked", key);
-        assert.equal(await writeAs(uid, pathOf(uid, "x")), 403);
+        assert.equal(await writeAs(uid, pathOf(uid, "x"), fields), 403);
       });
       test("a legacy editor (no map) still may", async () => {
         assert.equal(
-            await writeAs("legacyEditor", pathOf("legacyEditor", "e")), 200);
+            await writeAs("legacyEditor", pathOf("legacyEditor", "e"), fields), 200);
       });
     });
   }

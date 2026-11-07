@@ -4,6 +4,9 @@ const assert = require('node:assert');
 const H = require('./harness.js');
 const writes = require('../../functions/assignment-writes.js');
 
+/** @typedef {import('firebase-admin/firestore').Firestore} Firestore */
+/** @typedef {Parameters<typeof writes.answer>[1]} AnswerSpec */
+
 // The plumbing under answering and taking (MS-20, MS-217).
 //
 // ⚠ WHAT THESE PROVE THAT THE UNIT TESTS CANNOT.
@@ -65,10 +68,11 @@ const suite = H.skipReason
     : describe;
 
 suite('the writes under answering and taking', () => {
+    /** @type {Firestore} */
     let db;
 
     before(() => {
-        db = H.connect();
+        db = /** @type {Firestore} */ (H.connect());
     });
 
     beforeEach(async () => {
@@ -100,15 +104,15 @@ suite('the writes under answering and taking', () => {
         });
     });
 
-    const decline = (personId, slotId) => writes.answer(db, {
+    const decline = (personId, slotId) => writes.answer(db, /** @type {AnswerSpec} */ ({
         personId, roleSlug: USHERS, slotId,
         occurrenceId: OCC, state: 'declined', today: TODAY, now: H.now(),
-    });
+    }));
 
-    const confirm = (personId, slotId) => writes.answer(db, {
+    const confirm = (personId, slotId) => writes.answer(db, /** @type {AnswerSpec} */ ({
         personId, roleSlug: USHERS, slotId,
         occurrenceId: OCC, state: 'confirmed', today: TODAY, now: H.now(),
-    });
+    }));
 
     const take = (personId, slotId, handle) =>
         writes.take(handle || db, {
@@ -155,11 +159,11 @@ suite('the writes under answering and taking', () => {
 
     test('a failure part-way leaves none of the three written', async () => {
         await assert.rejects(
-            writes.answer(H.failsAtCommit(db), {
+            writes.answer(H.failsAtCommit(db), /** @type {AnswerSpec} */ ({
                 personId: ANN, roleSlug: USHERS, slotId: S1,
                 occurrenceId: OCC, state: 'declined',
                 today: TODAY, now: H.now(),
-            }),
+            })),
             /power went out/);
 
         // Every one of these would be a separate silent bug. The roster row
@@ -197,10 +201,10 @@ suite('the writes under answering and taking', () => {
 
     test('answering somebody else’s Assignment is refused, and writes ' +
         'nothing', async () => {
-        const result = await writes.answer(db, {
+        const result = await writes.answer(db, /** @type {AnswerSpec} */ ({
             personId: BEN, roleSlug: USHERS, slotId: S1,
             occurrenceId: OCC, state: 'declined', today: TODAY, now: H.now(),
-        });
+        }));
 
         assert.equal(result.ok, false);
         assert.equal(result.code, 'permission-denied');
@@ -471,10 +475,10 @@ suite('the writes under answering and taking', () => {
     // ── The date ─────────────────────────────────────────────────────────────
 
     test('a date that has passed refuses both, and writes nothing', async () => {
-        const answered = await writes.answer(db, {
+        const answered = await writes.answer(db, /** @type {AnswerSpec} */ ({
             personId: ANN, roleSlug: USHERS, slotId: S1, occurrenceId: OCC,
             state: 'declined', today: '2026-06-01', now: H.now(),
-        });
+        }));
         assert.equal(answered.ok, false);
         assert.equal(answered.code, 'failed-precondition');
 

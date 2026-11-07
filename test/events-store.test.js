@@ -19,7 +19,10 @@ const Core = require('../public/events-occurrence-core.js');
 
 // ── A fake Firestore that enforces rules the way the real one does ────────────
 
+/** @typedef {{kind: string, path: string, data?: any, options?: any}} FakeWrite */
+
 function fakeDb(collections, viewer) {
+    /** @type {any[]} */
     const committed = [];
     const queriesRun = [];
     let autoIdCounter = 0;
@@ -145,6 +148,31 @@ function fakeDb(collections, viewer) {
                 delete: ref => ops.push({ kind: 'delete', path: ref.path }),
                 async commit() { committed.push(ops); },
             };
+        },
+        // The roster is saved in a transaction (MS-812). A document this fake
+        // was already asked to write reads back as written, the way the real
+        // one would after the write that creates it.
+        /** @param {(tx: any) => Promise<any>} fn */
+        async runTransaction(fn) {
+            /** @type {FakeWrite[]} */
+            const ops = [];
+            const tx = {
+                /** @param {any} ref */
+                async get(ref) {
+                    const prior = committed.flat().filter(w => w.path === ref.path && w.kind === 'set');
+                    if (prior.length) {
+                        const data = Object.assign({}, ...prior.map(w => w.data));
+                        return { exists: true, id: ref.id, data: () => data };
+                    }
+                    return ref.get();
+                },
+                set: (/** @type {any} */ ref, /** @type {any} */ data, /** @type {any} */ options) =>
+                    ops.push({ kind: 'set', path: ref.path, data, options }),
+                delete: (/** @type {any} */ ref) => ops.push({ kind: 'delete', path: ref.path }),
+            };
+            const out = await fn(tx);
+            committed.push(ops);
+            return out;
         },
         _committed: committed,
         _queriesRun: queriesRun,
@@ -1467,6 +1495,7 @@ test('accepting a roster stamps visibility on the dates it creates', async () =>
 test('an accepted roster can be read back by the editor who wrote it', async () => {
     // The round trip, which is what the editor actually experienced: the seats
     // were written, and the page then showed every place as needing people.
+    /** @type {Record<string, any>} */
     const written = {};
     const db = fakeDb({
         events: { sunday_service: { name: 'Sunday Service' } },
@@ -1480,7 +1509,9 @@ test('an accepted roster can be read back by the editor who wrote it', async () 
     // Play the writes back into the store the fake reads from.
     db._flatWrites().forEach(w => {
         const m = /^event_occurrences\/([^/]+)$/.exec(w.path);
-        if (m) written[m[1]] = w.data;
+        // Merged, as the store's writes are: the roster's derived fields
+        // land in a second write after the document (MS-812).
+        if (m) written[m[1]] = Object.assign({}, written[m[1]], w.data);
     });
 
     const o = await Store.loadOccurrence(db, 'sunday_service_2026-08-09');

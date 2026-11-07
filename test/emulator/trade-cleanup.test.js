@@ -64,7 +64,7 @@ suite('what a settlement kills, and who hears about it', () => {
         await Promise.all([BOB, SARAH, RAY].map(id => Promise.all([
             H.seedPerson(db, id),
             db.collection('users').doc('uid-' + id)
-                .set({ personId: id, permissionLevel: 'member' }),
+                .set({ personId: id, accountLevelId: 'level_member' }),
         ])));
 
         await Promise.all(['kids', 'coffee', 'setup'].map(slug =>
@@ -242,7 +242,7 @@ suite('an editor filling a place ends every Trade about it', () => {
         await Promise.all([BOB, SARAH, RAY].map(id => Promise.all([
             H.seedPerson(db, id),
             db.collection('users').doc('uid-' + id)
-                .set({ personId: id, permissionLevel: 'member' }),
+                .set({ personId: id, accountLevelId: 'level_member' }),
         ])));
         await H.seedRole(db, {
             slug: 'kids', name: 'Kids Ministry',

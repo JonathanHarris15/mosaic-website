@@ -312,20 +312,20 @@ test('fails closed — an occurrence with no visibility is takeable by nobody', 
 // ── One-off Roles ────────────────────────────────────────────────────────────
 
 test('a one-off Role has no rules to break, so anyone who can see it may take it', () => {
-    const verdict = ask({ person: dan, roleDef: null, slot: null });
+    const verdict = ask({ person: dan, roleSlug: 'one_off', roleDef: null, slot: null });
     assert.equal(verdict.permitted, true);
     assert.equal(verdict.reason, null);
 });
 
 test('a one-off Role still refuses an Inactive Person', () => {
-    const verdict = ask({ person: frank, roleDef: null, slot: null });
+    const verdict = ask({ person: frank, roleSlug: 'one_off', roleDef: null, slot: null });
     assert.equal(verdict.permitted, false);
     assert.equal(verdict.reason, Roles.REASONS.INACTIVE);
 });
 
 test('a one-off Role still warns on your own Away', () => {
     const verdict = ask({
-        person: dan, roleDef: null, slot: null,
+        person: dan, roleSlug: 'one_off', roleDef: null, slot: null,
         context: {
             people: EVERYONE, assigned: [], assignedElsewhere: [],
             awayPersonIds: ['dan'],
@@ -333,6 +333,26 @@ test('a one-off Role still warns on your own Away', () => {
     });
     assert.equal(verdict.permitted, true);
     assert.equal(verdict.warning, Roles.REASONS.AWAY);
+});
+
+// ── A Role that is gone is not a one-off (MS-820) ────────────────────────────
+
+test('a place on a deleted Role is refused, not judged by no rules (MS-820)', () => {
+    const verdict = ask({ person: dan, roleSlug: 'kids_ministry', roleDef: null, slot: null });
+    assert.equal(verdict.permitted, false);
+    assert.equal(verdict.reason, Cover.REASONS.ROLE_GONE);
+});
+
+test('a place with no slug at all is refused too (MS-820)', () => {
+    const verdict = ask({ person: dan, roleDef: null, slot: null });
+    assert.equal(verdict.permitted, false);
+    assert.equal(verdict.reason, Cover.REASONS.ROLE_GONE);
+});
+
+test('a slot removed from its Role is refused cleanly, not thrown (MS-820)', () => {
+    const verdict = ask({ person: dan, slot: null });
+    assert.equal(verdict.permitted, false);
+    assert.equal(verdict.reason, Cover.REASONS.SLOT_GONE);
 });
 
 // ── Cross-Role Rules reach the member-facing door too (MS-221) ───────────────

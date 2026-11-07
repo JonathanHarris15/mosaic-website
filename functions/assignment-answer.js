@@ -31,6 +31,7 @@
 // declined place may be listed has ONE definition, and this is how the server
 // reaches it — restating it here was three copies of one rule.
 const occurrences = require("./shared/events-occurrence-core.js");
+const {rosterIdFor} = require("./assignment-take");
 
 const STATES = {
   PENDING: "pending",
@@ -122,14 +123,18 @@ function needsAttentionFor(roster) {
  *
  * @param {object} spec the question
  * @param {object} spec.occurrence the Event occurrence
- * @param {Array<object>} spec.roster every Assignment on it
+ * @param {Array<Object<string, *>>} spec.roster every Assignment on it
  * @param {?string} spec.personId the caller's own Person id
  * @param {string} spec.roleSlug the Role they are answering for
  * @param {?string} spec.slotId the slot they are answering for
+ * @param {?string} [spec.oneOffId] which one-off job, when it is one (MS-818)
  * @param {string} spec.state their answer
+ * @param {boolean} [spec.quiet] whether a decline stays off the open list
  * @param {string} spec.today YYYY-MM-DD in the church's timezone
+ * @param {*} [spec.now] a timestamp to stamp the answer with
  * @param {?string} spec.roleName the Role's human name, for the cover row
- * @return {object} a refusal, or everything the transaction must write
+ * @return {Object<string, *>} a refusal, or everything the transaction must
+ *   write
  */
 function planAnswer(spec) {
   const s = spec || {};
@@ -149,9 +154,17 @@ function planAnswer(spec) {
     return refuse("failed-precondition", "That date has already passed.");
   }
 
-  const held = roster.find((a) =>
+  // ⚠ ONE-OFF JOBS SHARE A SLUG AND HAVE NO SLOT (MS-818). Every one-off on an
+  // Event is `one_off` with a null slot, so slug and slot alone found the FIRST
+  // one-off, whoever's it was. The one-off's own id tells them apart; a caller
+  // that does not send one (an older page) still finds their own, because the
+  // caller's row is preferred over anybody else's.
+  const candidates = roster.filter((a) =>
     a && a.roleSlug === s.roleSlug &&
-    (a.slotId || null) === (s.slotId || null));
+    (a.slotId || null) === (s.slotId || null) &&
+    (!s.oneOffId || a.oneOffId === s.oneOffId));
+  const held = candidates.find((a) => a.personId === s.personId) ||
+    candidates[0];
 
   if (!held) {
     return refuse("not-found", "Nobody is standing in that place.");
@@ -212,7 +225,11 @@ function planAnswer(spec) {
 
   return {
     ok: true,
-    rosterId: [s.roleSlug, s.slotId || "x", s.personId].join("__"),
+    // The row is written back where it is filed, never under an id built from
+    // the request (MS-818): that id ignored the one-off's own id, so answering
+    // one wrote a second copy beside it.
+    rosterId: rosterIdFor(held),
+    held: held,
     assignment: assignment,
     derived: {
       participantIds: participantIdsOf(after),
