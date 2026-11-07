@@ -546,7 +546,8 @@ test('the phone opens the Hymns page and keeps the stored home key', () => {
 
     const app = read('mobile/app.js');
     const screens = read('mobile/screens-content.js');
-    assert.match(app, /label: "Hymns", route: "hymnDirectory"/);
+    assert.ok(destinations.homeTiles(null).some((t) => t.key === 'hymn-directory'));
+    assert.match(app, /homeTiles\(/);
     assert.doesNotMatch(app, /Hymn Directory/);
     assert.match(app, /if \(route === "hymnManager"\) \{\s*\n\s*if \(data\.forget\) data\.forget\("hymns"\);/);
     assert.match(app, /HymnsPage\.phoneShellHref/);

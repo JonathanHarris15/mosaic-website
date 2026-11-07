@@ -2566,7 +2566,9 @@ test('the phone offers the Calendar, and it is not the Services screen', () => {
     assert.ok(services && services.label === 'Services' && services.route === 'calendar',
         'the Services entry moved or was renamed — check nothing navigates by it');
 
-    assert.ok(/label: "Calendar", route: "events"/.test(appJs), 'the phone home has no Calendar tile');
+    assert.ok(D.homeTiles(null).some(t => t.label === 'Calendar' && t.route === 'events'),
+        'the phone home has no Calendar tile');
+    assert.match(appJs, /homeTiles\(/, 'Home no longer reads its tiles from the shared list');
     assert.strictEqual(D.SHELL_PAGES.events, 'calendar.html', 'the Calendar route opens nothing');
 });
 

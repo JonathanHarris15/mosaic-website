@@ -79,15 +79,14 @@ test('a Pastoral Assistant is offered Shepherd, Directory, Forms and Roles Manag
 });
 
 test('the Home tile carries the same gate as the drawer entry', () => {
-    // Two renderings of one list (see destinations.js). The tile is declared
-    // separately in app.js, so the gate has to be written twice — and a gate
-    // written twice is a gate that can drift.
+    // Home's tiles ARE the drawer's destinations (Destinations.homeTiles), so
+    // the gate is written once and cannot drift between the two.
     const app = fs.readFileSync(path.join(__dirname, '..', 'public', 'mobile', 'app.js'), 'utf8');
-    const tile = app.match(/\{[^}]*label: "Membership Directory"[^}]*\}/);
-    assert.ok(tile, 'the Membership Directory tile has gone missing from Home');
+    assert.match(app, /homeTiles\(/, 'Home keeps a tile list of its own again');
+    const onHome = user => Destinations.homeTiles(user).some(t => t.key === 'directory');
     for (const permissionLevel of ['member', 'editor', 'elder', 'admin', 'super_admin']) {
-        assert.ok(tile[0].includes(`"${permissionLevel}"`),
-            `the Home tile does not admit ${permissionLevel}`);
+        assert.ok(onHome(account(permissionLevel)), `the Home tile does not admit ${permissionLevel}`);
     }
-    assert.ok(!tile[0].includes('"viewer"'), 'the Home tile is looser than the drawer');
+    assert.ok(!onHome(account('viewer')), 'the Home tile is looser than the drawer');
+    assert.ok(!onHome(null), 'a guest is offered the directory from Home');
 });
