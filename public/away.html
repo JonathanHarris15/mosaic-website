@@ -269,10 +269,10 @@
                             </div>
                             <div class="aw-days grid grid-cols-7 gap-y-[3px]">
                                 <template x-for="(c, i) in m.cells" :key="i">
-                                    <button type="button" :disabled="!c.inMonth" :data-day="c.iso" :title="c.title"
+                                    <button type="button" :disabled="!c.inMonth || c.past" :data-day="c.iso" :title="c.title"
                                             @pointerdown="pointerDown($event, c.iso)" @click="keyed($event, c.iso)"
                                             class="relative flex flex-col items-center justify-center gap-[3px] h-[46px] border-0 aw-motion aw-focus"
-                                            :class="[cellClass(c), cellRadius(c), c.inMonth ? 'cursor-pointer' : 'cursor-default']">
+                                            :class="[cellClass(c), cellRadius(c), c.inMonth && !c.past ? 'cursor-pointer' : 'cursor-default']">
                                         <span class="text-[14.5px]" x-text="c.day"></span>
                                         <span class="w-[5px] h-[5px] rounded-full" :class="dotClass(c)"></span>
                                     </button>
@@ -403,10 +403,10 @@
                             </div>
                             <div class="aw-days grid grid-cols-7 gap-y-[3px]">
                                 <template x-for="(c, i) in m.cells" :key="i">
-                                    <button type="button" :disabled="!c.inMonth" :data-day="c.iso"
+                                    <button type="button" :disabled="!c.inMonth || c.past" :data-day="c.iso"
                                             @pointerdown="pointerDown($event, c.iso)" @click="keyed($event, c.iso)"
                                             class="flex flex-col items-center justify-center gap-0.5 h-[48px] border-0 aw-motion aw-focus"
-                                            :class="[cellClass(c), cellRadius(c), c.inMonth ? 'cursor-pointer' : 'cursor-default']">
+                                            :class="[cellClass(c), cellRadius(c), c.inMonth && !c.past ? 'cursor-pointer' : 'cursor-default']">
                                         <span class="text-[15px]" x-text="c.day"></span>
                                         <span class="w-[5px] h-[5px] rounded-full" :class="dotClass(c)"></span>
                                     </button>

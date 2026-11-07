@@ -377,14 +377,22 @@
             // handlers below only translate pointer events into these, so the
             // behaviour can be tested without a browser.
 
+            // ⚠ NOTHING BEFORE TODAY. Away is a thing you say before
+            // (ADR-0023 §4). The rail starts at this month, so its first days
+            // are already behind you — and a day marked there showed on the
+            // calendar while the sentence, counting from today, said "No days
+            // marked yet". A press there does nothing, and a drag that runs
+            // back into them stops at today.
             press(iso) {
-                if (!iso || !this.subjectId) return;
+                if (!iso || !this.subjectId || iso < this.today) return;
                 this.drag = { from: iso, to: iso, on: !Core.isAwayOn(this.stretches, iso) };
             },
 
             dragTo(iso) {
-                if (!this.drag || !iso || iso === this.drag.to) return;
-                this.drag = Object.assign({}, this.drag, { to: iso });
+                if (!this.drag || !iso) return;
+                const to = iso < this.today ? this.today : iso;
+                if (to === this.drag.to) return;
+                this.drag = Object.assign({}, this.drag, { to: to });
             },
 
             release() {
@@ -585,6 +593,8 @@
 
             cellClass(c) {
                 if (!c.inMonth) return 'invisible';
+                // Gone: faded, and still showing whether you were away.
+                if (c.past) return c.away ? 'bg-primary/30 text-on-primary' : 'text-outline opacity-50';
                 if (c.pending === 'on') return 'bg-primary/75 text-on-primary font-bold';
                 if (c.pending === 'off') return 'bg-surface-container-high text-outline line-through';
                 if (c.away) return 'bg-primary text-on-primary font-bold';

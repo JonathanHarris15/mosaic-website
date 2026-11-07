@@ -430,6 +430,11 @@
                 runStart: runStart,
                 runEnd: runEnd,
                 isToday: !!iso && iso === today,
+                // A day that has gone. Away is a thing you say BEFORE
+                // (ADR-0023 §4), so these are drawn faded and cannot be tapped
+                // — the rail starts at this month, so its first days are
+                // always behind you.
+                past: !!iso && !!today && iso < today,
                 // A place you hold turns amber on a day you are away — the same
                 // dot, saying "this one is now your problem".
                 place: place,
