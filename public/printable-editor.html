@@ -1553,6 +1553,18 @@
 
         /* ── Menus ─────────────────────────────────────────────────────── */
         .pe-asof { display: flex; align-items: center; gap: 2px; }
+        /* A phone has no room for the whole header row — the tools ran ~100px
+           off the right edge and pushed the back arrow and title off the left.
+           On a phone the tools take a row of their own under the title; the
+           template name and the "As of" word go (the date input still says
+           which date it is). */
+        @media (max-width: 640px) {
+            .pe-header .m-header__inner { flex-wrap: wrap; row-gap: 6px; height: auto; padding-bottom: 8px; }
+            .pe-header .m-header__lead { flex: 1 1 100%; min-width: 0; }
+            .pe-body .m-header__actions { flex: 1 1 100%; flex-wrap: wrap; justify-content: flex-start; row-gap: 6px; min-width: 0; margin-left: 0; }
+            .pe-body .m-header__chip:not([data-live-chip]):not([data-changed-elsewhere]) { display: none; }
+            .pe-asof__label > span { display: none; }
+        }
         .pe-asof__label { display: flex; align-items: center; gap: 6px; font: 12px var(--font-sans); color: var(--on-surface-variant); }
         .pe-passage { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; margin-top: 4px; }
         .pe-passage__opts { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; }

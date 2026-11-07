@@ -1053,10 +1053,10 @@
     this.mount.innerHTML =
       '<div data-rv="root" style="height:100vh;width:100%;display:flex;flex-direction:column;background:var(--background);color:var(--on-surface);font-family:var(--font-sans);overflow:hidden;position:relative">' +
         // top bar
-        '<header style="flex:0 0 auto;height:64px;display:flex;align-items:center;gap:18px;padding:0 20px;background:var(--surface-container-lowest);border-bottom:1px solid var(--outline-variant);z-index:40">' +
+        '<header data-rv="bar" style="flex:0 0 auto;height:64px;display:flex;align-items:center;gap:18px;padding:0 20px;background:var(--surface-container-lowest);border-bottom:1px solid var(--outline-variant);z-index:40">' +
           '<button data-act="toggleRail" data-rv="railBtn" class="rv-icobtn" title="Controls" style="display:none;width:40px;height:40px;border:1px solid var(--outline-variant);border-radius:10px;background:var(--surface-container-lowest);color:var(--navy);cursor:pointer;align-items:center;justify-content:center;flex:0 0 auto"><span class="msy" style="font-size:22px">tune</span></button>' +
           '<a href="shepherding-dashboard.html" title="Back to Shepherd Dashboard" aria-label="Back to Shepherd Dashboard" class="rv-icobtn" style="display:flex;flex:0 0 auto;width:40px;height:40px;border:1px solid var(--outline-variant);border-radius:10px;background:var(--surface-container-lowest);color:var(--navy);cursor:pointer;align-items:center;justify-content:center;text-decoration:none"><span class="msy" style="font-size:22px">arrow_back</span></a>' +
-          '<div style="display:flex;align-items:center;gap:12px;flex:0 0 auto">' +
+          '<div data-rv="titleBlock" style="display:flex;align-items:center;gap:12px;flex:0 0 auto">' +
             '<img src="assets/mosaic-logo.png" alt="Mosaic" style="width:34px;height:34px;object-fit:contain">' +
             '<div style="display:flex;flex-direction:column;line-height:1.05">' +
               '<span style="font-size:10px;font-weight:600;letter-spacing:.16em;text-transform:uppercase;color:var(--on-surface-variant)">Shepherd Dashboard</span>' +
@@ -1077,7 +1077,7 @@
           // The account, which is the one thing this bar was missing and the
           // only reason the page carried a second header above it (MS-233).
           // auth.js fills it; see the refresh at the end of buildSkeleton.
-          '<div style="width:1px;height:30px;background:var(--outline-variant);flex:0 0 auto"></div>' +
+          '<div data-rv="authRule" style="width:1px;height:30px;background:var(--outline-variant);flex:0 0 auto"></div>' +
           '<div id="auth-container" style="flex:0 0 auto;display:flex;align-items:center;gap:8px;min-height:40px"></div>' +
         '</header>' +
         '<div data-rv="tabs" role="tablist" style="flex:0 0 auto;display:flex;align-items:stretch;gap:4px;padding:0 20px;background:var(--surface-container-lowest);border-bottom:1px solid var(--outline-variant)">' +

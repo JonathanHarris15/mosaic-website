@@ -83,11 +83,11 @@
     <div x-show="!loading && !refused" x-cloak class="flex-none bg-background z-[90] border-b border-outline-variant/30">
         <div class="px-margin">
             <!-- Navigation Tabs -->
-            <div class="flex border-b border-outline-variant">
-                <button @click="activeTab = 'hymns'" :class="activeTab === 'hymns' ? 'tab-active' : 'text-on-surface-variant hover:text-primary'" class="px-8 py-4 transition-all duration-200">Hymn Usage</button>
-                <button @click="activeTab = 'bible'" :class="activeTab === 'bible' ? 'tab-active' : 'text-on-surface-variant hover:text-primary'" class="px-8 py-4 transition-all duration-200">Bible Heat Map</button>
-                <button @click="activeTab = 'people'" :class="activeTab === 'people' ? 'tab-active' : 'text-on-surface-variant hover:text-primary'" class="px-8 py-4 transition-all duration-200">People's Involvement</button>
-                <button x-show="isEditor" @click="activeTab = 'praise'" :class="activeTab === 'praise' ? 'tab-active' : 'text-on-surface-variant hover:text-primary'" class="px-8 py-4 transition-all duration-200">Pastoral Prayer</button>
+            <div class="flex border-b border-outline-variant overflow-x-auto">
+                <button @click="activeTab = 'hymns'" :class="activeTab === 'hymns' ? 'tab-active' : 'text-on-surface-variant hover:text-primary'" class="shrink-0 whitespace-nowrap px-4 md:px-8 py-4 transition-all duration-200">Hymn Usage</button>
+                <button @click="activeTab = 'bible'" :class="activeTab === 'bible' ? 'tab-active' : 'text-on-surface-variant hover:text-primary'" class="shrink-0 whitespace-nowrap px-4 md:px-8 py-4 transition-all duration-200">Bible Heat Map</button>
+                <button @click="activeTab = 'people'" :class="activeTab === 'people' ? 'tab-active' : 'text-on-surface-variant hover:text-primary'" class="shrink-0 whitespace-nowrap px-4 md:px-8 py-4 transition-all duration-200">People's Involvement</button>
+                <button x-show="isEditor" @click="activeTab = 'praise'" :class="activeTab === 'praise' ? 'tab-active' : 'text-on-surface-variant hover:text-primary'" class="shrink-0 whitespace-nowrap px-4 md:px-8 py-4 transition-all duration-200">Pastoral Prayer</button>
             </div>
 
             <!-- Actions Area -->

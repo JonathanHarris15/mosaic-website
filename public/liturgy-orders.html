@@ -407,9 +407,11 @@
         .lo-unsaved { font-size: 13px; color: var(--on-surface-variant); margin-right: var(--space-xs); }
         .lo-tabs {
             flex: 0 0 auto; display: flex; align-items: flex-end; gap: 4px; padding: 0 16px;
+            overflow-x: auto; scrollbar-width: none;
             background: var(--surface-container-lowest); border-bottom: 1px solid var(--outline-variant);
         }
         .lo-tab {
+            flex: 0 0 auto; white-space: nowrap;
             height: 46px; padding: 0 16px; border: 0; border-bottom: 2px solid transparent;
             background: transparent; font-family: var(--font-serif); font-size: 17px;
             color: var(--on-surface-variant); cursor: pointer;
