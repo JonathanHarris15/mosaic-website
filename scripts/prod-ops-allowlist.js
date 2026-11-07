@@ -35,6 +35,7 @@ const ALLOWLIST_SORTED = [
     'prayer-request-send-preview.js',
     'prayer-text-notifications-audit.js',
     'reset-prayer-send-attempt.js',
+    'roles-merge-impact.js',
     'set-liturgy-order-flags.js',
     'set-prayer-sms-answer-link.js',
     'set-prayer-sms-reply-webhook.js',

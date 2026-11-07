@@ -27,7 +27,9 @@ const WITH_ORDERS = (() => {
     };
 })();
 
-const fields = (s) => s.liturgy.map((r) => r.field);
+/** @typedef {Record<string, any>} Row One read liturgy row. */
+
+const fields = (/** @type {{liturgy: Row[]}} */ s) => s.liturgy.map((/** @type {Row} */ r) => r.field);
 
 describe('readableService walks the Sunday\'s Liturgy Order', () => {
     test('a Sunday with no order reads in Standard, element names as labels', () => {
@@ -36,11 +38,11 @@ describe('readableService walks the Sunday\'s Liturgy Order', () => {
         });
         assert.deepStrictEqual(fields(s), Liturgy.STANDARD_ORDER.elementIds.slice());
         assert.deepStrictEqual(s.liturgyOrder, { id: 'standard', name: 'Standard' });
-        const closing = s.liturgy.find((r) => r.field === 'hymnEnd1');
+        const closing = s.liturgy.find((/** @type {Row} */ r) => r.field === 'hymnEnd1');
         assert.strictEqual(closing.label, 'Hymn of Response');
         assert.strictEqual(closing.primitive, 'song');
         assert.deepStrictEqual(closing.value, { name: 'A Closing Song', id: 'h-9' });
-        assert.deepStrictEqual(s.liturgy.filter((r) => r.filled).map((r) => r.field),
+        assert.deepStrictEqual(s.liturgy.filter((/** @type {Row} */ r) => r.filled).map((/** @type {Row} */ r) => r.field),
             ['callToWorship', 'hymnEnd1']);
     });
 
@@ -53,12 +55,12 @@ describe('readableService walks the Sunday\'s Liturgy Order', () => {
         }, WITH_ORDERS);
         assert.deepStrictEqual(fields(s), ['callToWorship', 'lordsSupper', 'offertory', 'benediction']);
         assert.deepStrictEqual(s.liturgyOrder, { id: 'communion', name: 'Communion' });
-        const supper = s.liturgy.find((r) => r.field === 'lordsSupper');
+        const supper = s.liturgy.find((/** @type {Row} */ r) => r.field === 'lordsSupper');
         assert.strictEqual(supper.carriedBy, 'Rowan Example');
         assert.strictEqual(supper.note, 'Bread first');
-        assert.strictEqual(s.liturgy.find((r) => r.field === 'offertory').note, null,
+        assert.strictEqual(s.liturgy.find((/** @type {Row} */ r) => r.field === 'offertory').note, null,
             'an element without a note does not read one back');
-        assert.strictEqual(s.liturgy.find((r) => r.field === 'callToWorship').carriedBy, null);
+        assert.strictEqual(s.liturgy.find((/** @type {Row} */ r) => r.field === 'callToWorship').carriedBy, null);
     });
 
     test('an order that has since been deleted reads as Standard', () => {
@@ -72,7 +74,7 @@ describe('readableService walks the Sunday\'s Liturgy Order', () => {
             'liturgy.sermon': 'Romans 8:28',
             liturgy: { sermon: 'From nested' },
         });
-        const sermon = s.liturgy.find((r) => r.field === 'sermon');
+        const sermon = s.liturgy.find((/** @type {Row} */ r) => r.field === 'sermon');
         assert.strictEqual(sermon.value, 'From nested');
     });
 
@@ -104,10 +106,10 @@ describe('readableService walks the Sunday\'s Liturgy Order', () => {
         const s = Read.readableService('2031-04-06', {
             liturgy: { baptism: [{ id: 'p-2', name: 'Avery Test' }, { id: '', name: '' }] },
         });
-        const baptism = s.liturgy.find((r) => r.field === 'baptism');
+        const baptism = s.liturgy.find((/** @type {Row} */ r) => r.field === 'baptism');
         assert.deepStrictEqual(baptism.value, [{ id: 'p-2', name: 'Avery Test' }]);
         assert.strictEqual(Read.readableService('2031-04-13', { liturgy: { baptism: [{ id: '', name: ' ' }] } })
-            .liturgy.find((r) => r.field === 'baptism').filled, false);
+            .liturgy.find((/** @type {Row} */ r) => r.field === 'baptism').filled, false);
     });
 
     test('MS-796 — irregular Sunday legacy fields are not returned on MCP read', () => {
