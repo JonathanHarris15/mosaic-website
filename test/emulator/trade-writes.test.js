@@ -5,6 +5,13 @@ const H = require('./harness.js');
 const writes = require('../../functions/trade-writes.js');
 const Core = require('../../public/trade-core.js');
 
+/** @typedef {import('firebase-admin/firestore').Firestore} Firestore */
+/**
+ * What a Trade write hands back: done, or refused and why.
+ * @typedef {{ok: boolean, code?: string, reason?: string, message?: string,
+ *     tradeId?: string}} Outcome
+ */
+
 // The five moves, against a real Firestore (MS-190, MS-211).
 //
 // `trade-core` decides; these prove the plumbing under it. Which matters most
@@ -46,10 +53,11 @@ const suite = H.skipReason
     : describe;
 
 suite('the five ways a Trade moves', () => {
+    /** @type {Firestore} */
     let db;
 
     before(() => {
-        db = H.connect();
+        db = /** @type {Firestore} */ (H.connect());
     });
 
     beforeEach(async () => {
@@ -202,13 +210,14 @@ suite('the five ways a Trade moves', () => {
                 roster: [assignment('kids', 's1', RAY, 'confirmed')],
             });
             const empty = { occurrenceId: OCC_A, roleSlug: 'kids', slotId: 's9', date: KIDS.date };
+            /** @type {Outcome[]} */
             const results = [];
             for (const target of [held, empty]) {
-                results.push(await writes.offer(db, {
+                results.push(/** @type {Outcome} */ (await writes.offer(db, {
                     actorId: JEN, assignment: target,
                     offered: [{ occurrenceId: 'occ-ray', roleSlug: 'kids', slotId: 's1', date: '2026-03-21' }],
                     today: TODAY, now: H.now(),
-                }));
+                })));
             }
             results.forEach(r => {
                 assert.equal(r.ok, false);
@@ -224,20 +233,20 @@ suite('the five ways a Trade moves', () => {
             id: 'occ-quiet', date: '2026-03-21', visibility: 'member', name: 'Morning Service',
             roster: [Object.assign(assignment('kids', 's1', BOB, 'declined'), { quiet: true })],
         });
-        const r = await writes.offer(db, {
+        const r = /** @type {Outcome} */ (await writes.offer(db, {
             actorId: SARAH, assignment: { occurrenceId: 'occ-quiet', roleSlug: 'kids', slotId: 's1', date: '2026-03-21' },
             offered: [COFFEE], today: TODAY, now: H.now(),
-        });
+        }));
         assert.equal(r.ok, false);
         assert.equal(r.reason, 'notOpen');
     });
 
     test('you cannot offer somebody else\'s date as yours (MS-816)', async () => {
         // Coffee on the 28th is Sarah's, not Ray's.
-        const r = await writes.offer(db, {
+        const r = /** @type {Outcome} */ (await writes.offer(db, {
             actorId: RAY, assignment: KIDS, offered: [COFFEE],
             today: TODAY, now: H.now(),
-        });
+        }));
         assert.equal(r.ok, false);
         assert.equal(r.reason, 'notHeld');
         assert.deepEqual(await tradesNow(), []);
@@ -245,10 +254,10 @@ suite('the five ways a Trade moves', () => {
 
     test('an offer is capped at five dates (MS-816)', async () => {
         const many = Array.from({ length: Core.MAX_OFFERED + 1 }, () => COFFEE);
-        const r = await writes.offer(db, {
+        const r = /** @type {Outcome} */ (await writes.offer(db, {
             actorId: SARAH, assignment: KIDS, offered: many,
             today: TODAY, now: H.now(),
-        });
+        }));
         assert.equal(r.ok, false);
         assert.equal(r.reason, Core.REASONS.TOO_MANY);
     });

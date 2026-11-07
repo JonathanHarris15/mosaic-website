@@ -16,19 +16,43 @@
 const ac = require("./assignment-conversion");
 const si = require("./service-involvement");
 
+/** @typedef {import("firebase-admin/firestore").Firestore} Firestore */
+/** @typedef {import("firebase-admin/firestore").DocumentSnapshot} Snapshot */
+/**
+ * @typedef {typeof import("firebase-admin/firestore").FieldValue} FieldValues
+ */
+
+/**
+ * @callback LogFn
+ * @param {string} message What happened.
+ * @return {void}
+ */
+
+/**
+ * One serve record a past Service owes, as `si.conversion` builds it.
+ * @typedef {{
+ *   id: string,
+ *   personId: string,
+ *   serviceDate: string,
+ *   type: string,
+ *   metadata: (Object<string, *>|undefined),
+ * }} OwedRecord
+ */
+
 /**
  * Pay one Service's records, if any are owed.
  *
- * @param {Object} db Admin Firestore.
- * @param {Object} doc The `services/{date}` snapshot.
+ * @param {Firestore} db Admin Firestore.
+ * @param {Snapshot} doc The `services/{date}` snapshot.
  * @param {string} today The church's today, YYYY-MM-DD.
- * @param {Object} FieldValue admin.firestore.FieldValue.
+ * @param {FieldValues} FieldValue admin.firestore.FieldValue.
  * @return {Promise<{written: number, skipped: string[], converted: boolean}>}
  *   Records written, Person ids skipped because they no longer exist, and
  *   whether the Service was settled.
  */
 async function payService(db, doc, today, FieldValue) {
-  const records = si.conversion(doc.data(), doc.id, today);
+  const records = /** @type {OwedRecord[]} */ (
+    si.conversion(/** @type {Object} */ (doc.data()), doc.id, today));
   if (!records.length) {
     // Nobody to credit, but the date has passed and the debt is settled,
     // otherwise an empty Sunday is re-read every night forever.
@@ -48,6 +72,7 @@ async function payService(db, doc, today, FieldValue) {
   // `totalInvolvements` is a counter the People page and Analytics both sort
   // by. Counted per person first, because one person can hold two Roles on
   // the same Sunday.
+  /** @type {Map<string, number>} */
   const gained = new Map();
   let written = 0;
 
@@ -82,16 +107,17 @@ async function payService(db, doc, today, FieldValue) {
 /**
  * Pay every Service in `docs`, one at a time, never letting one stop the rest.
  *
- * @param {Object} db Admin Firestore.
- * @param {Object[]} docs The flagged `services/{date}` snapshots.
+ * @param {Firestore} db Admin Firestore.
+ * @param {Snapshot[]} docs The flagged `services/{date}` snapshots.
  * @param {string} today The church's today.
- * @param {Object} FieldValue admin.firestore.FieldValue.
- * @param {function(string): void} log Where to say what happened.
+ * @param {FieldValues} FieldValue admin.firestore.FieldValue.
+ * @param {LogFn} log Where to say what happened.
  * @return {Promise<{written: number, converted: number, failed: string[]}>}
  */
 async function payAll(db, docs, today, FieldValue, log) {
   let written = 0;
   let converted = 0;
+  /** @type {string[]} */
   const failed = [];
   for (const doc of docs) {
     try {
@@ -105,10 +131,10 @@ async function payAll(db, docs, today, FieldValue, log) {
     } catch (err) {
       failed.push(doc.id);
       log(`convertServiceInvolvement: ${doc.id} failed: ` +
-          `${err && err.message}`);
+          `${err && /** @type {Error} */ (err).message}`);
     }
   }
   return {written, converted, failed};
 }
 
-module.exports = {payService, payAll};
+module.exports = {payAll};

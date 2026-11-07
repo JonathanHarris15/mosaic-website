@@ -129,6 +129,10 @@
 
     // FNV-1a over the name's UTF-16 units, in base 36. Not for security: only
     // so a fallback slug is short, ASCII, and the same every time.
+    /**
+     * @param {string} text
+     * @returns {string}
+     */
     function nameHash(text) {
         let h = 0x811c9dc5;
         for (let i = 0; i < text.length; i++) {
@@ -173,8 +177,12 @@
     // requirement. The definition now remembers the next number it may issue.
     // One with no counter (stored before this) starts from its highest slot,
     // which is what it would have done anyway.
+    /**
+     * @param {?Record<string, *> | undefined} def A Role definition.
+     * @returns {number}
+     */
     function slotSeqOf(def) {
-        const highest = (def && def.slots ? def.slots : []).reduce((max, slot) => {
+        const highest = (def && def.slots ? def.slots : []).reduce((/** @type {number} */ max, /** @type {*} */ slot) => {
             const n = parseInt(String(slot && slot.id).replace(/^s/, ''), 10);
             return Number.isFinite(n) && n > max ? n : max;
         }, 0);
@@ -182,6 +190,10 @@
         return Math.max(highest + 1, stored);
     }
 
+    /**
+     * @param {?Record<string, *> | undefined} def A Role definition.
+     * @returns {string}
+     */
     function nextSlotId(def) {
         return 's' + slotSeqOf(def);
     }
@@ -267,7 +279,7 @@
     function removeSlot(def, slotId) {
         assertEditable(def);
         // Remembered BEFORE the slot goes, so its number is never issued again.
-        return Object.assign(withSlots(def, slotsOf(def).filter(slot => slot.id !== slotId)),
+        return Object.assign(withSlots(def, slotsOf(def).filter((/** @type {{id: string}} */ slot) => slot.id !== slotId)),
             { nextSlotSeq: slotSeqOf(def) });
     }
 
@@ -499,6 +511,20 @@
     // Is there an edge of this Relationship Type between the two? Edges are
     // stored one way round (`fromId` is the priority holder), but "may not serve
     // together" is symmetric, so both orientations count.
+    /**
+     * @typedef {{typeId: string, fromId: string, toId: string}} RelEdge
+     *   One stored Relationship edge.
+     * @typedef {{id: string, typeId: string, name?: string, leaderId?: ?string, memberIds?: string[]}} RelGroup
+     *   One Relationship Group.
+     */
+    /**
+     * @param {?RelEdge[] | undefined} relationships
+     * @param {string} typeId
+     * @param {string} a
+     * @param {string} b
+     * @param {Set<string>} [index] `edgeIndex(relationships)`.
+     * @returns {boolean}
+     */
     function joinedBy(relationships, typeId, a, b, index) {
         // `index`, when given, is `edgeIndex(relationships)` (MS-814).
         if (index) return index.has(typeId + '\u0000' + a + '\u0000' + b);
@@ -517,6 +543,10 @@
     // Cached on the list itself, since the solve hands the same church's list
     // to every call. The length is checked so a list grown in place is rebuilt.
     const EDGE_INDEX = new WeakMap();
+    /**
+     * @param {RelEdge[]} relationships
+     * @returns {Set<string>}
+     */
     function edgeIndex(relationships) {
         const cached = EDGE_INDEX.get(relationships);
         if (cached && cached.length === relationships.length) return cached.index;
@@ -571,14 +601,19 @@
     // Cached on the list the same way; the stamp counts members too, so a
     // group gaining somebody in place is picked up.
     const GROUP_INDEX = new WeakMap();
+    /**
+     * @param {RelGroup[]} groups
+     * @returns {Map<string, RelGroup[]>}
+     */
     function groupIndex(groups) {
         let members = 0;
         groups.forEach(g => { members += (g && g.memberIds) ? g.memberIds.length : 0; });
         const stamp = groups.length + ':' + members;
         const cached = GROUP_INDEX.get(groups);
         if (cached && cached.stamp === stamp) return cached.index;
+        /** @type {Map<string, RelGroup[]>} */
         const index = new Map();
-        const add = (personId, group) => {
+        const add = (/** @type {?string | undefined} */ personId, /** @type {RelGroup} */ group) => {
             if (!personId) return;
             const list = index.get(personId);
             if (!list) index.set(personId, [group]);
@@ -595,12 +630,27 @@
 
     // The groups of one Type that a Person belongs to. `index`, when given,
     // is `groupIndex(groups)`.
+    /**
+     * @param {?RelGroup[] | undefined} groups
+     * @param {string} typeId
+     * @param {string} personId
+     * @param {Map<string, RelGroup[]>} [index] `groupIndex(groups)`.
+     * @returns {RelGroup[]}
+     */
     function groupsFor(groups, typeId, personId, index) {
         if (index) return (index.get(personId) || []).filter(g => g.typeId === typeId);
         return (groups || []).filter(g => g && g.typeId === typeId && inGroup(g, personId));
     }
 
     // The groups of one Type that two People both belong to.
+    /**
+     * @param {?RelGroup[] | undefined} groups
+     * @param {string} typeId
+     * @param {string} a
+     * @param {string} b
+     * @param {Map<string, RelGroup[]>} [index] `groupIndex(groups)`.
+     * @returns {RelGroup[]}
+     */
     function sharedGroups(groups, typeId, a, b, index) {
         return groupsFor(groups, typeId, a, index).filter(g => inGroup(g, b));
     }

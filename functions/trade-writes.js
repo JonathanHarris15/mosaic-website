@@ -35,6 +35,46 @@ const coverCore = require("./shared/cover-core.js");
 const occurrences = require("./shared/events-occurrence-core.js");
 const aw = require("./assignment-writes");
 
+/** @typedef {import("firebase-admin/firestore").Firestore} Firestore */
+/** @typedef {import("firebase-admin/firestore").Transaction} Transaction */
+
+/**
+ * Which place on which Event: what an Assignment is known by.
+ * @typedef {{
+ *   occurrenceId: string,
+ *   roleSlug: string,
+ *   slotId?: ?string,
+ *   date?: string,
+ * }} AssignmentRef
+ */
+
+/**
+ * What `offer` is asked: a reply to a Trade, or an uninvited offer.
+ * `holderId` is still sent by older callers and is never read: who holds the
+ * place is always looked up.
+ * @typedef {{
+ *   tradeId?: string,
+ *   actorId?: string,
+ *   assignment?: AssignmentRef,
+ *   offered?: AssignmentRef[],
+ *   holderId?: string,
+ *   verdicts?: *,
+ *   today?: string,
+ *   now?: *,
+ * }} OfferSpec
+ */
+
+/**
+ * What `accept` is asked: which Trade, and which Assignment on it.
+ * @typedef {{
+ *   tradeId?: string,
+ *   actorId?: string,
+ *   chosen?: *,
+ *   today?: string,
+ *   now?: *,
+ * }} AcceptSpec
+ */
+
 const TRADES = "trades";
 const OCCURRENCES = "event_occurrences";
 const COVER = "cover";
@@ -204,7 +244,7 @@ function inviteFacts(occurrence, personId, rank) {
  *
  * @param {Object} db the Firestore handle
  * @param {string} personId who
- * @param {Object} ref the Assignment they would take
+ * @param {AssignmentRef} ref the Assignment they would take
  * @param {Array<Object>} roster the Event's roster as freshly read
  * @return {Promise<Object>} cover-core's verdict
  */
@@ -262,12 +302,12 @@ async function verdictFor(db, personId, ref, roster) {
  * answers is "whose place is this to trade, and is it open", which the caller
  * must not be trusted for and which the cover list does not disclose.
  *
- * @param {Object} db the Firestore handle
- * @param {Object} ref the Assignment being offered against
- * @return {Promise<?Object>} the row, or null
+ * @param {Firestore} db the Firestore handle
+ * @param {?AssignmentRef|undefined} ref the Assignment being offered against
+ * @return {Promise<?Object<string, *>>} the row, or null
  */
 async function placeOf(db, ref) {
-  const r = ref || {};
+  const r = /** @type {Partial<AssignmentRef>} */ (ref || {});
   if (!r.occurrenceId || !r.roleSlug) return null;
   const rosterSnap = await db.collection(OCCURRENCES).doc(r.occurrenceId)
       .collection("roster").get();
@@ -293,8 +333,12 @@ async function placeOf(db, ref) {
  * @param {Object} db the Firestore handle
  * @param {Object} ref what the caller named: occurrenceId, roleSlug,
  *   slotId
- * @return {Promise<?Object>} the reference, the Event's name and the
- *   Role's
+ * @return {Promise<?{
+ *   assignment: AssignmentRef,
+ *   eventName: string,
+ *   roleName: ?string,
+ *   occurrence: Object<string, *>,
+ * }>} the reference, the Event's name and the Role's
  */
 async function describeAssignment(db, ref) {
   const r = ref || {};
@@ -475,8 +519,8 @@ function step(db, spec, action) {
  * UNINVITED offer is refused instead, because taking something nobody offered
  * you is the cover list's Take button and that is one tap.
  *
- * @param {Object} db the Firestore handle
- * @param {Object} spec the offer
+ * @param {Firestore} db the Firestore handle
+ * @param {OfferSpec} spec the offer
  * @return {Promise<Object>} the outcome
  */
 async function offer(db, spec) {
@@ -621,8 +665,9 @@ async function offer(db, spec) {
 
 /**
  * Take one of the Assignments offered, which settles the whole thing.
- * @param {Object} db the Firestore handle
- * @param {Object} spec which one, and which Assignment
+ * @param {*} db the Firestore handle (the emulator suite also passes one
+ *   wrapped to fail at commit)
+ * @param {AcceptSpec} spec which one, and which Assignment
  * @return {Promise<Object>} the outcome
  */
 async function accept(db, spec) {
@@ -644,14 +689,15 @@ async function accept(db, spec) {
   // the moment between that read and this transaction, and settling from the
   // copy read before she did moved her Coffee anyway. The plan that counts is
   // the one made from the Trade as the transaction sees it.
-  return runOrLose(db, async (tx) => {
+  return runOrLose(db, async (/** @type {Transaction} */ tx) => {
     const fresh = await tx.get(db.collection(TRADES).doc(s.tradeId));
     if (!fresh.exists) return refuse("not-found", "That one has gone.");
     const current = Object.assign({id: fresh.id}, fresh.data());
-    const again = tradeCore.planTransition({
-      trade: current, action: tradeCore.ACTIONS.ACCEPT,
-      actorId: s.actorId, chosen: s.chosen, today: s.today,
-    });
+    const again = /** @type {{ok: boolean, reason: string, chosen: *}} */ (
+      tradeCore.planTransition({
+        trade: current, action: tradeCore.ACTIONS.ACCEPT,
+        actorId: s.actorId, chosen: s.chosen, today: s.today,
+      }));
     if (!again.ok) return refusalFor(again.reason);
     return settle(tx, db, {
       trade: current, chosen: again.chosen, today: s.today, now: s.now,

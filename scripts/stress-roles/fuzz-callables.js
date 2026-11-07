@@ -9,10 +9,17 @@ const SLOTS = ['s1', 's2', 's3'];
 const N = Number(process.argv[2] || 40);
 const OPS = Number(process.argv[3] || 300);
 const people = Array.from({ length: N }, (_, i) => 'p' + i);
+/** @typedef {{ roleSlug: string, slotId: string, personId: string, state: string, quiet?: boolean }} RosterRow */
 let seed = 7; const rnd = () => (seed = (seed * 1103515245 + 12345) % 2147483648) / 2147483648;
+/**
+ * @template T
+ * @param {T[]} a
+ * @returns {T}
+ */
 const pick = a => a[Math.floor(rnd() * a.length)];
 
 (async () => {
+  /** @type {import('firebase-admin/firestore').Firestore} */
   const db = H.connect();
   await H.wipe();
   await Promise.all(people.map(id => Promise.all([H.seedPerson(db, id),
@@ -24,6 +31,7 @@ const pick = a => a[Math.floor(rnd() * a.length)];
   for (const r of ROLES) for (const s of SLOTS) roster.push({ roleSlug: r, slotId: s, personId: people[k++], state: 'pending', stateSetBy: null, stateSetAt: null });
   await H.seedOccurrence(db, { id: OCC, date: '2026-03-14', visibility: 'member', roster });
 
+  /** @type {Object<string, number>} */
   const counts = {};
   const t0 = Date.now();
   const ops = Array.from({ length: OPS }, async () => {
@@ -33,6 +41,7 @@ const pick = a => a[Math.floor(rnd() * a.length)];
     try {
       if (kind === 'answer') {
         // the current holder (whoever we think it is) answers — read without a tx, like a phone that loaded earlier
+        /** @type {RosterRow[]} */
         const rows = await H.rosterOf(db, OCC);
         const held = rows.find(r => r.roleSlug === roleSlug && r.slotId === slotId);
         res = await writes.answer(db, { personId: held ? held.personId : pick(people), roleSlug, slotId, occurrenceId: OCC,
@@ -40,7 +49,7 @@ const pick = a => a[Math.floor(rnd() * a.length)];
       } else {
         res = await writes.take(db, { personId: pick(people), rank: 'member', roleSlug, slotId, occurrenceId: OCC, today: TODAY, now: H.now() });
       }
-    } catch (e) { res = { ok: false, code: 'THREW:' + (e.code || '') + ':' + String(e.message).slice(0, 80) }; }
+    } catch (e) { res = { ok: false, code: 'THREW:' + (/** @type {{ code?: string }} */ (e).code || '') + ':' + String(/** @type {Error} */ (e).message).slice(0, 80) }; }
     const key = kind + ':' + (res.ok ? 'ok' : res.code);
     counts[key] = (counts[key] || 0) + 1;
   });
@@ -48,6 +57,7 @@ const pick = a => a[Math.floor(rnd() * a.length)];
   const ms = Date.now() - t0;
 
   // invariants
+  /** @type {RosterRow[]} */
   const rows = await H.rosterOf(db, OCC);
   const occ = await H.occurrenceOf(db, OCC);
   const cover = (await db.collection('cover').get()).docs.map(d => Object.assign({ id: d.id }, d.data()));
@@ -67,6 +77,7 @@ const pick = a => a[Math.floor(rnd() * a.length)];
     const should = r.state === 'declined' && r.quiet !== true;
     if (has !== should) problems.push(`cover ${cid}: has=${has} should=${should} (state ${r.state}, quiet ${r.quiet})`);
   }
+  /** @type {Object<string, number>} */
   const byPerson = {};
   rows.forEach(r => { byPerson[r.personId] = (byPerson[r.personId] || 0) + 1; });
   Object.entries(byPerson).filter(([, n]) => n > 1).forEach(([p, n]) => problems.push(`${p} holds ${n} exclusive places on one Event`));

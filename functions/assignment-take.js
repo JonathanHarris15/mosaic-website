@@ -94,7 +94,8 @@ function needsAttentionFor(roster) {
  *
  * @param {object} spec the question
  * @param {object} spec.occurrence the Event occurrence
- * @param {Array<object>} spec.roster every Assignment on it, freshly read
+ * @param {Array<Object<string, *>>} spec.roster every Assignment on it,
+ *   freshly read
  * @param {?string} spec.personId the taker's own Person id
  * @param {string} spec.roleSlug the Role of the place being taken
  * @param {?string} spec.slotId its slot

@@ -12,24 +12,29 @@
 // points at somebody whose record does not point back is a ghost link, and a
 // ghost link is treated as no link at all.
 
+/** @typedef {import("firebase-admin/firestore").Firestore} Firestore */
+
 /**
  * Read the caller's account and the Person it is truly linked to.
  *
- * @param {Object} db Admin Firestore.
+ * @param {Firestore} db Admin Firestore.
  * @param {string} uid The caller's auth uid.
- * @return {Promise<{user: Object, personId: ?string}>} The account (an empty
- *   object when there is none) and the Person id, or null when the account is
- *   not linked both ways.
+ * @return {Promise<{user: Object<string, *>, personId: ?string}>} The
+ *   account (an empty object when there is none) and the Person id, or null
+ *   when the account is not linked both ways.
  */
 async function callerOf(db, uid) {
   const userSnap = await db.collection("users").doc(uid).get();
-  const user = userSnap.exists ? userSnap.data() : {};
+  // `exists` is what guarantees `data()`; the SDK's type cannot see that.
+  const user = /** @type {Object<string, *>} */ (
+    userSnap.exists ? userSnap.data() : {});
   const claimed = typeof user.personId === "string" && user.personId ?
     user.personId : null;
   if (!claimed) return {user, personId: null};
 
   const personSnap = await db.collection("people").doc(claimed).get();
-  const linkedBack = personSnap.exists && personSnap.data().userId === uid;
+  const linkedBack = personSnap.exists &&
+    (/** @type {Object<string, *>} */ (personSnap.data())).userId === uid;
   return {user, personId: linkedBack ? claimed : null};
 }
 

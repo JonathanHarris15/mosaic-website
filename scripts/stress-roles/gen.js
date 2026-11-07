@@ -5,7 +5,123 @@ const Fairness = require(REPO + 'fairness-core.js');
 const AutoAssign = require(REPO + 'auto-assign-core.js');
 const Family = require(REPO + 'family-core.js');
 
+/**
+ * @typedef {object} Person
+ * @property {string} id
+ * @property {string} name
+ * @property {string} sex 'male' or 'female'
+ * @property {string[]} tags
+ * @property {{ inactive?: boolean }} membership
+ */
+/**
+ * @typedef {object} Family
+ * @property {string} id
+ * @property {string} [husbandId]
+ * @property {string} [wifeId]
+ * @property {string[]} [childIds]
+ */
+/**
+ * @typedef {object} Group
+ * @property {string} id
+ * @property {string} typeId
+ * @property {string} [name]
+ * @property {?string} [leaderId]
+ * @property {string[]} memberIds
+ */
+/**
+ * @typedef {object} Relationship
+ * @property {string | undefined} fromId
+ * @property {string} toId
+ * @property {string} typeId
+ */
+/**
+ * @typedef {object} Slot
+ * @property {string} id
+ * @property {string} requirement
+ */
+/**
+ * @typedef {object} Restriction
+ * @property {string} kind
+ * @property {string} [tagId]
+ * @property {string} [typeId]
+ * @property {string[]} [personIds]
+ * @property {string[]} [roleSlugs]
+ */
+/**
+ * @typedef {object} Role
+ * @property {string} slug
+ * @property {string} name
+ * @property {string} family
+ * @property {Slot[]} slots
+ * @property {Restriction[]} restrictions
+ * @property {number} intensity
+ * @property {boolean} [allowsAnotherRole]
+ */
+/**
+ * @typedef {object} HistoryRecord
+ * @property {string} personId
+ * @property {string} type the Role slug
+ * @property {string} serviceDate YYYY-MM-DD
+ * @property {string} [seriesId]
+ */
+/**
+ * @typedef {object} Seat
+ * @property {string} roleSlug
+ * @property {string} slotId
+ * @property {string} personId
+ * @property {boolean} [held]
+ */
+/**
+ * @typedef {object} DraftDay
+ * @property {Seat[]} [seats]
+ * @property {Seat[]} [filled]
+ */
+/**
+ * @typedef {object} ChurchOptions
+ * @property {number} n how many people
+ * @property {number} [seed]
+ * @property {boolean} [unfillable] add a Role nobody can fill
+ * @property {boolean} [crossSame] add a cross-role sameGroup rule
+ */
+/**
+ * @typedef {object} AuditOptions
+ * @property {string[]} [away]
+ * @property {string[]} [liturgical]
+ * @property {Role[]} [roles]
+ * @property {Person[]} [people]
+ */
+/**
+ * @typedef {object} Gap
+ * @property {string} roleSlug
+ * @property {string} slotId
+ * @property {string} reason
+ */
+/**
+ * @typedef {object} SolveResult what Fairness.solve returns
+ * @property {Seat[]} filled
+ * @property {Gap[]} unfilled
+ * @property {number} widened
+ * @property {boolean} [allSpent]
+ * @property {Array<{ personId: string, load: number }>} pool
+ */
+/**
+ * @typedef {object} Candidate one row of Roles.candidatesFor
+ * @property {string} personId
+ * @property {boolean} eligible
+ * @property {?string} reason
+ */
+/**
+ * @typedef {object} DraftResult what AutoAssign.draft returns
+ * @property {Array<{ date: string, seats: Seat[], skipped?: boolean }>} dates
+ */
+/** @typedef {ReturnType<typeof church>} Church */
+/** @typedef {(def: Role, slot: Slot, context: object) => any} CandidatesFor */
+
 // Deterministic PRNG (mulberry32).
+/**
+ * @param {number} seed
+ * @returns {() => number}
+ */
 function rng(seed) {
     let a = seed >>> 0;
     return () => {
@@ -16,7 +132,14 @@ function rng(seed) {
     };
 }
 
+/**
+ * @param {string} startIso YYYY-MM-DD
+ * @param {number} count
+ * @param {number} step days between dates
+ * @returns {string[]}
+ */
 function sundays(startIso, count, step) {
+    /** @type {string[]} */
     const out = [];
     const d = new Date(startIso + 'T00:00:00Z');
     for (let i = 0; i < count; i++) {
@@ -30,13 +153,21 @@ const R = Roles.RESTRICTIONS;
 const Q = Roles.REQUIREMENTS;
 
 // opts: { n, seed, unfillable }
+/** @param {ChurchOptions} opts */
 function church(opts) {
     const n = opts.n;
     const rand = rng(opts.seed || 1);
+    /**
+     * @template T
+     * @param {T[]} arr
+     * @returns {T}
+     */
     const pick = arr => arr[Math.floor(rand() * arr.length)];
 
+    /** @type {Person[]} */
     const people = [];
     for (let i = 0; i < n; i++) {
+        /** @type {string[]} */
         const tags = [];
         // tag0 is a "member" tag carried by ~60%; others sparse.
         if (rand() < 0.6) tags.push('tag0');
@@ -54,12 +185,14 @@ function church(opts) {
 
     // Families: walk people in order, form households of 1-5. ~30% of people
     // married (i.e. ~15% of n couples).
+    /** @type {Family[]} */
     const families = [];
     let i = 0, fam = 0;
     while (i < n) {
         const size = 1 + Math.floor(rand() * 5);
         const members = people.slice(i, i + size).map(p => p.id);
         i += size;
+        /** @type {Family} */
         const f = { id: 'f' + (fam++) };
         if (members.length >= 2 && rand() < 0.75) {
             f.husbandId = members[0]; f.wifeId = members[1];
@@ -69,6 +202,7 @@ function church(opts) {
         }
         families.push(f);
     }
+    /** @type {Group[]} */
     const groups = Family.servingGroups(families, people);
 
     // House groups of ~12, with a leader not in memberIds.
@@ -82,6 +216,7 @@ function church(opts) {
     }
 
     // Pairwise relationships (marriage edges + some "mentor" edges).
+    /** @type {Relationship[]} */
     const relationships = [];
     families.forEach(f => {
         if (f.husbandId && f.wifeId) relationships.push({ fromId: f.husbandId, toId: f.wifeId, typeId: 'spouse' });
@@ -92,6 +227,7 @@ function church(opts) {
     }
 
     // ~30 Servant Roles.
+    /** @type {Array<() => Restriction[]>} */
     const roleKinds = [
         () => [],
         () => [{ kind: R.REQUIRE_TAG, tagId: 'tag1' }],
@@ -102,9 +238,11 @@ function church(opts) {
         () => [{ kind: R.ALLOWLIST, personIds: Array.from({ length: 40 }, () => pick(people).id) }],
         () => [{ kind: R.REQUIRE_TAG, tagId: 'tag0' }, { kind: R.NOT_SAME_GROUP, typeId: 'marriage' }],
     ];
+    /** @type {Role[]} */
     const roles = [];
     for (let r = 0; r < 30; r++) {
         const count = 1 + Math.floor(rand() * 4);
+        /** @type {Slot[]} */
         const slots = [];
         for (let s = 0; s < count; s++) {
             const x = rand();
@@ -127,6 +265,7 @@ function church(opts) {
         });
     }
 
+    /** @type {Restriction[]} */
     const crossRoleRules = [
         { kind: R.NOT_SAME_GROUP, typeId: 'marriage', roleSlugs: ['role1', 'role2'] },
     ];
@@ -139,6 +278,7 @@ function church(opts) {
 
     // History: every past date fully staffed from random people, plus some
     // older noise outside the window.
+    /** @type {HistoryRecord[]} */
     const history = [];
     pastAsc.forEach(date => {
         roles.forEach(role => role.slots.forEach(() => {
@@ -148,6 +288,7 @@ function church(opts) {
     });
 
     // Away: ~5% of people away for a 3-week stretch inside the draft range.
+    /** @type {Object<string, string[]>} */
     const awayByDate = {};
     dates.forEach(d => { awayByDate[d] = []; });
     people.forEach(p => {
@@ -156,12 +297,17 @@ function church(opts) {
         for (let k = start; k < Math.min(dates.length, start + 3); k++) awayByDate[dates[k]].push(p.id);
     });
 
+    /** @type {Object<string, number>} */
     const intensityBySlug = {};
     roles.forEach(r => { intensityBySlug[r.slug] = r.intensity; });
 
     return { people, roles, groups, relationships, families, crossRoleRules, history, pastDates, dates, awayByDate, intensityBySlug };
 }
 
+/**
+ * @param {Church} c
+ * @param {Object<string, *>} [over] options to override
+ */
 function draftOptions(c, over) {
     return Object.assign({
         dates: c.dates,
@@ -176,10 +322,10 @@ function draftOptions(c, over) {
         solve: Fairness.solve,
         candidatesFor: Roles.candidatesFor,
         crossRoleRules: c.crossRoleRules,
-        intensityOf: rec => (c.intensityBySlug[rec.type] !== undefined ? c.intensityBySlug[rec.type] : 1),
+        intensityOf: /** @param {HistoryRecord} rec */ rec => (c.intensityBySlug[rec.type] !== undefined ? c.intensityBySlug[rec.type] : 1),
         nudges: {},
         outOn: () => [],
-        awayOn: d => c.awayByDate[d] || [],
+        awayOn: /** @param {string} d */ d => c.awayByDate[d] || [],
         liturgicalSlugs: Roles.LITURGICAL_SLUGS,
         liturgicalHoldersFor: () => ['p0'],
         relationships: c.relationships,
@@ -187,6 +333,11 @@ function draftOptions(c, over) {
     }, over || {});
 }
 
+/**
+ * @param {Church} c
+ * @param {?string} [date] defaults to the first draft date
+ * @param {Object<string, *>} [over] options to override
+ */
 function solveOptions(c, date, over) {
     return Object.assign({
         seriesId: 'sunday_service',
@@ -196,7 +347,7 @@ function solveOptions(c, date, over) {
         history: c.history,
         occurrenceDates: c.pastDates,
         windowSize: 12,
-        intensityOf: rec => (c.intensityBySlug[rec.type] !== undefined ? c.intensityBySlug[rec.type] : 1),
+        intensityOf: /** @param {HistoryRecord} rec */ rec => (c.intensityBySlug[rec.type] !== undefined ? c.intensityBySlug[rec.type] : 1),
         liturgicalSlugs: Roles.LITURGICAL_SLUGS,
         liturgicalHolders: ['p0'],
         relationships: c.relationships,
@@ -208,14 +359,25 @@ function solveOptions(c, date, over) {
 }
 
 // Independent roster checker: does a draft day break any hard rule?
+/**
+ * @param {Church} c
+ * @param {DraftDay} day
+ * @param {AuditOptions} [opts]
+ * @returns {string[]}
+ */
 function audit(c, day, opts) {
+    /** @type {AuditOptions} */
     const o = opts || {};
+    /** @type {string[]} */
     const problems = [];
     const away = new Set((o.away) || []);
     const lit = new Set(o.liturgical || []);
     const seats = day.seats || day.filled || [];
+    /** @type {Object<string, Seat[]>} */
     const byRole = {};
+    /** @type {Object<string, Role>} */
     const defs = {}; (o.roles || c.roles).forEach(r => { defs[r.slug] = r; });
+    /** @type {Object<string, Seat[]>} */
     const perPerson = {};
     seats.forEach(s => {
         (byRole[s.roleSlug] || (byRole[s.roleSlug] = [])).push(s);
@@ -237,7 +399,7 @@ function audit(c, day, opts) {
         crossRoleRules: c.crossRoleRules, awayPersonIds: o.away || [],
         liturgicalHolders: (o.liturgical || []).map(id => ({ personId: id, roleSlug: 'preacher' })),
     });
-    w.forEach(x => problems.push('warning ' + x.reason + ' ' + x.personId + ' ' + x.roleSlug + '/' + x.slotId));
+    w.forEach(/** @param {{ reason: string, personId: string, roleSlug: string, slotId: string }} x */ x => problems.push('warning ' + x.reason + ' ' + x.personId + ' ' + x.roleSlug + '/' + x.slotId));
     return problems;
 }
 

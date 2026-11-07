@@ -123,15 +123,18 @@ function needsAttentionFor(roster) {
  *
  * @param {object} spec the question
  * @param {object} spec.occurrence the Event occurrence
- * @param {Array<object>} spec.roster every Assignment on it
+ * @param {Array<Object<string, *>>} spec.roster every Assignment on it
  * @param {?string} spec.personId the caller's own Person id
  * @param {string} spec.roleSlug the Role they are answering for
  * @param {?string} spec.slotId the slot they are answering for
- * @param {?string} spec.oneOffId which one-off job, when it is one (MS-818)
+ * @param {?string} [spec.oneOffId] which one-off job, when it is one (MS-818)
  * @param {string} spec.state their answer
+ * @param {boolean} [spec.quiet] whether a decline stays off the open list
  * @param {string} spec.today YYYY-MM-DD in the church's timezone
+ * @param {*} [spec.now] a timestamp to stamp the answer with
  * @param {?string} spec.roleName the Role's human name, for the cover row
- * @return {object} a refusal, or everything the transaction must write
+ * @return {Object<string, *>} a refusal, or everything the transaction must
+ *   write
  */
 function planAnswer(spec) {
   const s = spec || {};

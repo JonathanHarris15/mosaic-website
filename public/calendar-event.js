@@ -128,6 +128,7 @@
             personId: null,
             uid: null,
 
+            /** @type {?Record<string, *>} */
             occurrence: null,
             series: null,
             assignments: [],
@@ -877,7 +878,7 @@
                 this.saving = true;
                 try {
                     await this.saveWithRoster();
-                } catch (e) {
+                } catch (/** @type {any} */ e) {
                     console.error('Save failed:', e);
                     this.error = e && e.code === 'roster-changed'
                         ? 'Somebody else changed this roster since you opened it, so that change was not saved. The latest is shown now.'
@@ -899,20 +900,22 @@
                 this.storedAssignments = this.assignments.slice();
                 // Keep the derived fields in step locally too, so the banner
                 // and the flag do not wait for a reload to agree.
-                this.occurrence.participantIds = Core.participantIds(this.assignments);
-                this.occurrence.needsAttention = saved.needsAttention;
-                this.occurrence.outForCover = saved.outForCover;
+                const occurrence = /** @type {Record<string, *>} */ (this.occurrence);
+                occurrence.participantIds = Core.participantIds(this.assignments);
+                occurrence.needsAttention = saved.needsAttention;
+                occurrence.outForCover = saved.outForCover;
             },
 
             async reloadRoster() {
                 try {
-                    const fresh = await Store.loadOccurrence(db, this.occurrence.id);
+                    const occurrence = /** @type {Record<string, *>} */ (this.occurrence);
+                    const fresh = await Store.loadOccurrence(db, occurrence.id);
                     if (!fresh) return;
                     this.assignments = fresh.assignments || [];
                     this.storedAssignments = this.assignments.slice();
-                    this.occurrence.participantIds = Core.participantIds(this.assignments);
-                    this.occurrence.needsAttention = fresh.needsAttention;
-                    this.occurrence.outForCover = fresh.outForCover;
+                    occurrence.participantIds = Core.participantIds(this.assignments);
+                    occurrence.needsAttention = fresh.needsAttention;
+                    occurrence.outForCover = fresh.outForCover;
                 } catch (e) {
                     console.error('Roster reload failed:', e);
                 }

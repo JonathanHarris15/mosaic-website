@@ -3,22 +3,42 @@ const assert = require('node:assert');
 const H = require('./harness.js');
 const writes = require('../../functions/assignment-writes.js');
 
+/** @typedef {import('firebase-admin/firestore').Firestore} Firestore */
+/** @typedef {Parameters<typeof writes.answer>[1]} AnswerSpec */
+/**
+ * What a write hands back: done, or refused and why.
+ * @typedef {{ok: boolean, code?: string, message?: string}} Outcome
+ */
+/**
+ * One roster row as it is stored.
+ * @typedef {{id?: string, roleSlug: string, slotId: ?string, oneOffId?: ?string,
+ *     personId: string, state: string}} Row
+ */
+
 // MS-818. Every one-off job is `one_off` with no slot, so answering matched
 // the first one-off on the Event and wrote it back under an id that ignored the
 // one-off's own id.
 
-const suite = H.skipReason ? (n) => test(n, { skip: H.skipReason }, () => {}) : describe;
+const suite = H.skipReason ? /** @type {(name: string, body: () => void) => void} */ ((n) => test(n, { skip: H.skipReason }, () => {})) : describe;
 const OCC = 'occ-one-off';
 const ANN = 'person-ann';
 const RAY = 'person-ray';
+/**
+ * One one-off job on the roster.
+ * @param {string} oneOffId which job
+ * @param {string} personId who holds it
+ * @param {string} label what the job is called
+ * @return {object} the row
+ */
 const oneOff = (oneOffId, personId, label) => ({
     roleSlug: 'one_off', slotId: null, oneOffId, label, personId,
     state: 'pending', stateSetBy: null, stateSetAt: null,
 });
 
 suite('answering a one-off job', () => {
+    /** @type {Firestore} */
     let db;
-    before(() => { db = H.connect(); });
+    before(() => { db = /** @type {Firestore} */ (H.connect()); });
     beforeEach(async () => {
         await H.wipe();
         await Promise.all([ANN, RAY].map(id => H.seedPerson(db, id)));
@@ -28,14 +48,21 @@ suite('answering a one-off job', () => {
         });
     });
 
-    const say = (personId, oneOffId, state) => writes.answer(db, {
+    /**
+     * Answer a one-off job as somebody.
+     * @param {string} personId who is answering
+     * @param {string} oneOffId which job
+     * @param {string} state confirmed or declined
+     * @return {Promise<Outcome>} what the write handed back
+     */
+    const say = (personId, oneOffId, state) => /** @type {Promise<Outcome>} */ (writes.answer(db, {
         personId, occurrenceId: OCC, roleSlug: 'one_off', slotId: null, oneOffId,
         state, today: '2026-03-01', now: H.now(),
-    });
+    }));
 
     test('updates its own row and adds none (MS-818)', async () => {
         assert.equal((await say(ANN, 'oo1', 'confirmed')).ok, true);
-        const roster = await H.rosterOf(db, OCC);
+        const roster = /** @type {Array<Row>} */ (await H.rosterOf(db, OCC));
         assert.equal(roster.length, 3, 'a second copy was written');
         const byId = Object.fromEntries(roster.map(r => [r.oneOffId, r.state]));
         assert.deepEqual(byId, { oo1: 'confirmed', oo2: 'pending', oo3: 'pending' });
@@ -44,7 +71,7 @@ suite('answering a one-off job', () => {
     test('two one-offs for one person are answered separately (MS-818)', async () => {
         assert.equal((await say(ANN, 'oo1', 'confirmed')).ok, true);
         assert.equal((await say(ANN, 'oo2', 'declined')).ok, true);
-        const roster = await H.rosterOf(db, OCC);
+        const roster = /** @type {Array<Row>} */ (await H.rosterOf(db, OCC));
         const byId = Object.fromEntries(roster.map(r => [r.oneOffId, r.state]));
         assert.deepEqual(byId, { oo1: 'confirmed', oo2: 'declined', oo3: 'pending' });
     });
@@ -56,13 +83,13 @@ suite('answering a one-off job', () => {
     });
 
     test('an older page that sends no one-off id still answers its own (MS-818)', async () => {
-        const r = await writes.answer(db, {
+        const r = /** @type {Outcome} */ (await writes.answer(db, /** @type {AnswerSpec} */ ({
             personId: RAY, occurrenceId: OCC, roleSlug: 'one_off', slotId: null,
             state: 'confirmed', today: '2026-03-01', now: H.now(),
-        });
+        })));
         assert.equal(r.ok, true, JSON.stringify(r));
-        const roster = await H.rosterOf(db, OCC);
+        const roster = /** @type {Array<Row>} */ (await H.rosterOf(db, OCC));
         assert.equal(roster.length, 3);
-        assert.equal(roster.find(x => x.oneOffId === 'oo3').state, 'confirmed');
+        assert.equal(/** @type {Row} */ (roster.find(x => x.oneOffId === 'oo3')).state, 'confirmed');
     });
 });

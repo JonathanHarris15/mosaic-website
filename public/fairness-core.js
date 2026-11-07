@@ -581,6 +581,7 @@
         // down the ranking they sit.
         const reach = reachFor(roles, ranked.candidates, byId, o, candidatesFor);
 
+        /** @type {string[]} */
         const guaranteed = [];
         const guaranteedSeen = {};
         reach.forEach(entry => {
@@ -624,7 +625,11 @@
         //
         // One solve of the date with the `size` least-loaded people in the
         // pool (plus every Role's guaranteed people).
-        const attempt = size => {
+        /**
+         * @typedef {{roleSlug: string, slotId: *, reason: *, detail: *}} Gap
+         *   A place one solve could not fill, and why.
+         */
+        const attempt = (/** @type {number} */ size) => {
             const taken = {};
             const chosen = [];
             ranked.candidates.slice(0, size).forEach(c => {
@@ -644,6 +649,7 @@
             // Setup seat blocks the same person from Coffee even when Coffee
             // goes first. Solved seats join it as they are taken.
             const seated = preset.slice();
+            /** @type {Gap[]} */
             const gaps = [];
 
             solveOrder.forEach(entry => {
@@ -721,8 +727,9 @@
         // fills is FOUND, by doubling and then halving, in a handful of solves
         // rather than one per person. The pool is still a prefix of the load
         // ranking, so nobody lighter-loaded is ever passed over.
+        /** @type {Record<string, number>} */
         const rankOf = {};
-        ranked.candidates.forEach((c, i) => {
+        ranked.candidates.forEach((/** @type {{personId: string}} */ c, /** @type {number} */ i) => {
             if (rankOf[c.personId] === undefined) rankOf[c.personId] = i;
         });
         let best = attempt(start);
@@ -731,13 +738,17 @@
         // first pool did not already hold: every Role's own people are
         // guaranteed into it, so an allowlist that is simply too short for its
         // places stops here rather than pulling in the whole church.
+        /** @type {Record<string, boolean>} */
         const short = {};
         best.unfilled.forEach(gap => { short[gap.roleSlug] = true; });
+        /** @type {Record<string, boolean>} */
         const inPool = {};
-        ranked.candidates.slice(0, start).forEach(c => { inPool[c.personId] = true; });
+        ranked.candidates.slice(0, start).forEach((/** @type {{personId: string}} */ c) => {
+            inPool[c.personId] = true;
+        });
         guaranteed.forEach(personId => { inPool[personId] = true; });
         let useful = start;
-        reach.forEach(entry => {
+        reach.forEach((/** @type {{role: {slug: string}, reach: string[]}} */ entry) => {
             if (!short[entry.role.slug]) return;
             entry.reach.forEach(personId => {
                 if (inPool[personId]) return;

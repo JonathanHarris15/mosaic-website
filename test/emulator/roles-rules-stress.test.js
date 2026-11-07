@@ -8,11 +8,14 @@ const path = require('node:path');
 // emulator's real rules engine.
 
 const HOST = process.env.FIRESTORE_EMULATOR_HOST || '';
-const suite = HOST ? describe : (name) => test(name, { skip: 'no emulator' }, () => {});
+const suite = HOST ? describe : /** @type {(name: string, body: () => void) => void} */ ((name) => test(name, { skip: 'no emulator' }, () => {}));
 
 suite('Roles: what the rules actually let through', () => {
-    let RT, env;
-    const ctx = (uid) => env.authenticatedContext(uid, { firebase: { sign_in_provider: 'password' } }).firestore();
+    /** @type {typeof import('@firebase/rules-unit-testing')} */
+    let RT;
+    /** @type {import('@firebase/rules-unit-testing').RulesTestEnvironment} */
+    let env;
+    const ctx = (/** @type {string} */ uid) => env.authenticatedContext(uid, { firebase: { sign_in_provider: 'password' } }).firestore();
 
     before(async () => {
         RT = require('@firebase/rules-unit-testing');
@@ -99,7 +102,7 @@ suite('Roles: what the rules actually let through', () => {
     test('a Role\'s allowlist is not readable signed out', { todo: 'roles/ is allow read: if true' }, async () => {
         const anon = env.unauthenticatedContext().firestore();
         const snap = await anon.doc('roles/ushers').get();
-        const rules = (snap.data() && snap.data().restrictions) || [];
+        const rules = (snap.data() && /** @type {{restrictions?: Array<{personIds?: string[]}>}} */ (snap.data()).restrictions) || [];
         assert.equal(rules.some(r => r.personIds), false);
     });
 

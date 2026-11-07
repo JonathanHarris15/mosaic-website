@@ -636,6 +636,16 @@
     // touch are left as they stand, whoever last wrote them.
     //
     // Resolves to the payload, with `assignments` as the roster now stored.
+    /**
+     * @typedef {Record<string, *>} RosterRow One stored roster row (an assignment).
+     * @typedef {Record<string, *>} Occurrence An occurrence, its roster as `assignments`.
+     */
+    /**
+     * @param {*} db Firestore, browser compat or Admin; both take the same calls.
+     * @param {Occurrence} occurrence What to write.
+     * @param {{loaded?: RosterRow[]}} [options] The roster as the page read it.
+     * @returns {Promise<Occurrence>}
+     */
     async function saveOccurrence(db, occurrence, options) {
         const id = occurrence.id || Core.occurrenceId(occurrence.seriesId, occurrence.date);
         if (!id) throw new Error('An occurrence needs either an id or a series and a date.');
@@ -662,6 +672,10 @@
 
     const DERIVED = ['participantIds', 'needsAttention', 'outForCover'];
 
+    /**
+     * @param {Occurrence} occurrence
+     * @returns {{participantIds: *, needsAttention: *, outForCover: *}}
+     */
     function derivedFields(occurrence) {
         const assignments = occurrence.assignments || [];
         return {
@@ -677,11 +691,20 @@
     // somebody else writing the row.
     const ROW_FIELDS = ['personId', 'roleSlug', 'slotId', 'oneOffId', 'label',
         'state', 'quiet', 'stateSetBy'];
+    /**
+     * @param {?RosterRow | undefined} a
+     * @param {?RosterRow | undefined} b
+     * @returns {boolean}
+     */
     function sameRow(a, b) {
         if (!a || !b) return !a && !b;
         return ROW_FIELDS.every(k => (a[k] === undefined ? null : a[k]) === (b[k] === undefined ? null : b[k]))
             && timeKey(a.stateSetAt) === timeKey(b.stateSetAt);
     }
+    /**
+     * @param {*} v A time as stored: string, Firestore Timestamp, Date or other.
+     * @returns {?string}
+     */
     function timeKey(v) {
         if (v == null) return null;
         if (typeof v === 'string') return v;
@@ -698,17 +721,27 @@
     // trade) also writes that document in its own transaction, so if one lands
     // while this is open, this one is retried, and the untouched rows it then
     // reads include the change.
+    /**
+     * @param {*} db Firestore, browser compat or Admin.
+     * @param {string} occurrenceId
+     * @param {RosterRow[]} loaded The roster as the page read it.
+     * @param {RosterRow[]} wanted The roster the page wants stored.
+     * @returns {Promise<RosterRow[]>}
+     */
     async function saveRosterChanges(db, occurrenceId, loaded, wanted) {
         const ref = occurrenceRef(db, occurrenceId);
         const col = ref.collection(ROSTER);
+        /** @type {Map<string, RosterRow>} */
         const before = new Map((loaded || []).map(a => [rosterId(a), a]));
+        /** @type {Map<string, RosterRow>} */
         const after = new Map((wanted || []).map(a => [rosterId(a), a]));
 
+        /** @type {string[]} */
         const touched = [];
         after.forEach((row, rid) => { if (!sameRow(before.get(rid), row)) touched.push(rid); });
         before.forEach((row, rid) => { if (!after.has(rid)) touched.push(rid); });
 
-        return db.runTransaction(async tx => {
+        return db.runTransaction(async (/** @type {*} */ tx) => {
             const occSnap = await tx.get(ref);
             // A plain read, after the document read: anything that committed
             // before that read is in it; anything after retries this.
@@ -716,11 +749,13 @@
             // A row is known by what it holds, not by the id it happens to
             // be filed under. Older rows may sit under another id; they are
             // read where they are and moved to the canonical one when written.
+            /** @type {Map<string, string>} */
             const filedAs = new Map();
-            all.docs.forEach(d => { filedAs.set(rosterId(d.data() || {}), d.id); });
-            const where = rid => filedAs.get(rid) || rid;
+            all.docs.forEach((/** @type {*} */ d) => { filedAs.set(rosterId(d.data() || {}), d.id); });
+            const where = (/** @type {string} */ rid) => filedAs.get(rid) || rid;
             const snaps = await Promise.all(touched.map(rid => tx.get(col.doc(where(rid)))));
 
+            /** @type {string[]} */
             const conflicts = [];
             snaps.forEach((snap, i) => {
                 const rid = touched[i];
@@ -728,19 +763,21 @@
                 if (!sameRow(stored, before.get(rid) || null)) conflicts.push(rid);
             });
             if (conflicts.length) {
-                const err = new Error('Somebody else changed this roster since it was opened. ' +
-                    'Reload to see the latest before changing it.');
+                const err = /** @type {Error & {code?: string, conflicts?: string[]}} */ (
+                    new Error('Somebody else changed this roster since it was opened. ' +
+                        'Reload to see the latest before changing it.'));
                 err.code = 'roster-changed';
                 err.conflicts = conflicts;
                 throw err;
             }
 
-            const rows = new Map(all.docs.map(d => [rosterId(d.data() || {}), d.data()]));
+            /** @type {Map<string, RosterRow>} */
+            const rows = new Map(all.docs.map((/** @type {*} */ d) => [rosterId(d.data() || {}), d.data()]));
             touched.forEach(rid => {
                 if (where(rid) !== rid) tx.delete(col.doc(where(rid)));
                 if (after.has(rid)) {
                     tx.set(col.doc(rid), after.get(rid));
-                    rows.set(rid, after.get(rid));
+                    rows.set(rid, /** @type {RosterRow} */ (after.get(rid)));
                 } else {
                     if (where(rid) === rid) tx.delete(col.doc(rid));
                     rows.delete(rid);
@@ -1665,7 +1702,7 @@
             await saveOccurrence(db, Object.assign(
                 { id: id, assignments: roster },
                 newOccurrenceFields(series, o.seriesId, day.date)
-            ), { loaded: existing.docs.map(doc => doc.data()) });
+            ), { loaded: existing.docs.map((/** @type {*} */ doc) => doc.data()) });
 
             assignments += drafted.length;
             written.push(day.date);

@@ -3,15 +3,21 @@ const assert = require('node:assert');
 const H = require('./harness.js');
 const run = require('../../functions/service-involvement-run.js');
 
+/** @typedef {import('firebase-admin/firestore').Firestore} Firestore */
+/** @typedef {import('firebase-admin/firestore').DocumentData} DocumentData */
+
 // MS-815. One Person deleted after going on the booklet stopped the nightly
 // conversion for every Sunday after it, every night.
 
-const suite = H.skipReason ? (n) => test(n, { skip: H.skipReason }, () => {}) : describe;
+const suite = H.skipReason ? /** @type {(name: string, body: () => void) => void} */ ((n) => test(n, { skip: H.skipReason }, () => {})) : describe;
 const TODAY = '2026-03-10';
 
 suite('the nightly Sunday conversion', () => {
-    let db, FieldValue;
-    before(() => { db = H.connect(); FieldValue = require('firebase-admin').firestore.FieldValue; });
+    /** @type {Firestore} */
+    let db;
+    /** @type {typeof import('firebase-admin/firestore').FieldValue} */
+    let FieldValue;
+    before(() => { db = /** @type {Firestore} */ (H.connect()); FieldValue = require('firebase-admin').firestore.FieldValue; });
     beforeEach(async () => {
         await H.wipe();
         await H.seedPerson(db, 'p-preacher', { totalInvolvements: 2 });
@@ -28,14 +34,15 @@ suite('the nightly Sunday conversion', () => {
     const flagged = async () => (await db.collection('services').where('involvementDeferred', '==', true).get()).docs;
 
     test('a deleted Person does not stop the run (MS-815)', async () => {
+        /** @type {string[]} */
         const logs = [];
-        const r = await run.payAll(db, await flagged(), TODAY, FieldValue, (m) => logs.push(m));
+        const r = await run.payAll(db, await flagged(), TODAY, FieldValue, (/** @type {string} */ m) => logs.push(m));
         assert.deepEqual(r.failed, []);
         assert.equal(r.converted, 2);
         assert.equal(r.written, 2);
 
-        const preacher = (await db.collection('people').doc('p-preacher').get()).data();
-        const leader = (await db.collection('people').doc('p-leader').get()).data();
+        const preacher = /** @type {DocumentData} */ ((await db.collection('people').doc('p-preacher').get()).data());
+        const leader = /** @type {DocumentData} */ ((await db.collection('people').doc('p-leader').get()).data());
         assert.equal(preacher.totalInvolvements, 3);
         assert.equal(leader.totalInvolvements, 1);
         assert.equal((await flagged()).length, 0, 'both Sundays are settled');
@@ -54,10 +61,11 @@ suite('the nightly Sunday conversion', () => {
         const broken = Object.create(docs[0]);
         broken.data = () => { throw new Error('unreadable'); };
         Object.defineProperty(broken, 'id', { value: docs[0].id });
+        /** @type {string[]} */
         const logs = [];
-        const r = await run.payAll(db, [broken, docs[1]], TODAY, FieldValue, (m) => logs.push(m));
+        const r = await run.payAll(db, [broken, docs[1]], TODAY, FieldValue, (/** @type {string} */ m) => logs.push(m));
         assert.deepEqual(r.failed, [docs[0].id]);
         assert.equal(r.converted, 1);
-        assert.equal((await db.collection('people').doc('p-leader').get()).data().totalInvolvements, 1);
+        assert.equal(/** @type {DocumentData} */ ((await db.collection('people').doc('p-leader').get()).data()).totalInvolvements, 1);
     });
 });

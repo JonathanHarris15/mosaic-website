@@ -29,6 +29,8 @@ const at = require("./assignment-take");
 const coverCore = require("./shared/cover-core.js");
 const awayCore = require("./shared/away-core.js");
 
+/** @typedef {import("firebase-admin/firestore").Firestore} Firestore */
+
 const OCCURRENCES = "event_occurrences";
 // Where Event series live — the home of the Cross-Role Rules (MS-221).
 const SERIES = "events";
@@ -117,7 +119,7 @@ function runOrLose(db, body, message) {
  * and the decline path has both — this knows when an advertisement has stopped
  * being true, which is a different and much smaller question.
  *
- * @param {Object} db the Firestore handle
+ * @param {Firestore} db the Firestore handle
  * @param {Object} spec the place, and what is on it now
  * @param {string} spec.occurrenceId the occurrence
  * @param {string} spec.roleSlug the Role
@@ -293,8 +295,10 @@ async function takeContext(db, personId, roleSlug, date, seriesId) {
  * @param {string} spec.occurrenceId the occurrence
  * @param {string} spec.roleSlug the Role being answered for
  * @param {?string} spec.slotId its slot
- * @param {?string} spec.oneOffId which one-off job, when it is one
+ * @param {?string} [spec.oneOffId] which one-off job, when it is one
  * @param {string} spec.state the answer — confirmed or declined
+ * @param {boolean} [spec.quiet] whether a decline stays off the open list;
+ *   absent leaves it as it was
  * @param {string} spec.today YYYY-MM-DD in the church's timezone
  * @param {*} spec.now a timestamp to stamp the answer with
  * @return {Promise<Object>} the plan that was written, or a refusal

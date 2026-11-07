@@ -553,8 +553,9 @@ window.RolesManager = () => ({
             initial,
             same: (a, b) => norm(a) === norm(b),
             validate: () => (this.draft && this.draftErrors.length ? { role: this.draftErrors.join(' ') } : null),
-            save: async (patch) => {
+            save: async (/** @type {Record<string, *>} */ patch) => {
                 const definition = this.definitionFromDraft();
+                /** @type {Record<string, *>} */
                 const out = {};
                 Object.keys(patch).forEach(f => { out[f] = definition[f]; });
                 // The slot counter goes with the slots, so a removed slot's id

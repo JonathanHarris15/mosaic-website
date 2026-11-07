@@ -57,6 +57,6 @@ test('a Role stored before the counter keeps working (MS-823)', () => {
     const old = { name: 'Old', slug: 'old', family: 'servant', restrictions: [],
         slots: [{ id: 's1', requirement: 'either' }, { id: 's4', requirement: 'either' }] };
     const next = RolesCore.addSlot(old, 'either');
-    assert.deepEqual(next.slots.map(s => s.id), ['s1', 's4', 's5']);
+    assert.deepEqual(next.slots.map((/** @type {{id: string}} */ s) => s.id), ['s1', 's4', 's5']);
     assert.equal(next.nextSlotSeq, 6);
 });

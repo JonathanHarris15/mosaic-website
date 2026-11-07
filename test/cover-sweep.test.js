@@ -25,6 +25,11 @@ const aa = require('../functions/assignment-answer.js');
 // A Firestore small enough to answer the questions this asks of it. `roster`
 // is what the place's roster holds NOW, which the sweep reads again rather
 // than trusting the trigger's copy (MS-819).
+/**
+ * @param {Record<string, any>} [seed]
+ * @param {Array<Record<string, any>>} [roster]
+ * @returns {any} stands in for Firestore
+ */
 function fakeDb(seed, roster) {
     const data = Object.assign({}, seed || {});
     const deleted = [];
@@ -43,7 +48,7 @@ function fakeDb(seed, roster) {
                         }),
                         delete: async () => { deleted.push(key); delete data[key]; },
                         collection: () => ({
-                            where: (field, op, value) => ({
+                            where: (/** @type {string} */ field, /** @type {string} */ op, /** @type {any} */ value) => ({
                                 get: async () => ({
                                     docs: rows.filter(r => r[field] === value)
                                         .map(r => ({ data: () => r })),
@@ -54,8 +59,12 @@ function fakeDb(seed, roster) {
                 },
             };
         },
+        /** @param {(tx: any) => Promise<any>} body */
         async runTransaction(body) {
-            return body({ get: q => q.get(), delete: ref => { ref.delete(); } });
+            return body({
+                get: (/** @type {any} */ q) => q.get(),
+                delete: (/** @type {any} */ ref) => { ref.delete(); },
+            });
         },
     };
 }

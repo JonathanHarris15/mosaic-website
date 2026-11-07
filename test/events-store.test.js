@@ -19,7 +19,10 @@ const Core = require('../public/events-occurrence-core.js');
 
 // ── A fake Firestore that enforces rules the way the real one does ────────────
 
+/** @typedef {{kind: string, path: string, data?: any, options?: any}} FakeWrite */
+
 function fakeDb(collections, viewer) {
+    /** @type {any[]} */
     const committed = [];
     const queriesRun = [];
     let autoIdCounter = 0;
@@ -149,9 +152,12 @@ function fakeDb(collections, viewer) {
         // The roster is saved in a transaction (MS-812). A document this fake
         // was already asked to write reads back as written, the way the real
         // one would after the write that creates it.
+        /** @param {(tx: any) => Promise<any>} fn */
         async runTransaction(fn) {
+            /** @type {FakeWrite[]} */
             const ops = [];
             const tx = {
+                /** @param {any} ref */
                 async get(ref) {
                     const prior = committed.flat().filter(w => w.path === ref.path && w.kind === 'set');
                     if (prior.length) {
@@ -160,8 +166,9 @@ function fakeDb(collections, viewer) {
                     }
                     return ref.get();
                 },
-                set: (ref, data, options) => ops.push({ kind: 'set', path: ref.path, data, options }),
-                delete: ref => ops.push({ kind: 'delete', path: ref.path }),
+                set: (/** @type {any} */ ref, /** @type {any} */ data, /** @type {any} */ options) =>
+                    ops.push({ kind: 'set', path: ref.path, data, options }),
+                delete: (/** @type {any} */ ref) => ops.push({ kind: 'delete', path: ref.path }),
             };
             const out = await fn(tx);
             committed.push(ops);
@@ -1488,6 +1495,7 @@ test('accepting a roster stamps visibility on the dates it creates', async () =>
 test('an accepted roster can be read back by the editor who wrote it', async () => {
     // The round trip, which is what the editor actually experienced: the seats
     // were written, and the page then showed every place as needing people.
+    /** @type {Record<string, any>} */
     const written = {};
     const db = fakeDb({
         events: { sunday_service: { name: 'Sunday Service' } },

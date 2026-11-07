@@ -4,17 +4,20 @@ const assert = require('node:assert');
 const H = require('./harness.js');
 const { callerOf } = require('../../functions/linked-person.js');
 
+/** @typedef {import('firebase-admin/firestore').Firestore} Firestore */
+
 // MS-811. The Roles callables act for "the caller's own Person". A caller only
 // counts as a Person when the link agrees both ways: users/{uid}.personId AND
 // people/{personId}.userId.
 
 const suite = H.skipReason
-    ? (name) => test(name, { skip: H.skipReason }, () => {})
+    ? /** @type {(name: string, body: () => void) => void} */ ((name) => test(name, { skip: H.skipReason }, () => {}))
     : describe;
 
 suite('who the caller is, as a Person (MS-811)', () => {
+    /** @type {Firestore} */
     let db;
-    before(() => { db = H.connect(); });
+    before(() => { db = /** @type {Firestore} */ (H.connect()); });
     beforeEach(async () => {
         await H.wipe();
         await db.doc('people/p-ann').set({ name: 'Ann', userId: 'uid-ann' });
@@ -24,7 +27,7 @@ suite('who the caller is, as a Person (MS-811)', () => {
     test('a link that agrees both ways is the caller\'s Person', async () => {
         const c = await callerOf(db, 'uid-ann');
         assert.equal(c.personId, 'p-ann');
-        assert.equal(c.user.accountLevelId, 'level_member');
+        assert.equal(/** @type {{accountLevelId?: string}} */ (c.user).accountLevelId, 'level_member');
     });
 
     test('an account claiming a Person who does not point back is nobody', async () => {

@@ -5,14 +5,43 @@ const { Roles, Fairness, AutoAssign } = G;
 const Events = require(__dirname + '/../../public/events-core.js');
 const Q = Roles.REQUIREMENTS, R = Roles.RESTRICTIONS;
 
+/** @typedef {import('./gen.js').Person} Person */
+/** @typedef {import('./gen.js').Role} Role */
+/** @typedef {import('./gen.js').Slot} Slot */
+/** @typedef {import('./gen.js').SolveResult} SolveResult */
+/** @typedef {import('./gen.js').Candidate} Candidate */
+/** @typedef {import('./gen.js').CandidatesFor} CandidatesFor */
+/** @typedef {import('./gen.js').DraftResult} DraftResult */
+
 const PAST = ['2026-10-25', '2026-10-18', '2026-10-11', '2026-10-04', '2026-09-27', '2026-09-20',
     '2026-09-13', '2026-09-06', '2026-08-30', '2026-08-23', '2026-08-16', '2026-08-09'];
+/**
+ * @param {string} id
+ * @param {Partial<Person>} [x]
+ * @returns {Person}
+ */
 const person = (id, x) => Object.assign({ id, name: id, tags: [], sex: 'male', membership: {} }, x);
-const role = (slug, slots, x) => Object.assign({ slug, name: slug, family: 'servant', slots, restrictions: [], intensity: 1 }, x);
+/**
+ * @param {string} slug
+ * @param {Slot[]} [slots] left undefined on purpose by one case below
+ * @param {Partial<Role>} [x]
+ * @returns {Role}
+ */
+const role = (slug, slots, x) => /** @type {Role} */ (Object.assign({ slug, name: slug, family: 'servant', slots, restrictions: [], intensity: 1 }, x));
+/**
+ * @param {string} id
+ * @param {string} [requirement]
+ * @returns {Slot}
+ */
 const slot = (id, requirement) => ({ id, requirement: requirement || Q.EITHER });
 
+/**
+ * @param {Object<string, *>} over options to override
+ * @returns {SolveResult}
+ */
 function solve(over) {
     const deadline = Date.now() + 10000;
+    /** @type {CandidatesFor} */
     const guard = (d, sl, x) => { if (Date.now() > deadline) throw new Error('HANG: >10 s, aborted'); return Roles.candidatesFor(d, sl, x); };
     return Fairness.solve(Object.assign({
         seriesId: 'sunday_service', date: '2026-11-01', roles: [], people: [], history: [],
@@ -21,14 +50,19 @@ function solve(over) {
         candidatesFor: guard, crossRoleRules: [], awayPersonIds: [],
     }, over));
 }
+/**
+ * @param {string} name
+ * @param {() => *} fn
+ */
 const timed = (name, fn) => {
     const t = process.hrtime.bigint();
     let out, err;
-    try { out = fn(); } catch (e) { err = e; }
+    try { out = fn(); } catch (e) { err = /** @type {Error} */ (e); }
     const ms = Number(process.hrtime.bigint() - t) / 1e6;
     console.log('\n## ' + name + '  [' + ms.toFixed(1) + ' ms]' + (err ? '  THREW: ' + err.message : ''));
     return out;
 };
+/** @param {SolveResult} r */
 const ids = r => r.filled.map(f => f.roleSlug + '/' + f.slotId + '=' + f.personId).join(' ');
 
 // 1. Duplicate person ids with different facts.
@@ -36,6 +70,7 @@ timed('duplicate person id, differing sex (female copy first)', () => {
     const people = [person('dup', { sex: 'female' }), person('dup', { sex: 'male' }), person('x', { sex: 'female' })];
     const r = solve({ roles: [role('door', [slot('s1', Q.MALE)])], people });
     console.log('filled:', ids(r), '| unfilled:', r.unfilled.map(u => u.reason).join(','));
+    /** @type {Candidate[]} */
     const picker = Roles.candidatesFor(role('door', [slot('s1', Q.MALE)]), slot('s1', Q.MALE), { people });
     console.log('picker rows:', picker.map(p => p.personId + ':' + p.eligible).join(' '));
     return r;
@@ -62,6 +97,7 @@ timed('candidatesFor, 1000 people, one person in 500 house groups, notSameGroup 
     const people = Array.from({ length: 1000 }, (_, i) => person('p' + i));
     const groups = Array.from({ length: 500 }, (_, g) => ({ id: 'g' + g, typeId: 'hg', name: 'g', memberIds: ['p0', 'p' + (1 + g)] }));
     const def = role('r', [slot('s1'), slot('s2')], { restrictions: [{ kind: R.NOT_SAME_GROUP, typeId: 'hg' }] });
+    /** @type {Candidate[]} */
     const out = Roles.candidatesFor(def, slot('s2'), { people, groups, assigned: [{ slotId: 's1', personId: 'p0' }] });
     console.log('eligible', out.filter(o => o.eligible).length, 'of', out.length);
 });
@@ -79,6 +115,7 @@ timed('solve: one role with 50 slots where only 49 can be filled (unary), 300 pe
 timed('candidatesFor: allowlist of 5,000 ids over 10,000 people', () => {
     const people = Array.from({ length: 10000 }, (_, i) => person('p' + i));
     const def = role('comm', [slot('s1')], { restrictions: [{ kind: R.ALLOWLIST, personIds: people.slice(0, 5000).map(p => p.id) }] });
+    /** @type {Candidate[]} */
     const out = Roles.candidatesFor(def, slot('s1'), { people });
     console.log('eligible', out.filter(o => o.eligible).length);
 });
@@ -150,6 +187,7 @@ timed('cross-role sameGroup: feasible roster exists, solver leaves gaps', () => 
 timed('auto-assign KEEP: pending seat held for a person who is Away', () => {
     const people = ['a', 'b', 'c'].map(id => person(id));
     const d = ['2026-11-08'];
+    /** @type {DraftResult} */
     const out = AutoAssign.draft({
         dates: d, pastDates: PAST, history: [], existing: { '2026-11-08': [{ roleSlug: 'coffee', slotId: 's1', personId: 'a', state: 'pending' }] },
         choice: 'keep', roles: [role('coffee', [slot('s1'), slot('s2')])], people, windowSize: 12, seriesId: 'sunday_service',

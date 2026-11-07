@@ -83,9 +83,12 @@ function fakeDb(seed) {
         },
         // The roster is saved in a transaction (MS-812): reads, then the
         // writes applied together on return, like a batch.
+        /** @param {(tx: any) => Promise<any>} fn */
         async runTransaction(fn) {
+            /** @type {any[]} */
             const ops = [];
             const tx = {
+                /** @param {any} ref */
                 async get(ref) {
                     if (ref._occ) {
                         const store = rosterOf(ref._occ);
@@ -93,7 +96,9 @@ function fakeDb(seed) {
                     }
                     return ref.get();
                 },
+                /** @param {any} ref @param {any} data @param {any} [options] */
                 set(ref, data, options) { ops.push({ kind: 'set', ref, data, options }); },
+                /** @param {any} ref */
                 delete(ref) { ops.push({ kind: 'delete', ref }); },
             };
             const out = await fn(tx);

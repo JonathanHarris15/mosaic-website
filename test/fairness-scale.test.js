@@ -4,6 +4,18 @@ const assert = require('node:assert');
 const Roles = require('../public/roles-core.js');
 const Fairness = require('../public/fairness-core.js');
 
+/** @typedef {{ id: string, name: string, sex: string, tags: string[], membership: object }} Person */
+/** @typedef {{ id: string, requirement: string }} Slot */
+/**
+ * @typedef {object} RoleDef
+ * @property {string} slug
+ * @property {string} name
+ * @property {string} family
+ * @property {number} intensity
+ * @property {Array<{ kind: string, personIds?: string[], tagId?: string }>} restrictions
+ * @property {Slot[]} slots
+ */
+
 // MS-814. A Role with fewer people than places (five on an allowlist, six
 // slots) can never be filled, and widening used to re-solve the date once per
 // member of the church trying anyway: 20 seconds and more at 800 people, on
@@ -13,17 +25,29 @@ const Fairness = require('../public/fairness-core.js');
 const PAST = ['2026-10-25', '2026-10-18', '2026-10-11', '2026-10-04', '2026-09-27', '2026-09-20',
     '2026-09-13', '2026-09-06', '2026-08-30', '2026-08-23', '2026-08-16', '2026-08-09'];
 
+/**
+ * @param {number} n how many people
+ * @returns {Person[]}
+ */
 function church(n) {
     return Array.from({ length: n }, (_, i) => ({ id: 'p' + i, name: 'p' + i, sex: 'male', tags: [], membership: {} }));
 }
 
+/**
+ * @param {Person[]} people
+ * @param {RoleDef} def
+ */
 function solve(people, def) {
     let calls = 0;
     const result = Fairness.solve({
         seriesId: 's', date: '2026-11-01', roles: [def], people, history: [],
         occurrenceDates: PAST, windowSize: 12, intensityOf: () => 1,
         liturgicalSlugs: [], liturgicalHolders: [], relationships: [], groups: [],
-        candidatesFor: (d, s, x) => { calls++; return Roles.candidatesFor(d, s, x); },
+        candidatesFor: /**
+         * @param {RoleDef} d
+         * @param {Slot} s
+         * @param {object} x
+         */ (d, s, x) => { calls++; return Roles.candidatesFor(d, s, x); },
     });
     return { result, calls };
 }
@@ -62,6 +86,7 @@ test('widening still reaches the one person far down the ranking who can fill it
     // served the most, so they sit last in load order.
     const people = church(300);
     const only = people[299].id;
+    /** @type {Array<{ personId: string, roleSlug: string, date: string }>} */
     const history = [];
     PAST.forEach(date => history.push({ personId: only, roleSlug: 'other', date }));
     const def = {
@@ -75,7 +100,7 @@ test('widening still reaches the one person far down the ranking who can fill it
         liturgicalSlugs: [], liturgicalHolders: [], relationships: [], groups: [],
         candidatesFor: Roles.candidatesFor,
     });
-    assert.deepEqual(result.filled.map(s => s.personId), [only]);
+    assert.deepEqual(result.filled.map(/** @param {{ personId: string }} s */ s => s.personId), [only]);
 });
 
 test('group and relationship lookups agree with the plain scan (MS-814)', () => {
@@ -86,7 +111,7 @@ test('group and relationship lookups agree with the plain scan (MS-814)', () => 
     ];
     const index = Roles.groupIndex(groups);
     ['a', 'b', 'c', 'd', 'z'].forEach(p => ['house', 'family'].forEach(t => {
-        assert.deepEqual(Roles.groupsFor(groups, t, p, index).map(g => g.id),
-            Roles.groupsFor(groups, t, p).map(g => g.id), p + ' in ' + t);
+        assert.deepEqual(Roles.groupsFor(groups, t, p, index).map(/** @param {{ id: string }} g */ g => g.id),
+            Roles.groupsFor(groups, t, p).map(/** @param {{ id: string }} g */ g => g.id), p + ' in ' + t);
     }));
 });
