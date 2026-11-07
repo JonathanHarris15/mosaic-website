@@ -90,6 +90,46 @@
         return merged.map(s => (s === written ? Object.assign({ id: ref.id }, payload) : s));
     }
 
+    // A tap or a drag on the calendar: mark or clear every day from `from` to
+    // `to`. Read fresh first and painted onto THAT, so two devices marking
+    // different days of the same diary both land — a page writing its own
+    // idea of the whole diary would quietly undo the other one.
+    //
+    // One batch, for the same reason as addStretch: a trim and a delete split
+    // across two writes could leave a person away on a day they just cleared.
+    async function paintDays(db, personId, paint, author) {
+        if (!personId) throw new Error('An Away needs a person it belongs to.');
+        const existing = await loadStretches(db, personId);
+        const who = author || {};
+        const plan = Core.paintDays(existing, paint.from, paint.to, !!paint.on, {
+            personId: who.personId || personId,
+            uid: who.uid,
+            name: who.name,
+        });
+        if (!plan.set.length && !plan.remove.length) return existing;
+
+        const batch = db.batch();
+        const now = new Date().toISOString();
+        const written = new Map();
+        plan.set.forEach(s => {
+            const ref = s.id ? awayRef(db, personId).doc(s.id) : awayRef(db, personId).doc();
+            const payload = {
+                start: s.start,
+                end: s.end,
+                authorPersonId: s.authorPersonId || null,
+                authorUid: s.authorUid || null,
+                authorName: s.authorName || null,
+                updatedAt: now,
+            };
+            batch.set(ref, payload, { merge: true });
+            written.set(s, Object.assign({ id: ref.id }, payload));
+        });
+        plan.remove.forEach(id => batch.delete(awayRef(db, personId).doc(id)));
+
+        await batch.commit();
+        return plan.stretches.map(s => written.get(s) || s);
+    }
+
     async function removeStretch(db, personId, id) {
         if (!personId || !id) return;
         await awayRef(db, personId).doc(id).delete();
@@ -192,7 +232,7 @@
     }
 
     const AwayStore = {
-        loadStretches, addStretch, removeStretch, loadPlaces,
+        loadStretches, addStretch, paintDays, removeStretch, loadPlaces,
         loadAwayStretches, loadAwayBetween, loadStretchesOn, loadAwayOn,
     };
 

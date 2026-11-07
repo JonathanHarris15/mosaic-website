@@ -148,61 +148,143 @@ test('a place on the first or last day of the stretch counts', () => {
 });
 
 test('a backwards or half-made range clashes with nothing', () => {
-    // The grid always has a half-made range in it — one tap in — and asking for
-    // clashes then must be quiet rather than wrong.
+    // Asking about a range that is not one must be quiet rather than wrong.
     assert.deepStrictEqual(Core.clashesIn(PLACES, '2026-09-13', '2026-09-06'), []);
     assert.deepStrictEqual(Core.clashesIn(PLACES, null, '2026-09-06'), []);
 });
 
-// ── Choosing a range on the grid ─────────────────────────────────────────────
+// ── Painting days on the grid ────────────────────────────────────────────────
+//
+// The screen marks and clears DAYS; stretches are only how they are stored.
 
-test('the first tap sets one day and waits for the last', () => {
-    const sel = Core.nextSelection(Core.EMPTY_SELECTION, '2026-09-04');
-    assert.deepStrictEqual(sel, { start: '2026-09-04', end: '2026-09-04', awaiting: 'end' });
+const MARKER = { personId: 'p_ann', uid: 'u_ann', name: 'Ann Reid' };
+const ids = list => list.map(s => s.start + '..' + s.end);
+
+test('marking one day on an empty diary is one new one-day stretch', () => {
+    const plan = Core.paintDays([], '2026-09-04', '2026-09-04', true, MARKER);
+    assert.deepStrictEqual(ids(plan.stretches), ['2026-09-04..2026-09-04']);
+    assert.strictEqual(plan.set.length, 1);
+    assert.strictEqual(plan.set[0].id, null, 'a new day is a new document');
+    assert.strictEqual(plan.set[0].authorPersonId, 'p_ann');
+    assert.deepStrictEqual(plan.remove, []);
 });
 
-test('the second tap closes the range', () => {
-    let sel = Core.nextSelection(Core.EMPTY_SELECTION, '2026-09-04');
-    sel = Core.nextSelection(sel, '2026-09-20');
-    assert.deepStrictEqual(sel, { start: '2026-09-04', end: '2026-09-20', awaiting: 'start' });
+test('a drag run backwards means what it looks like', () => {
+    const plan = Core.paintDays([], '2026-09-10', '2026-09-04', true, MARKER);
+    assert.deepStrictEqual(ids(plan.stretches), ['2026-09-04..2026-09-10']);
 });
 
-test('tapping BEFORE the first day starts again from there', () => {
-    // Rather than producing a backwards range nobody meant.
-    let sel = Core.nextSelection(Core.EMPTY_SELECTION, '2026-09-20');
-    sel = Core.nextSelection(sel, '2026-09-04');
-    assert.deepStrictEqual(sel, { start: '2026-09-04', end: '2026-09-04', awaiting: 'end' });
+test('marking a day beside a stretch grows that stretch, in the same document', () => {
+    const existing = [{ id: 'a', start: '2026-09-04', end: '2026-09-06', authorPersonId: 'p_sarah' }];
+    const plan = Core.paintDays(existing, '2026-09-07', '2026-09-07', true, MARKER);
+    assert.deepStrictEqual(ids(plan.stretches), ['2026-09-04..2026-09-07']);
+    assert.strictEqual(plan.set[0].id, 'a', 'grew into a second document rather than the one it joined');
+    assert.strictEqual(plan.set[0].authorPersonId, 'p_ann', 'whoever extends it is making the claim now');
 });
 
-test('tapping again on a finished range starts a new one', () => {
-    let sel = { start: '2026-09-04', end: '2026-09-20', awaiting: 'start' };
-    sel = Core.nextSelection(sel, '2026-09-25');
-    assert.deepStrictEqual(sel, { start: '2026-09-25', end: '2026-09-25', awaiting: 'end' });
+test('marking the gap between two stretches joins them and deletes the spare', () => {
+    const existing = [
+        { id: 'a', start: '2026-09-04', end: '2026-09-06' },
+        { id: 'b', start: '2026-09-08', end: '2026-09-10' },
+    ];
+    const plan = Core.paintDays(existing, '2026-09-07', '2026-09-07', true, MARKER);
+    assert.deepStrictEqual(ids(plan.stretches), ['2026-09-04..2026-09-10']);
+    assert.strictEqual(plan.set.length, 1);
+    assert.deepStrictEqual(plan.remove.length, 1, 'the swallowed document is left behind');
+});
+
+test('marking days that are already away changes nothing and re-attributes nothing', () => {
+    const existing = [{ id: 'a', start: '2026-09-04', end: '2026-09-10', authorPersonId: 'p_sarah' }];
+    const plan = Core.paintDays(existing, '2026-09-05', '2026-09-08', true, MARKER);
+    assert.deepStrictEqual(plan.set, []);
+    assert.deepStrictEqual(plan.remove, []);
+    assert.strictEqual(plan.stretches[0].authorPersonId, 'p_sarah');
+});
+
+test('clearing a one-day stretch deletes it', () => {
+    const plan = Core.paintDays([{ id: 'a', start: '2026-09-04', end: '2026-09-04' }], '2026-09-04', '2026-09-04', false, MARKER);
+    assert.deepStrictEqual(plan.stretches, []);
+    assert.deepStrictEqual(plan.remove, ['a']);
+});
+
+test('clearing an end day trims the stretch and keeps its author', () => {
+    // Taking a day out of Sarah's fortnight is not anybody claiming the rest
+    // of it on her behalf.
+    const existing = [{ id: 'a', start: '2026-09-04', end: '2026-09-10', authorPersonId: 'p_sarah' }];
+    const plan = Core.paintDays(existing, '2026-09-10', '2026-09-10', false, MARKER);
+    assert.deepStrictEqual(ids(plan.stretches), ['2026-09-04..2026-09-09']);
+    assert.strictEqual(plan.set[0].id, 'a');
+    assert.strictEqual(plan.set[0].authorPersonId, 'p_sarah');
+});
+
+test('clearing the middle of a stretch splits it in two', () => {
+    const existing = [{ id: 'a', start: '2026-09-04', end: '2026-09-10', authorPersonId: 'p_sarah' }];
+    const plan = Core.paintDays(existing, '2026-09-06', '2026-09-07', false, MARKER);
+    assert.deepStrictEqual(ids(plan.stretches), ['2026-09-04..2026-09-05', '2026-09-08..2026-09-10']);
+    assert.deepStrictEqual(plan.set.map(s => s.id), ['a', null], 'the left half keeps the document, the right is new');
+    assert.ok(plan.set.every(s => s.authorPersonId === 'p_sarah'));
+    assert.deepStrictEqual(plan.remove, []);
+});
+
+test('clearing a drag across several stretches deals with each of them', () => {
+    const existing = [
+        { id: 'a', start: '2026-09-01', end: '2026-09-05' },
+        { id: 'b', start: '2026-09-08', end: '2026-09-09' },
+        { id: 'c', start: '2026-09-12', end: '2026-09-20' },
+    ];
+    const plan = Core.paintDays(existing, '2026-09-04', '2026-09-14', false, MARKER);
+    assert.deepStrictEqual(ids(plan.stretches), ['2026-09-01..2026-09-03', '2026-09-15..2026-09-20']);
+    assert.deepStrictEqual(plan.remove, ['b']);
+    assert.deepStrictEqual(plan.set.map(s => s.id), ['a', 'c']);
+});
+
+test('clearing days that are not away changes nothing', () => {
+    const existing = [{ id: 'a', start: '2026-09-04', end: '2026-09-06' }];
+    const plan = Core.paintDays(existing, '2026-09-10', '2026-09-12', false, MARKER);
+    assert.deepStrictEqual(plan.set, []);
+    assert.deepStrictEqual(plan.remove, []);
+    assert.deepStrictEqual(ids(plan.stretches), ['2026-09-04..2026-09-06']);
+});
+
+test('days ahead counts only from today on, ends included', () => {
+    const list = [
+        { start: '2026-08-01', end: '2026-08-05' },   // passed
+        { start: '2026-09-08', end: '2026-09-12' },   // in it: 10, 11, 12
+        { start: '2026-09-20', end: '2026-09-20' },
+    ];
+    assert.strictEqual(Core.daysAhead(list, '2026-09-10'), 4);
+    assert.strictEqual(Core.daysAhead([], '2026-09-10'), 0);
 });
 
 // ── The words ────────────────────────────────────────────────────────────────
 
-test('the sentence names the days rather than echoing two fields', () => {
-    assert.match(Core.sentence(Core.EMPTY_SELECTION), /^Nothing chosen yet/);
+test('the sentence counts the days marked, rather than listing ranges', () => {
+    assert.strictEqual(Core.sentence([], '2026-09-01', null), 'No days marked yet.');
     assert.strictEqual(
-        Core.sentence({ start: '2026-09-04', end: '2026-09-04', awaiting: 'start' }),
-        'Friday 4 September — one day.'
+        Core.sentence([{ start: '2026-09-04', end: '2026-09-04' }], '2026-09-01', null),
+        'One day marked from today on. Tap one to clear it.'
     );
     assert.strictEqual(
-        Core.sentence({ start: '2026-09-04', end: '2026-09-06', awaiting: 'start' }),
-        'Friday 4 September to Sunday 6 September — 3 days.'
+        Core.sentence([{ start: '2026-09-04', end: '2026-09-06' }], '2026-09-01', null),
+        'Three days marked from today on. Tap one to clear it.'
     );
 });
 
-test('one tap in, the sentence offers the single day rather than nagging', () => {
-    const half = { start: '2026-09-04', end: '2026-09-04', awaiting: 'end' };
-    assert.match(Core.sentence(half), /now tap the last day, or press below for the one day/);
+test('mid-drag, the sentence says what letting go will do', () => {
+    assert.strictEqual(
+        Core.sentence([], '2026-09-01', { from: '2026-09-06', to: '2026-09-04', on: true }),
+        'Friday 4 September to Sunday 6 September — 3 days, away.'
+    );
+    assert.strictEqual(
+        Core.sentence([], '2026-09-01', { from: '2026-09-04', to: '2026-09-04', on: false }),
+        'Friday 4 September, cleared.'
+    );
 });
 
-test('the prompt says what the grid wants next', () => {
-    assert.strictEqual(Core.prompt(Core.EMPTY_SELECTION), "Tap the first day you're away");
-    assert.strictEqual(Core.prompt({ start: '2026-09-04', end: '2026-09-04', awaiting: 'end' }), 'Now tap the last day');
-    assert.strictEqual(Core.prompt({ start: '2026-09-04', end: '2026-09-06', awaiting: 'start' }), 'Tap again to choose different days');
+test('the prompt says what the grid does', () => {
+    assert.strictEqual(Core.prompt(null), "Tap a day you're away, or drag across several");
+    assert.strictEqual(Core.prompt({ from: 'x', to: 'x', on: true }), 'Marking these days away');
+    assert.strictEqual(Core.prompt({ from: 'x', to: 'x', on: false }), 'Clearing these days');
 });
 
 test('the conflict heading counts in words and never scolds', () => {
@@ -215,29 +297,18 @@ test('the conflict heading counts in words and never scolds', () => {
     assert.doesNotMatch(Core.conflictHeading(2), /can't|cannot|error|invalid/i);
 });
 
-test('a row says how long it is and whether anything of yours is inside', () => {
-    const row = Core.stretchRow({ id: 'a', start: '2026-09-06', end: '2026-09-13' }, PLACES);
-    assert.strictEqual(row.range, '6 Sep to 13 Sep');
-    assert.strictEqual(row.meta, '8 days · two places of yours inside');
-
-    const quiet = Core.stretchRow({ id: 'b', start: '2026-10-24', end: '2026-10-25' }, PLACES);
-    assert.strictEqual(quiet.meta, '2 days · nothing of yours inside');
-
-    const single = Core.stretchRow({ id: 'c', start: '2026-09-06', end: '2026-09-06' }, PLACES);
-    assert.strictEqual(single.range, 'Sunday 6 September');
-    assert.strictEqual(single.meta, 'One day · one place of yours inside');
-});
-
 test('nothing anywhere says unavailable, blackout or absence', () => {
     // The word is Away. This is the one string test worth having, because the
     // wrong word here is what makes the screen feel like booking leave with HR.
     const strings = [
-        Core.prompt(Core.EMPTY_SELECTION),
-        Core.sentence(Core.EMPTY_SELECTION),
-        Core.sentence({ start: '2026-09-04', end: '2026-09-06', awaiting: 'start' }),
+        Core.prompt(null),
+        Core.prompt({ from: '2026-09-04', to: '2026-09-06', on: true }),
+        Core.prompt({ from: '2026-09-04', to: '2026-09-06', on: false }),
+        Core.sentence([], '2026-09-01', null),
+        Core.sentence([{ start: '2026-09-04', end: '2026-09-06' }], '2026-09-01', null),
+        Core.sentence([], '2026-09-01', { from: '2026-09-04', to: '2026-09-06', on: true }),
         Core.conflictHeading(1),
         Core.conflictHeading(4),
-        Core.stretchRow({ start: '2026-09-06', end: '2026-09-13' }, PLACES).meta,
     ].join(' | ');
     assert.doesNotMatch(strings, /unavailab|blackout|absence|submit|request|pending|approv/i);
 });
@@ -273,8 +344,7 @@ test('the note never says Unavailable', () => {
 // ── The grid ─────────────────────────────────────────────────────────────────
 
 const gridOpts = {
-    selection: { start: '2026-09-06', end: '2026-09-13', awaiting: 'start' },
-    stretches: [{ start: '2026-09-20', end: '2026-09-22' }],
+    stretches: [{ start: '2026-09-06', end: '2026-09-13' }, { start: '2026-09-21', end: '2026-09-22' }],
     places: PLACES,
     today: '2026-09-01',
 };
@@ -289,30 +359,50 @@ test('a month grid is whole weeks, with the leading blanks outside the month', (
     assert.strictEqual(grid.cells[2].iso, '2026-09-01');
 });
 
-test('the ends of the range are marked, and the days between are in it', () => {
+test('every away day is marked, and nothing else is', () => {
     const grid = Core.monthGrid(2026, 8, gridOpts);
     const at = iso => grid.cells.find(c => c.iso === iso);
-    assert.strictEqual(at('2026-09-06').isStart, true);
-    assert.strictEqual(at('2026-09-13').isEnd, true);
-    assert.strictEqual(at('2026-09-09').inRange, true);
-    assert.strictEqual(at('2026-09-06').inRange, false, 'an end is an end, not a middle');
-    assert.strictEqual(at('2026-09-14').inRange, false);
+    ['2026-09-06', '2026-09-09', '2026-09-13', '2026-09-21'].forEach(iso => {
+        assert.strictEqual(at(iso).away, true, iso + ' is not drawn away');
+    });
+    ['2026-09-05', '2026-09-14', '2026-09-20'].forEach(iso => {
+        assert.strictEqual(at(iso).away, false, iso + ' is drawn away');
+    });
 });
 
-test('days already on record are marked without being part of the selection', () => {
+test('a run of away days draws as one block, broken at the end of each week', () => {
+    // 6 September 2026 is a Sunday, so 6–12 fills a row and 13 starts the next.
     const grid = Core.monthGrid(2026, 8, gridOpts);
     const at = iso => grid.cells.find(c => c.iso === iso);
-    assert.strictEqual(at('2026-09-21').onRecord, true);
-    assert.strictEqual(at('2026-09-21').inRange, false);
-    assert.strictEqual(at('2026-09-09').onRecord, false);
+    assert.strictEqual(at('2026-09-06').runStart, true);
+    assert.strictEqual(at('2026-09-09').runStart, false);
+    assert.strictEqual(at('2026-09-09').runEnd, false, 'a middle day is rounded off');
+    assert.strictEqual(at('2026-09-12').runEnd, true, 'the Saturday ends the row');
+    assert.strictEqual(at('2026-09-13').runStart, true, 'the next row starts again');
+    assert.strictEqual(at('2026-09-13').runEnd, true);
 });
 
-test('a place you hold turns amber once it is inside the range', () => {
+test('the days a drag is touching are marked as not saved yet', () => {
+    const grid = Core.monthGrid(2026, 8, Object.assign({}, gridOpts, {
+        drag: { from: '2026-09-25', to: '2026-09-23', on: true },
+    }));
+    const at = iso => grid.cells.find(c => c.iso === iso);
+    assert.strictEqual(at('2026-09-23').pending, 'on');
+    assert.strictEqual(at('2026-09-25').pending, 'on');
+    assert.strictEqual(at('2026-09-26').pending, null);
+
+    const clearing = Core.monthGrid(2026, 8, Object.assign({}, gridOpts, {
+        drag: { from: '2026-09-21', to: '2026-09-21', on: false },
+    }));
+    assert.strictEqual(clearing.cells.find(c => c.iso === '2026-09-21').pending, 'off');
+});
+
+test('a place you hold turns amber on a day you are away', () => {
     // Same dot, saying "this one is now your problem".
     const grid = Core.monthGrid(2026, 8, gridOpts);
     const at = iso => grid.cells.find(c => c.iso === iso);
-    assert.strictEqual(at('2026-09-06').dotTone, 'warning', 'inside the range');
-    assert.strictEqual(at('2026-09-20').dotTone, 'sand', 'outside it');
+    assert.strictEqual(at('2026-09-06').dotTone, 'warning', 'on an away day');
+    assert.strictEqual(at('2026-09-20').dotTone, 'sand', 'on a day you are here');
     assert.strictEqual(at('2026-09-09').dotTone, null, 'no place that day');
 });
 
