@@ -108,12 +108,34 @@
     // derived from the name ONCE, at creation, and then stored — renaming the
     // Role afterwards must not change the slug, or every Involvement record
     // already written under the old one would be orphaned.
+    // ⚠ A SLUG IS NEVER EMPTY (MS-822). It used to keep a-z and 0-9 and drop
+    // everything else, so "Música" became "m_sica", "Café" collided with
+    // "Caf", and a Role named in another script got no slug at all: every
+    // callable then refused it. Accents are now folded ("musica", "cafe"), and
+    // a name with no Latin letters left gets a short, stable id built from the
+    // name itself, so the same name always gives the same slug and two
+    // different ones do not meet. ASCII names slug exactly as before.
     function slugify(name) {
-        return String(name || '')
-            .trim()
+        const raw = String(name || '').trim();
+        const folded = raw.normalize ? raw.normalize('NFD') : raw;
+        const slug = folded
+            .replace(/[\u0300-\u036f]/g, '')
             .toLowerCase()
             .replace(/[^a-z0-9]+/g, '_')
             .replace(/^_+|_+$/g, '');
+        if (slug || !raw) return slug;
+        return 'role_' + nameHash(raw);
+    }
+
+    // FNV-1a over the name's UTF-16 units, in base 36. Not for security: only
+    // so a fallback slug is short, ASCII, and the same every time.
+    function nameHash(text) {
+        let h = 0x811c9dc5;
+        for (let i = 0; i < text.length; i++) {
+            h ^= text.charCodeAt(i);
+            h = Math.imul(h, 0x01000193) >>> 0;
+        }
+        return h.toString(36);
     }
 
     const slugOf = def => (def && def.slug) || slugify(def && def.name);
@@ -1111,6 +1133,13 @@
 
         const name = def && typeof def.name === 'string' ? def.name.trim() : '';
         if (!name) errors.push('A Role needs a name.');
+        // A stored slug that is not a usable one (MS-822). Every place, cover
+        // entry and Trade names a Role by its slug, so an empty one is a Role
+        // nothing can point at.
+        if (def && def.slug !== undefined && def.slug !== null &&
+            !(typeof def.slug === 'string' && /^[a-z0-9_]+$/.test(def.slug))) {
+            errors.push('A Role needs a usable short name (letters, digits and _).');
+        }
 
         // Only liturgical Roles carry the locked family, and they are defined in
         // code — a stored definition claiming it would forge an undeletable Role.
