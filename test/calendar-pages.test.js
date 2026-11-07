@@ -115,7 +115,7 @@ function membersOf(component) {
 
 // ── Pulling the identifiers out of the markup ─────────────────────────────────
 
-const ALPINE_ATTRS = /(?:x-text|x-show|x-if|x-model[.\w]*|x-html|x-for|@click|@change|@keydown[.\w]*|:class|:href|:disabled|:checked|:selected|:value|:aria-label|:style|:inert)\s*=\s*"([^"]*)"/g;
+const ALPINE_ATTRS = /(?:x-text|x-show|x-if|x-model[.\w]*|x-html|x-for|@click|@change|@keydown[.\w]*|@pointer[.\w]*|@touch[.\w]*|:class|:href|:disabled|:checked|:selected|:value|:aria-label|:style|:inert)\s*=\s*"([^"]*)"/g;
 
 // Things a template may legitimately name that are not component members.
 const ALLOWED = new Set([
@@ -334,85 +334,211 @@ test('the Recurring Events page only binds to things its component defines', () 
 
 // ── The Away page's one piece of real logic ──────────────────────────────────
 
-test('a single tapped day is checked for clashes, not just a settled range', () => {
-    // REPORTED FROM THE PREVIEW. The first tap sets both ends of the selection,
-    // so the button goes live one tap in and the sentence explicitly offers it —
-    // "press below for the one day". But the clash was gated on the range being
-    // SETTLED, so you could tap a Sunday you were serving on, press the button,
-    // and never be told. That is the one thing this screen exists to tell you.
-    const page = loadComponent('away.js', 'awayPage');
-    page.places = [{ date: '2026-09-27', when: 'Sunday 27 September', role: 'Coffee', event: 'Sunday Service', occurrenceId: 'o1' }];
+// A Firestore just big enough for the Away store: one person's `away`
+// subcollection, read in date order and written in batches.
+function fakeAwayDb(initial) {
+    const docs = new Map((initial || []).map(s => [s.id, Object.assign({}, s)]));
+    let minted = 0;
+    const commits = [];
+    const col = {
+        doc(id) {
+            const ref = { id: id || ('new' + (++minted)) };
+            return ref;
+        },
+        orderBy() {
+            return {
+                async get() {
+                    const list = Array.from(docs.entries())
+                        .map(([id, d]) => ({ id, data: () => Object.assign({}, d) }))
+                        .sort((a, b) => (a.data().start < b.data().start ? -1 : 1));
+                    return { docs: list };
+                },
+            };
+        },
+    };
+    const db = {
+        collection() { return { doc() { return { collection() { return col; } }; } }; },
+        batch() {
+            const ops = [];
+            return {
+                set(ref, payload) { ops.push(['set', ref.id, payload]); },
+                delete(ref) { ops.push(['delete', ref.id]); },
+                async commit() {
+                    if (db.fail) throw Object.assign(new Error('offline'), { code: 'unavailable' });
+                    ops.forEach(([op, id, payload]) => {
+                        if (op === 'set') docs.set(id, Object.assign({}, docs.get(id) || {}, payload));
+                        else docs.delete(id);
+                    });
+                    commits.push(ops);
+                },
+            };
+        },
+        docs, commits, fail: false,
+    };
+    return db;
+}
 
-    page.tap('2026-09-27');
+function awayPageWith(db) {
+    const page = loadComponent('away.js', 'awayPage', { db: db || fakeAwayDb() });
+    page.personId = 'p_me';
+    page.subjectId = 'p_me';
+    return page;
+}
 
-    assert.equal(page.canAdd, true, 'one tap in, the day is saveable');
-    assert.equal(page.clashes.length, 1, 'so one tap in, it must already be checked');
-    assert.equal(page.hasClash, true);
+const SERVING_27 = [{ date: '2026-09-27', when: 'Sunday 27 September', role: 'Coffee', event: 'Sunday Service', occurrenceId: 'o1' }];
+
+test('a tap marks a day away and saves it, with no button to press', async () => {
+    const db = fakeAwayDb();
+    const page = awayPageWith(db);
+
+    await page.toggle('2026-09-27');
+
+    assert.deepStrictEqual(page.stretches.map(s => [s.start, s.end]), [['2026-09-27', '2026-09-27']]);
+    assert.strictEqual(db.docs.size, 1, 'the tap was not saved');
+    assert.strictEqual(Array.from(db.docs.values())[0].authorPersonId, 'p_me');
 });
 
-test('anything the button will save has been checked first', () => {
-    // The invariant behind the bug above: `canAdd` and the clash check must
-    // never disagree about whether a selection is real.
-    const page = loadComponent('away.js', 'awayPage');
-    page.places = [{ date: '2026-09-27', when: 'Sunday 27 September', role: 'Coffee', event: 'Sunday Service', occurrenceId: 'o1' }];
-
-    ['2026-09-27', '2026-09-28', '2026-10-04'].forEach(iso => {
-        page.tap(iso);
-        assert.equal(page.canAdd, page.selectionMade,
-            'the button and the check disagree after tapping ' + iso);
-    });
-});
-
-test('a conflict already on record shows with nothing selected at all', () => {
-    // The screen opens on it. A place you are serving on a day you already said
-    // you were away is still yours to sort out tomorrow, so it is not something
-    // the screen mentions only while you happen to be mid-selection.
-    const page = loadComponent('away.js', 'awayPage');
-    page.places = [{ date: '2026-09-27', when: 'Sunday 27 September', role: 'Coffee', event: 'Sunday Service', occurrenceId: 'o1' }];
+test('a second tap on the same day clears it', async () => {
+    const db = fakeAwayDb([{ id: 'a1', start: '2026-09-27', end: '2026-09-27' }]);
+    const page = awayPageWith(db);
     page.stretches = [{ id: 'a1', start: '2026-09-27', end: '2026-09-27' }];
 
-    assert.equal(page.selectionMade, false, 'nothing is selected');
+    await page.toggle('2026-09-27');
+
+    assert.strictEqual(page.stretches.length, 0);
+    assert.strictEqual(db.docs.size, 0, 'the cleared day is still stored');
+});
+
+test('a drag marks every day it crosses, saved once on release', async () => {
+    const db = fakeAwayDb();
+    const page = awayPageWith(db);
+
+    page.press('2026-09-10');
+    page.dragTo('2026-09-12');
+    page.dragTo('2026-09-14');
+    assert.strictEqual(db.commits.length, 0, 'saved mid-drag');
+    page.release();
+    await page.queue;
+
+    assert.deepStrictEqual(page.stretches.map(s => [s.start, s.end]), [['2026-09-10', '2026-09-14']]);
+    assert.strictEqual(db.commits.length, 1);
+    assert.strictEqual(page.drag, null);
+});
+
+test('a drag that starts on an away day clears, and splits what it cuts', async () => {
+    const stored = [{ id: 'a1', start: '2026-09-01', end: '2026-09-30', authorPersonId: 'p_sarah' }];
+    const db = fakeAwayDb(stored);
+    const page = awayPageWith(db);
+    page.stretches = stored.slice();
+
+    page.press('2026-09-10');
+    assert.strictEqual(page.drag.on, false, 'starting on an away day did not clear');
+    page.dragTo('2026-09-12');
+    page.release();
+    await page.queue;
+
+    assert.deepStrictEqual(page.stretches.map(s => [s.start, s.end]),
+        [['2026-09-01', '2026-09-09'], ['2026-09-13', '2026-09-30']]);
+    assert.strictEqual(db.docs.size, 2);
+    assert.ok(Array.from(db.docs.values()).every(d => d.authorPersonId === 'p_sarah'),
+        'clearing some of Sarah\'s days put the rest in somebody else\'s mouth');
+});
+
+test('the calendar answers the drag before it is let go', () => {
+    const page = awayPageWith();
+    page.places = SERVING_27;
+
+    page.press('2026-09-25');
+    page.dragTo('2026-09-28');
+
+    assert.strictEqual(page.hasClash, true, 'the clash waited for the finger to lift');
+    assert.strictEqual(page.allClear, false, 'reassured mid-drag');
+    const sept = require('../public/away-core.js').monthGrid(2026, 8, page.gridOptions());
+    const cell = sept.cells.find(c => c.iso === '2026-09-26');
+    assert.strictEqual(cell.away, true);
+    assert.strictEqual(cell.pending, 'on');
+});
+
+test('a cancelled drag changes nothing', () => {
+    const db = fakeAwayDb();
+    const page = awayPageWith(db);
+
+    page.press('2026-09-10');
+    page.dragTo('2026-09-14');
+    page.cancelDrag();
+    page.release();
+
+    assert.strictEqual(page.stretches.length, 0);
+    assert.strictEqual(db.commits.length, 0);
+});
+
+test('a conflict already on record shows with nothing being touched', () => {
+    // The screen opens on it. A place you are serving on a day you already said
+    // you were away is still yours to sort out tomorrow.
+    const page = awayPageWith();
+    page.places = SERVING_27;
+    page.stretches = [{ id: 'a1', start: '2026-09-27', end: '2026-09-27' }];
+
+    assert.strictEqual(page.drag, null);
     assert.equal(page.hasClash, true, 'and it still says so');
     assert.equal(page.conflicts.length, 1);
     assert.match(page.clashHeading, /falls on a day you're away/);
 });
 
-test('a conflict does not vanish once the days are saved', () => {
-    // What saving looks like from the panel's side: the selection clears, the
-    // stretch lands, and the conflict carries straight over rather than blinking
-    // out at the exact moment it becomes real.
-    const page = loadComponent('away.js', 'awayPage');
-    page.places = [{ date: '2026-09-27', when: 'Sunday 27 September', role: 'Coffee', event: 'Sunday Service', occurrenceId: 'o1' }];
+test('the all-clear shows once days are marked and nothing of yours is on them', async () => {
+    const page = awayPageWith();
+    page.places = SERVING_27;
+    page.today = '2026-09-01';
+    assert.equal(page.allClear, false, 'reassured about nothing');
 
-    page.tap('2026-09-27');
-    assert.equal(page.conflicts.length, 1, 'while choosing');
+    await page.toggle('2026-09-20');
+    assert.equal(page.allClear, true);
 
-    page.stretches = [{ id: 'a1', start: '2026-09-27', end: '2026-09-27' }];
-    page.clearSelection();
-    assert.equal(page.conflicts.length, 1, 'and after saving');
+    await page.toggle('2026-09-27');
+    assert.equal(page.allClear, false, 'all clear while serving on an away day');
 });
 
-test('a place inside both a saved stretch and the selection is listed once', () => {
-    const page = loadComponent('away.js', 'awayPage');
-    page.places = [{ date: '2026-09-27', when: 'Sunday 27 September', role: 'Coffee', event: 'Sunday Service', occurrenceId: 'o1' }];
-    page.stretches = [{ id: 'a1', start: '2026-09-27', end: '2026-09-27' }];
+test('a failed save shows what is really stored, and says why', async () => {
+    const db = fakeAwayDb();
+    db.fail = true;
+    const page = awayPageWith(db);
 
-    page.tap('2026-09-27');
-    assert.equal(page.conflicts.length, 1, 'not doubled');
+    await page.toggle('2026-09-27');
+
+    assert.strictEqual(page.stretches.length, 0, 'the screen still shows a day that never saved');
+    assert.match(page.error, /No connection/);
+    assert.strictEqual(page.saving, false);
 });
 
-test('the all-clear waits for a settled range, unlike the clash', () => {
-    // Warn early, reassure late. Said one tap into an intended fortnight, "nothing
-    // of yours falls in these dates" answers a question about a single day nobody
-    // meant — and then flips when the range closes.
-    const page = loadComponent('away.js', 'awayPage');
-    page.places = [];
+test('a pointer press starts a drag and a keyboard press toggles', async () => {
+    const page = awayPageWith();
 
-    page.tap('2026-09-07');
-    assert.equal(page.allClear, false, 'silence, not premature reassurance');
+    page.pointerDown({ button: 2 }, '2026-09-10');
+    assert.strictEqual(page.drag, null, 'a right-click started painting');
 
-    page.tap('2026-09-20');
-    assert.equal(page.allClear, true, 'once the range is settled, say so');
+    page.pointerDown({ button: 0, pointerId: 1, target: {} }, '2026-09-10');
+    assert.ok(page.drag, 'a left press did not start a drag');
+    page.cancelDrag();
+
+    // The click that follows a pointer press is ignored — the press did it.
+    page.keyed({ detail: 1 }, '2026-09-10');
+    assert.strictEqual(page.stretches.length, 0);
+
+    // Enter or Space on a focused day reports no clicks counted.
+    await page.keyed({ detail: 0 }, '2026-09-10');
+    assert.strictEqual(page.stretches.length, 1, 'the keyboard cannot mark a day');
+});
+
+test('a finger that went down on a day paints rather than turning the month', () => {
+    const page = withAlpine(awayPageWith());
+    page.anchor = page.firstMonth;
+    page.loadPlaces = async () => {};
+
+    page.press(page.today);
+    page.swipeFrom({ changedTouches: [{ clientX: 200, clientY: 300 }] });
+    page.swipeTo({ changedTouches: [{ clientX: 100, clientY: 300 }] });
+
+    assert.strictEqual(page.railIndex, 0, 'a drag across a week turned the page');
 });
 
 test('the Away page only binds to things its component defines', () => {

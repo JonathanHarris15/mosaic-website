@@ -45,54 +45,47 @@
 
     // ── Writing ──────────────────────────────────────────────────────────────
     //
-    // Adding a stretch may swallow the ones it joins (AwayCore merges anything
-    // overlapping or merely touching), so the write is the merged document plus
-    // the deletion of whatever it absorbed — in ONE batch. Split across two
-    // writes, a failure between them would leave the old documents behind, and
-    // they would go on making the person away on days they had just redrawn.
+    // The only write: a tap or a drag, marking or clearing days. A mark may
+    // swallow the stretches it joins and a clear may trim or split one, so the
+    // writes and deletes go in ONE batch. Split across two, a failure between
+    // them would leave the old documents behind, and they would go on making
+    // the person away on days they had just redrawn.
 
-    async function addStretch(db, personId, range, author) {
+    // A tap or a drag on the calendar: mark or clear every day from `from` to
+    // `to`. Read fresh first and painted onto THAT, so two devices marking
+    // different days of the same diary both land — a page writing its own
+    // idea of the whole diary would quietly undo the other one.
+    async function paintDays(db, personId, paint, author) {
         if (!personId) throw new Error('An Away needs a person it belongs to.');
         const existing = await loadStretches(db, personId);
-
         const who = author || {};
-        const merged = Core.addStretch(existing, {
-            start: range.start,
-            end: range.end,
-            authorPersonId: who.personId || personId,
-            authorUid: who.uid || null,
-            authorName: who.name || null,
+        const plan = Core.paintDays(existing, paint.from, paint.to, !!paint.on, {
+            personId: who.personId || personId,
+            uid: who.uid,
+            name: who.name,
         });
-
-        // The one stretch this add produced — the only member of the merged list
-        // with no id yet, or the one carrying what it absorbed.
-        const written = merged.find(s => !s.id || (s.absorbed && s.absorbed.length));
-        if (!written) return existing;
+        if (!plan.set.length && !plan.remove.length) return existing;
 
         const batch = db.batch();
-        const ref = written.id ? awayRef(db, personId).doc(written.id) : awayRef(db, personId).doc();
-
-        const payload = {
-            start: written.start,
-            end: written.end,
-            authorPersonId: written.authorPersonId || null,
-            authorUid: written.authorUid || null,
-            authorName: written.authorName || null,
-            updatedAt: new Date().toISOString(),
-        };
-        batch.set(ref, payload, { merge: true });
-
-        (written.absorbed || []).forEach(id => {
-            if (id !== ref.id) batch.delete(awayRef(db, personId).doc(id));
+        const now = new Date().toISOString();
+        const written = new Map();
+        plan.set.forEach(s => {
+            const ref = s.id ? awayRef(db, personId).doc(s.id) : awayRef(db, personId).doc();
+            const payload = {
+                start: s.start,
+                end: s.end,
+                authorPersonId: s.authorPersonId || null,
+                authorUid: s.authorUid || null,
+                authorName: s.authorName || null,
+                updatedAt: now,
+            };
+            batch.set(ref, payload, { merge: true });
+            written.set(s, Object.assign({ id: ref.id }, payload));
         });
+        plan.remove.forEach(id => batch.delete(awayRef(db, personId).doc(id)));
 
         await batch.commit();
-        return merged.map(s => (s === written ? Object.assign({ id: ref.id }, payload) : s));
-    }
-
-    async function removeStretch(db, personId, id) {
-        if (!personId || !id) return;
-        await awayRef(db, personId).doc(id).delete();
+        return plan.stretches.map(s => written.get(s) || s);
     }
 
     // ── Who is away, across everybody ────────────────────────────────────────
@@ -192,7 +185,7 @@
     }
 
     const AwayStore = {
-        loadStretches, addStretch, removeStretch, loadPlaces,
+        loadStretches, paintDays, loadPlaces,
         loadAwayStretches, loadAwayBetween, loadStretchesOn, loadAwayOn,
     };
 

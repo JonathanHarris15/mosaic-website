@@ -32,9 +32,13 @@
 //      said after, the place stays theirs to hand on, and the roster reports
 //      itself with a Warning that is derived on read and so clears by itself.
 //
-//   4. The words. Every string on the screen is a function of the selection, and
-//      they live here rather than in the page so the phone and the desktop
-//      cannot drift apart. Never "unavailable", "blackout" or "absence" — it is
+//   4. Painting. The screen marks DAYS — a tap marks or clears one, a drag marks
+//      or clears a run — and this turns that into the stretches that are
+//      stored. The person never sees a stretch; downstream (the picker, the
+//      solve, auto-assign) never sees anything else.
+//
+//   5. The words. Every string on the screen lives here rather than in the page,
+//      so the phone and the desktop cannot drift apart. Never "unavailable", "blackout" or "absence" — it is
 //      Away, and where a person authored it, it is attributed to them.
 //
 // AWAY IS NOT THE DRAFT'S "OUT". Auto-assign lets an editor leave somebody out
@@ -84,8 +88,8 @@
 
     // ── Stretches ────────────────────────────────────────────────────────────
 
-    // Start before end, whatever order they were tapped in. The grid lets you
-    // tap backwards and it should simply mean what it looks like.
+    // Start before end, whatever order they were given in. A drag can run
+    // backwards and it should simply mean what it looks like.
     function normalise(stretch) {
         if (!stretch || !stretch.start || !stretch.end) return null;
         const a = stretch.start <= stretch.end ? stretch.start : stretch.end;
@@ -126,10 +130,6 @@
         });
 
         return kept.concat([merged]).sort((x, y) => (x.start < y.start ? -1 : 1));
-    }
-
-    function removeStretch(stretches, id) {
-        return (stretches || []).filter(s => s && s.id !== id);
     }
 
     // THE predicate. Everything downstream — the picker, the fairness solve,
@@ -189,22 +189,95 @@
         return one ? clashesIn(places, one.start, one.end).length : 0;
     }
 
-    // ── Choosing a range ─────────────────────────────────────────────────────
+    // ── Painting days ────────────────────────────────────────────────────────
     //
-    // The grid IS the input, on every size — no date fields anywhere. First tap
-    // sets the first day, second tap the last, and a tap BEFORE the first day
-    // starts again from there rather than producing a backwards range nobody
-    // meant.
+    // The grid IS the input, on every size, and it works in days. A tap on a day
+    // that is not away marks it; a tap on one that is clears it. A drag does the
+    // same to every day it crosses, and WHICH it does is settled by the day it
+    // started on — start on a clear day and the drag marks, start on an away day
+    // and it clears. That is how a paint tool behaves, and it means one gesture
+    // never does both.
+    //
+    // There is no "add" step and no list of ranges to manage. The calendar is
+    // the record: what is coloured is what is stored.
+    //
+    // Underneath, the days are still kept as stretches, because every reader of
+    // Away (the picker, the solve, auto-assign, the Firestore query) asks
+    // "which stretches overlap this window", and none of that should move. So a
+    // paint is turned into stretch writes here:
+    //
+    //   - MARKING joins the run to whatever it touches (addStretch above), and
+    //     the joined stretch carries the person marking — they are making the
+    //     current claim. Marking days that are ALL already away inside one
+    //     stretch changes nothing, and so re-attributes nothing.
+    //   - CLEARING trims or splits whatever it cuts. What is left keeps its
+    //     ORIGINAL author: taking a day out of Sarah's fortnight is not anybody
+    //     claiming the rest of it on her behalf.
+    //
+    // Returns the new list AND the writes that get there, so the store and the
+    // page's instant redraw are the same computation. A write with `id: null`
+    // is a new document.
 
-    function nextSelection(selection, iso) {
-        const sel = selection || {};
-        if (!sel.start || sel.awaiting !== 'end' || iso < sel.start) {
-            return { start: iso, end: iso, awaiting: 'end' };
-        }
-        return { start: sel.start, end: iso, awaiting: 'start' };
+    function authorFields(author) {
+        const who = author || {};
+        return {
+            authorPersonId: who.personId || null,
+            authorUid: who.uid || null,
+            authorName: who.name || null,
+        };
     }
 
-    const EMPTY_SELECTION = Object.freeze({ start: null, end: null, awaiting: 'start' });
+    function paintDays(stretches, from, to, on, author) {
+        const list = (stretches || []).map(normalise).filter(Boolean);
+        const range = normalise({ start: from, end: to || from });
+        if (!range) return { stretches: list, set: [], remove: [] };
+
+        if (on) {
+            if (list.some(s => s.start <= range.start && s.end >= range.end)) {
+                return { stretches: list, set: [], remove: [] };
+            }
+            const merged = addStretch(list, Object.assign({ start: range.start, end: range.end }, authorFields(author)));
+            const written = merged.find(s => !s.id || (s.absorbed && s.absorbed.length));
+            const absorbed = written.absorbed || [];
+            // Re-use one of the documents it swallowed rather than deleting them
+            // all and minting a new one.
+            const fresh = Object.assign({}, written, { id: absorbed[0] || null });
+            delete fresh.absorbed;
+            return {
+                stretches: merged.map(s => (s === written ? fresh : s)),
+                set: [fresh],
+                remove: absorbed.slice(1),
+            };
+        }
+
+        const kept = [];
+        const set = [];
+        const remove = [];
+        list.forEach(s => {
+            if (s.end < range.start || s.start > range.end) { kept.push(s); return; }
+            const left = s.start < range.start ? Object.assign({}, s, { end: addDays(range.start, -1) }) : null;
+            // The left piece keeps the document; with no left piece, the right
+            // one does.
+            const right = s.end > range.end
+                ? Object.assign({}, s, { id: left ? null : s.id, start: addDays(range.end, 1) })
+                : null;
+            if (left) { kept.push(left); set.push(left); }
+            if (right) { kept.push(right); set.push(right); }
+            if (!left && !right && s.id) remove.push(s.id);
+        });
+        kept.sort((x, y) => (x.start < y.start ? -1 : 1));
+        return { stretches: kept, set: set, remove: remove };
+    }
+
+    // How many days from today on are marked — what the screen says instead of
+    // reading ranges back.
+    function daysAhead(stretches, today) {
+        return (stretches || []).reduce((n, s) => {
+            if (!s || !s.end || s.end < today) return n;
+            const start = s.start > today ? s.start : today;
+            return n + spanDays(start, s.end);
+        }, 0);
+    }
 
     // ── The words ────────────────────────────────────────────────────────────
     //
@@ -247,25 +320,26 @@
     }
 
     // What the grid is asking for right now.
-    function prompt(selection) {
-        const sel = selection || {};
-        if (!sel.start) return "Tap the first day you're away";
-        if (sel.awaiting === 'end') return 'Now tap the last day';
-        return 'Tap again to choose different days';
+    function prompt(drag) {
+        if (!drag) return "Tap a day you're away, or drag across several";
+        return drag.on ? 'Marking these days away' : 'Clearing these days';
     }
 
-    // What has been chosen. Deliberately a sentence rather than two date fields
-    // echoed back — this screen is closer to writing on the calendar on the
-    // fridge than to filing for leave.
-    function sentence(selection) {
-        const sel = selection || {};
-        if (!sel.start) return 'Nothing chosen yet — tap the day you leave.';
-        if (sel.awaiting === 'end' && sel.start === sel.end) {
-            return longDate(sel.start) + ' — now tap the last day, or press below for the one day.';
+    // What is on the calendar, or what the drag in hand is about to do to it.
+    // A sentence, never a list of ranges — this screen is closer to colouring
+    // in the calendar on the fridge than to filing for leave.
+    function sentence(stretches, today, drag) {
+        if (drag) {
+            const range = normalise({ start: drag.from, end: drag.to || drag.from });
+            const n = spanDays(range.start, range.end);
+            const what = n === 1
+                ? longDate(range.start)
+                : longDate(range.start) + ' to ' + longDate(range.end) + ' — ' + n + ' days';
+            return what + (drag.on ? ', away.' : ', cleared.');
         }
-        const n = spanDays(sel.start, sel.end);
-        if (n === 1) return longDate(sel.start) + ' — one day.';
-        return longDate(sel.start) + ' to ' + longDate(sel.end) + ' — ' + n + ' days.';
+        const ahead = daysAhead(stretches, today);
+        if (!ahead) return 'No days marked yet.';
+        return (ahead === 1 ? 'One day' : inWords(ahead) + ' days') + ' marked from today on. Tap one to clear it.';
     }
 
     // Not a warning that something went wrong. The moment the person learns they
@@ -275,25 +349,6 @@
         return n === 1
             ? "One place of yours falls on a day you're away."
             : inWords(n) + " places of yours fall on days you're away.";
-    }
-
-    // The row in "what you've said so far".
-    function stretchRow(stretch, places) {
-        const one = normalise(stretch);
-        if (!one) return null;
-        const n = spanDays(one.start, one.end);
-        const c = clashesIn(places, one.start, one.end).length;
-        return {
-            id: one.id,
-            start: one.start,
-            end: one.end,
-            range: n === 1 ? longDate(one.start) : midDate(one.start) + ' to ' + midDate(one.end),
-            meta: (n === 1 ? 'One day' : n + ' days') + ' · ' + (
-                c
-                    ? inWords(c).toLowerCase() + ' place' + (c > 1 ? 's' : '') + ' of yours inside'
-                    : 'nothing of yours inside'
-            ),
-        };
     }
 
     // ── How an editor reads it ───────────────────────────────────────────────
@@ -330,15 +385,20 @@
     //
     // One month of cells, each carrying everything the view needs to draw it and
     // nothing it has to work out for itself. The same computation feeds the
-    // desktop's two months and the phone's continuous scroll, so they cannot
-    // disagree about what a day looks like.
+    // desktop's two months and the phone's one, so they cannot disagree about
+    // what a day looks like.
+    //
+    // `stretches` is what to draw — with a drag in hand, the page passes the
+    // list as it WILL be, so the calendar answers the finger as it moves.
+    // `drag` only marks which days that drag is touching.
 
     function monthGrid(year, monthIndex, options) {
         const o = options || {};
-        const selection = o.selection || EMPTY_SELECTION;
         const stretches = o.stretches || [];
         const places = o.places || [];
         const today = o.today || null;
+        const drag = o.drag ? normalise({ start: o.drag.from, end: o.drag.to || o.drag.from }) : null;
+        const dragTone = o.drag ? (o.drag.on ? 'on' : 'off') : null;
 
         const firstWeekday = new Date(Date.UTC(year, monthIndex, 1)).getUTCDay();
         const total = new Date(Date.UTC(year, monthIndex + 1, 0)).getUTCDate();
@@ -349,28 +409,31 @@
             const dayNumber = i - firstWeekday + 1;
             const inMonth = dayNumber >= 1 && dayNumber <= total;
             const iso = inMonth ? isoOf(year, monthIndex, dayNumber) : null;
+            const weekday = i % 7;
 
-            const isStart = !!iso && iso === selection.start;
-            const isEnd = !!iso && iso === selection.end;
-            const edge = isStart || isEnd;
-            const inRange = !!iso && !!selection.start && !!selection.end
-                && iso > selection.start && iso < selection.end;
-            const onRecord = !!iso && isAwayOn(stretches, iso);
+            const away = !!iso && isAwayOn(stretches, iso);
+            const pending = !!iso && !!drag && iso >= drag.start && iso <= drag.end ? dragTone : null;
             const place = iso ? places.find(p => p && p.date === iso) || null : null;
+
+            // A run of away days draws as one block. It breaks at the end of a
+            // week row as well as at a clear day, because the next day is on
+            // the line below.
+            const runStart = away && (weekday === 0 || dayNumber === 1 || !isAwayOn(stretches, addDays(iso, -1)));
+            const runEnd = away && (weekday === 6 || dayNumber === total || !isAwayOn(stretches, addDays(iso, 1)));
 
             cells.push({
                 iso: iso,
                 day: inMonth ? dayNumber : '',
                 inMonth: inMonth,
-                isStart: isStart,
-                isEnd: isEnd,
-                inRange: inRange,
-                onRecord: onRecord,
+                away: away,
+                pending: pending,
+                runStart: runStart,
+                runEnd: runEnd,
                 isToday: !!iso && iso === today,
-                // A place you hold turns amber inside the range you are choosing
-                // — the same dot, saying "this one is now your problem".
+                // A place you hold turns amber on a day you are away — the same
+                // dot, saying "this one is now your problem".
                 place: place,
-                dotTone: place ? (edge || inRange ? 'warning' : 'sand') : null,
+                dotTone: place ? (away ? 'warning' : 'sand') : null,
                 title: place ? place.role + ' · ' + place.event : '',
             });
         }
@@ -399,7 +462,6 @@
         normalise,
         joins,
         addStretch,
-        removeStretch,
         isAwayOn,
         stretchOn,
         upcoming,
@@ -408,9 +470,9 @@
         clashesIn,
         conflictsIn,
         clashCount,
-        // choosing
-        nextSelection,
-        EMPTY_SELECTION,
+        // painting
+        paintDays,
+        daysAhead,
         // words
         MONTHS,
         WEEKDAYS,
@@ -421,7 +483,6 @@
         prompt,
         sentence,
         conflictHeading,
-        stretchRow,
         awayNote,
         // grid
         monthGrid,

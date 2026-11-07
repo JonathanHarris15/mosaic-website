@@ -49,8 +49,17 @@
            tray grows a whole panel taller when the days you are choosing clash
            with something you are down to do — one clearance would either hide
            the last card behind the warning or leave a hole under it. */
-        .aw-tray-clearance { padding-bottom: 130px; }
-        .aw-tray-clearance-clash { padding-bottom: 290px; }
+        .aw-tray-clearance { padding-bottom: 80px; }
+        .aw-tray-clearance-clash { padding-bottom: 240px; }
+
+        /* ── The days themselves ──────────────────────────────────────────────
+           A press and drag across days marks a run, so on a phone a finger
+           moving over the days must paint rather than scroll the page or turn
+           the month. `touch-action: none` hands every gesture that starts on
+           a day to the page; the month name and weekday row above keep the
+           rail's own `pan-y`, so a swipe there still turns the month. No text
+           selection either, or a mouse drag highlights the numbers. */
+        .aw-days { touch-action: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
 
         /* ── The months, on a rail ────────────────────────────────────────────
            Every month the screen can reach is laid out in one row and the
@@ -114,7 +123,12 @@
     <script defer src="vendor/alpine-3.15.12.min.js"></script>
 </head>
 
-<body class="m-page" x-data="awayPage()" x-cloak>
+<!-- The drag's move and lift are heard on the whole window, not on a day: a
+     finger's events keep going to the day it went down on, and a mouse let go
+     outside the calendar still has to finish the run. -->
+<body class="m-page" x-data="awayPage()" x-cloak
+      @pointermove.window="pointerMove($event)" @pointerup.window="release()"
+      @pointercancel.window="cancelDrag()" @keydown.escape.window="cancelDrag()">
 
 <!-- The header is a direct child of <body>, outside the column: the phone shell
      finds it as `body > header`, and the bar's hairline has to reach the window
@@ -252,8 +266,11 @@
                                 <template x-for="(w, i) in weekdays" :key="i">
                                     <div class="text-center font-label-md text-[10px] uppercase tracking-[.12em] text-outline pb-2" x-text="w"></div>
                                 </template>
+                            </div>
+                            <div class="aw-days grid grid-cols-7 gap-y-[3px]">
                                 <template x-for="(c, i) in m.cells" :key="i">
-                                    <button type="button" :disabled="!c.inMonth" @click="tap(c.iso)" :title="c.title"
+                                    <button type="button" :disabled="!c.inMonth" :data-day="c.iso" :title="c.title"
+                                            @pointerdown="pointerDown($event, c.iso)" @click="keyed($event, c.iso)"
                                             class="relative flex flex-col items-center justify-center gap-[3px] h-[46px] border-0 aw-motion aw-focus"
                                             :class="[cellClass(c), cellRadius(c), c.inMonth ? 'cursor-pointer' : 'cursor-default']">
                                         <span class="text-[14.5px]" x-text="c.day"></span>
@@ -268,27 +285,15 @@
 
             <!-- Legend -->
             <div class="flex flex-wrap items-center gap-4 mt-4 pt-4 border-t border-outline-variant text-[11.5px] text-on-surface-variant">
-                <span class="flex items-center gap-2"><span class="w-[13px] h-[13px] rounded bg-primary"></span>The days you're choosing</span>
-                <span class="flex items-center gap-2"><span class="w-[13px] h-[13px] rounded bg-secondary-container border border-secondary"></span>Already on record</span>
+                <span class="flex items-center gap-2"><span class="w-[13px] h-[13px] rounded bg-primary"></span>Away</span>
                 <span class="flex items-center gap-2"><span class="w-[6px] h-[6px] rounded-full bg-sand"></span>You're serving</span>
+                <span class="flex items-center gap-2"><span class="w-[6px] h-[6px] rounded-full bg-warning"></span>Serving on a day you're away</span>
             </div>
 
-            <!-- The sentence and the one button -->
+            <!-- The sentence. No button: each tap or drag is saved as it lands. -->
             <div class="flex items-end justify-between gap-6 mt-5">
-                <p class="font-headline-lg text-[19px] leading-[1.4] text-on-surface max-w-[38ch]" x-text="sentence"></p>
-                <div class="flex items-center gap-3 shrink-0">
-                    <button type="button" @click="clearSelection()" x-show="selection.start"
-                            class="font-label-md text-[11px] uppercase tracking-[.1em] text-on-surface-variant px-1 py-2 hover:text-primary aw-motion aw-focus">
-                        Start again
-                    </button>
-                    <button type="button" @click="add()" :disabled="!canAdd || saving"
-                            class="flex items-center gap-2 font-label-md text-[12px] uppercase tracking-[.08em] text-on-primary bg-primary
-                                   border border-primary rounded-[10px] px-5 py-3.5 shadow-xs aw-motion aw-focus
-                                   disabled:opacity-40 disabled:cursor-not-allowed">
-                        <span class="material-symbols-outlined text-[19px]">check</span>
-                        <span x-text="addLabel"></span>
-                    </button>
-                </div>
+                <p class="font-headline-lg text-[19px] leading-[1.4] text-on-surface max-w-[44ch]" x-text="sentence"></p>
+                <span class="shrink-0 font-label-md text-[11px] uppercase tracking-[.1em] text-on-surface-variant" x-text="saveState"></span>
             </div>
 
             <!-- THE CLASH — information with a next step, never an error -->
@@ -326,55 +331,15 @@
         </div>
 
         <!-- ── Rail ────────────────────────────────────────────────────── -->
+        <!-- No list of ranges here any more: the calendar is the record. -->
         <div class="flex flex-col gap-md">
-            <div class="bg-surface-container-lowest border border-outline-variant rounded-[10px] p-5">
-                <div class="flex items-baseline justify-between gap-3 pb-3 border-b border-outline-variant">
-                    <span class="font-label-md text-[11px] uppercase tracking-[.14em] text-on-surface-variant">What you've said so far</span>
-                    <span class="text-[12px] text-on-surface-variant" x-text="recordCount"></span>
-                </div>
-
-                <div class="flex flex-col gap-2 mt-3.5">
-                    <template x-for="s in upcomingStretches" :key="s.id">
-                        <div class="flex items-center gap-3 px-3.5 py-3 bg-surface-container-low border border-outline-variant
-                                    border-l-[3px] border-l-secondary rounded-[10px]">
-                            <div class="flex-1 min-w-0">
-                                <div class="font-headline-lg text-[17px] leading-[1.3] text-on-surface" x-text="s.range"></div>
-                                <div class="text-[12px] text-on-surface-variant mt-0.5" x-text="s.meta"></div>
-                            </div>
-                            <button type="button" @click="remove(s.id)" title="Remove these days" :disabled="saving"
-                                    class="w-[34px] h-[34px] flex items-center justify-center border border-outline-variant rounded-[10px]
-                                           text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface shrink-0 aw-motion aw-focus">
-                                <span class="material-symbols-outlined text-[18px]">close</span>
-                            </button>
-                        </div>
-                    </template>
-                </div>
-
-                <p x-show="!upcomingStretches.length" class="mt-3.5 text-[13px] leading-[1.5] text-on-surface-variant"
-                   x-text="emptyLine"></p>
-
-                <!-- Past stretches fall out of the list and are offered back on tap -->
-                <div x-show="pastStretches.length" class="mt-3.5">
-                    <button type="button" @click="togglePast()"
-                            class="flex items-center gap-2 w-full font-body-md text-[12.5px] leading-[1.4] text-on-surface-variant
-                                   border-t border-dashed border-outline-variant pt-3.5 px-0.5 text-left hover:text-primary aw-motion aw-focus">
-                        <span class="material-symbols-outlined text-[18px] text-outline" x-text="showPast ? 'expand_less' : 'expand_more'"></span>
-                        <span x-text="pastLabel"></span>
-                    </button>
-                    <div x-show="showPast" class="flex flex-col gap-2 mt-3">
-                        <template x-for="p in pastStretches" :key="p.id">
-                            <div class="flex items-center gap-3 px-3.5 py-3 bg-surface-container-low border border-outline-variant rounded-[10px] opacity-70">
-                                <span class="font-headline-lg text-[15.5px] text-on-surface-variant" x-text="p.range"></span>
-                                <span class="text-[11.5px] text-outline ml-auto" x-text="p.meta"></span>
-                            </div>
-                        </template>
-                    </div>
-                </div>
-            </div>
-
             <div class="bg-surface-container-low border border-outline-variant rounded-[10px] p-5">
                 <div class="font-label-md text-[11px] uppercase tracking-[.14em] text-on-surface-variant mb-3">Worth knowing</div>
                 <div class="flex flex-col gap-3">
+                    <div class="flex items-start gap-2.5 text-[13px] leading-[1.5] text-on-surface-variant">
+                        <span class="material-symbols-outlined text-[17px] text-outline mt-px shrink-0">touch_app</span>
+                        <span>Tap a day to mark it, tap it again to clear it. Drag across days to mark a run — or start the drag on an away day to clear one.</span>
+                    </div>
                     <div class="flex items-start gap-2.5 text-[13px] leading-[1.5] text-on-surface-variant">
                         <span class="material-symbols-outlined text-[17px] text-outline mt-px shrink-0">wb_sunny</span>
                         <span>Whole days only — if you're away on the 14th, you're away for everything on the 14th.</span>
@@ -385,7 +350,7 @@
                     </div>
                     <div class="flex items-start gap-2.5 text-[13px] leading-[1.5] text-on-surface-variant">
                         <span class="material-symbols-outlined text-[17px] text-outline mt-px shrink-0">edit_calendar</span>
-                        <span>Change your mind any time — remove the days and they're simply gone.</span>
+                        <span>Every change saves as you make it. Change your mind any time — clear the days and they're simply gone.</span>
                     </div>
                 </div>
             </div>
@@ -435,8 +400,11 @@
                                 <template x-for="(w, i) in weekdays" :key="i">
                                     <div class="text-center font-label-md text-[9.5px] uppercase tracking-[.1em] text-outline pb-1.5" x-text="w"></div>
                                 </template>
+                            </div>
+                            <div class="aw-days grid grid-cols-7 gap-y-[3px]">
                                 <template x-for="(c, i) in m.cells" :key="i">
-                                    <button type="button" :disabled="!c.inMonth" @click="tap(c.iso)"
+                                    <button type="button" :disabled="!c.inMonth" :data-day="c.iso"
+                                            @pointerdown="pointerDown($event, c.iso)" @click="keyed($event, c.iso)"
                                             class="flex flex-col items-center justify-center gap-0.5 h-[48px] border-0 aw-motion aw-focus"
                                             :class="[cellClass(c), cellRadius(c), c.inMonth ? 'cursor-pointer' : 'cursor-default']">
                                         <span class="text-[15px]" x-text="c.day"></span>
@@ -449,31 +417,13 @@
                 </div>
             </div>
 
-            <!-- What's on record, underneath the grid on a phone -->
-            <div x-show="upcomingStretches.length" class="bg-surface-container-lowest border border-outline-variant rounded-[10px] p-4">
-                <div class="font-label-md text-[11px] uppercase tracking-[.14em] text-on-surface-variant pb-3 border-b border-outline-variant">
-                    What you've said so far
-                </div>
-                <div class="flex flex-col gap-2 mt-3">
-                    <template x-for="s in upcomingStretches" :key="s.id">
-                        <div class="flex items-center gap-3 px-3 py-3 bg-surface-container-low border border-outline-variant
-                                    border-l-[3px] border-l-secondary rounded-[10px]">
-                            <div class="flex-1 min-w-0">
-                                <div class="font-headline-lg text-[16px] leading-[1.3] text-on-surface" x-text="s.range"></div>
-                                <div class="text-[12px] text-on-surface-variant mt-0.5" x-text="s.meta"></div>
-                            </div>
-                            <button type="button" @click="remove(s.id)" title="Remove these days" :disabled="saving"
-                                    class="w-[38px] h-[38px] flex items-center justify-center border border-outline-variant rounded-[10px]
-                                           text-on-surface-variant shrink-0 aw-focus">
-                                <span class="material-symbols-outlined text-[18px]">close</span>
-                            </button>
-                        </div>
-                    </template>
-                </div>
+            <div x-show="allClear" class="flex items-center gap-2.5 px-4 py-3 bg-surface-container-low border border-outline-variant rounded-[10px]">
+                <span class="material-symbols-outlined text-[18px] text-success">check_circle</span>
+                <span class="font-headline-lg text-[15px] text-on-surface" x-text="allClearLine"></span>
             </div>
         </div>
 
-        <!-- The tray -->
+        <!-- The tray: the clash, if any, and the sentence. -->
         <div class="aw-tray fixed left-0 right-0 bottom-0 bg-surface-container-lowest border-t border-outline-variant px-margin pt-3"
              style="box-shadow:0 -8px 24px rgba(14,28,54,.10)">
             <div x-show="hasClash" class="bg-warning-container border border-warning rounded-[10px] px-3.5 py-3 mb-3">
@@ -495,29 +445,13 @@
                 </div>
             </div>
 
-            <!-- The sentence is a size down from the desktop's. It is the same
-                 words, but here it is one line of caption above a button rather
-                 than the largest thing in a panel — at 16.5px it wrapped to two
-                 lines in the empty state and made the tray a third taller for
-                 saying what the heading already says. -->
-            <div class="flex items-center justify-between gap-3 pb-2.5">
+            <!-- The sentence is a size down from the desktop's: one line of
+                 caption, not the largest thing in a panel. No button under it —
+                 each tap or drag is saved as the finger lifts. -->
+            <div class="flex items-center justify-between gap-3 pb-1">
                 <p class="font-headline-lg text-[14.5px] leading-[1.35] text-on-surface" x-text="sentence"></p>
-                <button type="button" @click="clearSelection()" x-show="selection.start"
-                        class="shrink-0 font-label-md text-[10.5px] uppercase tracking-[.1em] text-on-surface-variant px-0.5 py-1.5 aw-focus">
-                    Start again
-                </button>
+                <span class="shrink-0 font-label-md text-[10.5px] uppercase tracking-[.1em] text-on-surface-variant" x-text="saveState"></span>
             </div>
-
-            <!-- 46px, not 52. Still comfortably past the 44px anybody's
-                 guidance asks of a thumb, and the tray is pinned so this is
-                 never a target you have to aim at while the page moves. -->
-            <button type="button" @click="add()" :disabled="!canAdd || saving"
-                    class="flex items-center justify-center gap-2.5 w-full min-h-[46px] font-label-md text-[12.5px] uppercase tracking-[.08em]
-                           text-on-primary bg-primary border border-primary rounded-[10px] shadow-xs aw-focus
-                           disabled:opacity-40 disabled:cursor-not-allowed">
-                <span class="material-symbols-outlined text-[20px]">check</span>
-                <span x-text="addLabel"></span>
-            </button>
         </div>
     </div>
     </template>
