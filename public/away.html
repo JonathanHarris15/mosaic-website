@@ -138,7 +138,10 @@
     </div>
 </header>
 
-<div class="max-w-container mx-auto px-margin">
+<!-- w-full: the body is a flex column, where mx-auto shrinks a box to its
+     content. The month rail's content is twelve months wide, so without it the
+     page grew to ~1100px on a phone and showed two weekday columns. -->
+<div class="w-full max-w-container mx-auto px-margin">
 
     <!-- ── Title ─────────────────────────────────────────────────────────
          The whole block goes on a phone, not just the heading. The shell

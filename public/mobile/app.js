@@ -291,23 +291,10 @@
     var svcState = M.useAsync(data.getNextService, []);
     var svc = svcState.data;
     var liturgyState = M.useAsync(data.getLiturgyCatalog, []);
-    // The Home card grid mirrors the drawer's top-level destinations (permission-gated).
-    var tiles = [
-      { icon: "book-open", label: "Hymns", route: "hymnDirectory" },
-      { icon: "church", label: "Services", route: "calendar" },
-      // Route "events", not "calendar" — see data.js. "calendar" is Services.
-      { icon: "calendar-days", label: "Calendar", route: "events" },
-      // Same gate as the drawer's entry (destinations.js) and as the web's
-      // dashboard card. Ungated, this tile handed a signed-out guest the whole
-      // directory — see MS-197 / ADR-0031.
-      { icon: "users", label: "Membership Directory", route: "people", permissionLevels: ["member", "editor", "elder", "admin", "super_admin"] },
-      { icon: "shield", label: "Shepherd", route: "shepherd", permissionLevels: ["elder", "super_admin"] },
-      { icon: "settings-2", label: "Admin", route: "admin", permissionLevels: ["admin", "super_admin"] },
-      // A drawer destination now as well as a tile here (destinations.js) —
-      // on a phone the drawer IS the navigation, and reachable only from Home
-      // meant going home to reach it. Same gate as the web's card, MS-120.
-      { icon: "hand-heart", label: "Roles Manager", route: "rolesManager", permissionLevels: ["editor", "elder", "admin", "super_admin"] },
-    ].filter(function (t) { return data.canSee(t, user); });
+    // The Home card grid IS the drawer's destinations, gates and all
+    // (dashboard-nav.js). It used to keep a list of its own; when the drawer
+    // moved to gating by registry key, Home's keyless tiles all vanished.
+    var tiles = window.MosaicDestinations.homeTiles(user);
     var HD = window.HomeDashboard;
     var theme = svc && svc.theme && svc.theme !== "(no theme)" ? svc.theme : "";
     var sermon = svc && svc.sermon ? svc.sermon : "";

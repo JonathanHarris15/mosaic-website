@@ -74,6 +74,14 @@
         return dashboardNav().canSeeDrawerKey(item.key, user);
     }
 
+    // Home's tile grid: the drawer's destinations this person may open, less
+    // Home itself. One list, so a gate added for the drawer reaches Home too.
+    function homeTiles(user) {
+        return getDestinations().filter(function (d) {
+            return d.key !== 'home' && canSee(d, user);
+        });
+    }
+
     function routeHref(route) {
         return dashboardNav().mobileRouteHref(route);
     }
@@ -88,6 +96,7 @@
         ROLE_LABELS,
         DRAWER_HEAD,
         canSee,
+        homeTiles,
         routeHref,
         roleLabel,
         accountLabel,
