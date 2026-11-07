@@ -43,7 +43,7 @@ test('a stored empty or unusable slug is refused (MS-822)', () => {
 // roles-core says slot ids are never re-issued, because an Assignment points
 // at one. nextSlotId reads the highest id still present, so removing the last
 // slot and adding another hands the old id to a slot with a new requirement.
-test('a removed slot\'s id is never handed out again', { todo: 'nextSlotId uses the highest id present' }, () => {
+test('a removed slot\'s id is never handed out again (MS-823)', () => {
     let def = RolesCore.newDefinition('Kids');
     def = RolesCore.addSlot(def, 'either');
     def = RolesCore.addSlot(def, 'either');
@@ -51,4 +51,12 @@ test('a removed slot\'s id is never handed out again', { todo: 'nextSlotId uses 
     def = RolesCore.removeSlot(def, gone);
     def = RolesCore.addSlot(def, 'female');
     assert.equal(def.slots.some(s => s.id === gone), false, `slot ${gone} was re-issued`);
+});
+
+test('a Role stored before the counter keeps working (MS-823)', () => {
+    const old = { name: 'Old', slug: 'old', family: 'servant', restrictions: [],
+        slots: [{ id: 's1', requirement: 'either' }, { id: 's4', requirement: 'either' }] };
+    const next = RolesCore.addSlot(old, 'either');
+    assert.deepEqual(next.slots.map(s => s.id), ['s1', 's4', 's5']);
+    assert.equal(next.nextSlotSeq, 6);
 });

@@ -158,12 +158,24 @@
     // Slot ids are `s<n>`. The next one is one past the highest `n` ever used in
     // this definition — not `slots.length + 1`, which would re-issue the id of a
     // removed middle slot and hand its assignments to a brand-new slot.
-    function nextSlotId(def) {
+    // ⚠ NEVER BELOW THE COUNTER (MS-823). This used to read the highest slot
+    // id still present, so removing the last slot and adding another handed
+    // the removed id to a new slot — and every Assignment and serve still
+    // pointing at the old one attached itself to a slot with a different
+    // requirement. The definition now remembers the next number it may issue.
+    // One with no counter (stored before this) starts from its highest slot,
+    // which is what it would have done anyway.
+    function slotSeqOf(def) {
         const highest = (def && def.slots ? def.slots : []).reduce((max, slot) => {
             const n = parseInt(String(slot && slot.id).replace(/^s/, ''), 10);
             return Number.isFinite(n) && n > max ? n : max;
         }, 0);
-        return 's' + (highest + 1);
+        const stored = def && Number.isInteger(def.nextSlotSeq) ? def.nextSlotSeq : 0;
+        return Math.max(highest + 1, stored);
+    }
+
+    function nextSlotId(def) {
+        return 's' + slotSeqOf(def);
     }
 
     // ── Reading a definition ──────────────────────────────────────────────────
@@ -191,6 +203,8 @@
             slug: slugify(name),
             family: FAMILIES.SERVANT,
             slots: [{ id: 's1', requirement: REQUIREMENTS.EITHER }],
+            // The next slot number this Role may issue (MS-823).
+            nextSlotSeq: 2,
             restrictions: [],
             // Written explicitly rather than left absent, so the Roles Manager
             // form has something to render and the defaults are visible to the
@@ -236,14 +250,17 @@
         if (!isRequirement(requirement)) {
             throw new Error('Unknown slot requirement: ' + requirement);
         }
-        return withSlots(def, slotsOf(def).concat([
-            { id: nextSlotId(def), requirement: requirement },
-        ]));
+        const seq = slotSeqOf(def);
+        return Object.assign(withSlots(def, slotsOf(def).concat([
+            { id: 's' + seq, requirement: requirement },
+        ])), { nextSlotSeq: seq + 1 });
     }
 
     function removeSlot(def, slotId) {
         assertEditable(def);
-        return withSlots(def, slotsOf(def).filter(slot => slot.id !== slotId));
+        // Remembered BEFORE the slot goes, so its number is never issued again.
+        return Object.assign(withSlots(def, slotsOf(def).filter(slot => slot.id !== slotId)),
+            { nextSlotSeq: slotSeqOf(def) });
     }
 
     function setSlotRequirement(def, slotId, requirement) {
@@ -1236,6 +1253,7 @@
         slotOrder,
         slotCount,
         nextSlotId,
+        slotSeqOf,
         // building
         newDefinition,
         addSlot,
