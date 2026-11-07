@@ -672,9 +672,9 @@
     function sameRow(a, b) {
         if (!a || !b) return !a && !b;
         return ROW_FIELDS.every(k => (a[k] === undefined ? null : a[k]) === (b[k] === undefined ? null : b[k]))
-            && stamp(a.stateSetAt) === stamp(b.stateSetAt);
+            && timeKey(a.stateSetAt) === timeKey(b.stateSetAt);
     }
-    function stamp(v) {
+    function timeKey(v) {
         if (v == null) return null;
         if (typeof v === 'string') return v;
         if (typeof v.toMillis === 'function') return String(v.toMillis());

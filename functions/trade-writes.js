@@ -616,10 +616,25 @@ async function accept(db, spec) {
   });
   if (!plan.ok) return refusalFor(plan.reason);
 
-  return runOrLose(db, (tx) => settle(tx, db, {
-    trade: trade, chosen: plan.chosen, today: s.today, now: s.now,
-    actorId: s.actorId,
-  }), "Somebody has already sorted that one out.");
+  // ⚠ THE TRADE IS READ AGAIN INSIDE THE TRANSACTION (MS-813). The read
+  // above only answers fast for the ordinary refusals. Sarah can withdraw in
+  // the moment between that read and this transaction, and settling from the
+  // copy read before she did moved her Coffee anyway. The plan that counts is
+  // the one made from the Trade as the transaction sees it.
+  return runOrLose(db, async (tx) => {
+    const fresh = await tx.get(db.collection(TRADES).doc(s.tradeId));
+    if (!fresh.exists) return refuse("not-found", "That one has gone.");
+    const current = Object.assign({id: fresh.id}, fresh.data());
+    const again = tradeCore.planTransition({
+      trade: current, action: tradeCore.ACTIONS.ACCEPT,
+      actorId: s.actorId, chosen: s.chosen, today: s.today,
+    });
+    if (!again.ok) return refusalFor(again.reason);
+    return settle(tx, db, {
+      trade: current, chosen: again.chosen, today: s.today, now: s.now,
+      actorId: s.actorId,
+    });
+  }, "Somebody has already sorted that one out.");
 }
 
 /**

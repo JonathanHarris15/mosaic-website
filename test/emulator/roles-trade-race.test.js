@@ -3,7 +3,8 @@ const assert = require('node:assert');
 const H = require('./harness.js');
 const writes = require('../../functions/trade-writes.js');
 
-// accept() reads the Trade OUTSIDE its transaction and settles from that copy.
+// MS-813. accept() used to settle from a copy of the Trade read OUTSIDE its
+// transaction.
 // Here the other party withdraws in the gap between the read and the settle.
 
 const TODAY = '2026-03-01';
@@ -57,7 +58,7 @@ suite('a Trade withdrawn while it is being accepted', () => {
         await H.seedOccurrence(db, { id: OCC_B, date: COFFEE.date, visibility: 'member', roster: [row('coffee', SARAH, 'confirmed')] });
     });
 
-    test('is not settled', { todo: 'accept reads the Trade outside the transaction' }, async () => {
+    test('is not settled (MS-813)', async () => {
         // Sarah offers her Coffee for Bob's declined Kids place, uninvited.
         const inv = await writes.offer(db, { actorId: SARAH, assignment: KIDS, holderId: BOB,
             offered: [COFFEE], today: TODAY, now: H.now() });
