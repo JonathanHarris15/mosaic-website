@@ -22,10 +22,13 @@ const aa = require('../functions/assignment-answer.js');
 // It now hangs off the roster write, beside the Trade sweep that was already
 // there for exactly the same reason.
 
-// A Firestore small enough to answer the two questions this asks of it.
-function fakeDb(seed) {
+// A Firestore small enough to answer the questions this asks of it. `roster`
+// is what the place's roster holds NOW, which the sweep reads again rather
+// than trusting the trigger's copy (MS-819).
+function fakeDb(seed, roster) {
     const data = Object.assign({}, seed || {});
     const deleted = [];
+    const rows = roster || [];
     return {
         _data: data,
         _deleted: deleted,
@@ -39,9 +42,20 @@ function fakeDb(seed) {
                             data: () => data[key],
                         }),
                         delete: async () => { deleted.push(key); delete data[key]; },
+                        collection: () => ({
+                            where: (field, op, value) => ({
+                                get: async () => ({
+                                    docs: rows.filter(r => r[field] === value)
+                                        .map(r => ({ data: () => r })),
+                                }),
+                            }),
+                        }),
                     };
                 },
             };
+        },
+        async runTransaction(body) {
+            return body({ get: q => q.get(), delete: ref => { ref.delete(); } });
         },
     };
 }
@@ -122,6 +136,18 @@ test('a one-off Role sweeps under the same id its decline wrote', async () => {
 
     await aw.sweepCover(db, Object.assign({ row: null }, oneOff));
     assert.deepStrictEqual(db._deleted, [key]);
+});
+
+test('a late trigger does not take down a place that is declined NOW (MS-819)', async () => {
+    // The trigger still carries the confirmed row it fired with, but the
+    // holder has declined since.
+    const db = fakeDb({ [KEY]: { roleSlug: 'coffee' } },
+        [{ roleSlug: 'coffee', slotId: 's1', personId: 'bob', state: aa.STATES.DECLINED }]);
+    const cleared = await aw.sweepCover(db, Object.assign({
+        row: { personId: 'bob', state: aa.STATES.CONFIRMED },
+    }, PLACE));
+    assert.equal(cleared, false);
+    assert.deepStrictEqual(db._deleted, []);
 });
 
 // ── It is wired to the roster, not to one door ───────────────────────────────

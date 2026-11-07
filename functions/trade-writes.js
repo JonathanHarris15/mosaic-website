@@ -224,6 +224,7 @@ async function verdictFor(db, personId, ref, roster) {
     rank: rank,
     person: context.person,
     occurrence: occurrence,
+    roleSlug: ref.roleSlug,
     roleDef: context.roleDef,
     slot: slot,
     context: {

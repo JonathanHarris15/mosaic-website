@@ -423,6 +423,7 @@ async function take(db, spec) {
       rank: s.rank,
       person: context.person,
       occurrence: occurrence,
+      roleSlug: s.roleSlug,
       roleDef: context.roleDef,
       slot: slot,
       context: {
