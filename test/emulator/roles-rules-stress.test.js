@@ -1,7 +1,7 @@
 const { describe, test, before, after, beforeEach } = require('node:test');
-const assert = require('node:assert');
 const fs = require('node:fs');
 const path = require('node:path');
+const RolesCore = require('../../public/roles-core.js');
 
 // Live security-rule probes on the Roles system (Nov 2026 stress round).
 // Every other rules test in test/ reads firestore.rules as TEXT; these ask the
@@ -97,21 +97,57 @@ suite('Roles: what the rules actually let through', () => {
         await RT.assertFails(ctx('uid-ann').doc('users/uid-ann').update({ personId: 'p-bob' }));
     });
 
-    // ADR 0031 keeps `roles` world-readable for the printed guide, but a
-    // Role's allowlist names people and its tag rules name Shepherding Tags.
-    test('a Role\'s allowlist is not readable signed out', { todo: 'roles/ is allow read: if true' }, async () => {
+    // ADR 0031 keeps `roles` world-readable for the printed guide. Jonathan
+    // confirmed on Nov 7 that this stays, allowlists included.
+    test('the Roles list stays readable signed out (kept on purpose)', async () => {
         const anon = env.unauthenticatedContext().firestore();
-        const snap = await anon.doc('roles/ushers').get();
-        const rules = (snap.data() && /** @type {{restrictions?: Array<{personIds?: string[]}>}} */ (snap.data()).restrictions) || [];
-        assert.equal(rules.some(r => r.personIds), false);
+        await RT.assertSucceeds(anon.doc('roles/ushers').get());
     });
 
-    test('a Role write is held to the model (servant family, a slot, the description cap)', { todo: 'roles/ write has no shape check' }, async () => {
+    test('a Role write is held to the model (servant family, a slot, the description cap)', async () => {
         const db = ctx('uid-rolesmgr');
+        const ok = RolesCore.newDefinition('Greeters');
         await RT.assertFails(db.doc('roles/preacher').set({
             slug: 'preacher', name: 'x', family: 'liturgical', slots: [],
             description: 'x'.repeat(900 * 1024),
         }));
+        await RT.assertFails(db.doc('roles/g1').set({ ...ok, family: 'liturgical' }));
+        await RT.assertFails(db.doc('roles/g1').set({ ...ok, slots: [] }));
+        await RT.assertFails(db.doc('roles/g1').set({ ...ok, name: '' }));
+        await RT.assertFails(db.doc('roles/g1').set({ ...ok, description: 'x'.repeat(601) }));
+        await RT.assertFails(db.doc('roles/g1').set({ ...ok, slug: 'Greeters!' }));
+        await RT.assertFails(db.doc('roles/g1').set({ ...ok, intensity: -1 }));
+        await RT.assertFails(db.doc('roles/g1').set({ ...ok, nextSlotSeq: 'two' }));
+        await RT.assertFails(db.doc('roles/g1').set({ ...ok, notes: 'anything' }));
+    });
+
+    test('what the Roles page writes still goes through', async () => {
+        const db = ctx('uid-rolesmgr');
+        const def = RolesCore.newDefinition('Greeters');
+        // Create, as roles-manager.js does.
+        await RT.assertSucceeds(db.doc('roles/g1').set(def));
+        // A live save of a few fields, with the slot counter beside the slots.
+        const grown = RolesCore.addSlot(def, RolesCore.REQUIREMENTS.EITHER);
+        await RT.assertSucceeds(db.doc('roles/g1').update({
+            description: 'x'.repeat(600), slots: grown.slots, nextSlotSeq: grown.nextSlotSeq,
+        }));
+        // A whole save from the editor.
+        await RT.assertSucceeds(db.doc('roles/g1').set({ ...grown, name: 'Front door greeters', intensity: 0.5 }));
+        // An older Role with no slug, counter or description still saves.
+        await RT.assertSucceeds(db.doc('roles/ushers').update({ name: 'Ushers team', slug: 'ushers' }));
+        await RT.assertSucceeds(db.doc('roles/g1').delete());
+    });
+
+    test('a Role\'s slug never changes once set, and no write adds an unknown field', async () => {
+        const db = ctx('uid-rolesmgr');
+        await RT.assertFails(db.doc('roles/ushers').update({ slug: 'door_team' }));
+        await RT.assertFails(db.doc('roles/ushers').update({ notes: 'anything' }));
+        await env.withSecurityRulesDisabled(async (c) => {
+            await c.firestore().doc('roles/old').set({ slug: 'old', name: 'Old', family: 'servant',
+                slots: [{ id: 's1', requirement: 'either' }], legacyField: 1 });
+        });
+        // A field an older Role already carries does not block its save.
+        await RT.assertSucceeds(db.doc('roles/old').update({ name: 'Older' }));
     });
 
     // isEditor() is true for ANY one of directory.edit_identity, printables.edit,

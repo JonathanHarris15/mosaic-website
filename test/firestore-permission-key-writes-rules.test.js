@@ -113,6 +113,7 @@ test('shepherding_presence stays elders-only', () => {
 test('the editor-ladder write doors are all still there', () => {
     const used = [...rules.matchAll(/editsWith\('([^']+)'\)/g)].map(m => m[1]);
     // MS-722/725's 19, plus MS-727's four guide collections and people
-    // create, plus MS-693's two Resources collections.
-    assert.equal(used.length, 25);
+    // create, plus MS-693's two Resources collections, plus roles/ now
+    // naming the key on create, update and delete apart (its shape check).
+    assert.equal(used.length, 27);
 });
