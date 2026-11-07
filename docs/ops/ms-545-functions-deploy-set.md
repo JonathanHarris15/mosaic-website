@@ -8,7 +8,7 @@ target first, then ship through that path. No one-off
 ## Standing `--only` targets
 
 ```
-hosting,functions:publicForm,functions:answerLink,functions:onAttendanceCreated,functions:syncAccountRankToPerson,functions:sendPrayerRequestNow,functions:sendPrayerRequestTexts,functions:notifyEldersOnPrayerComplete,functions:smsInbound,functions:mcp,functions:notificationOverview,functions:notificationHistory,functions:notificationRevokeToken,functions:notificationTestPush,functions:translateLiturgy,functions:oosUpdateLiturgy,firestore:rules,storage
+hosting,functions:publicForm,functions:answerLink,functions:onAttendanceCreated,functions:syncAccountRankToPerson,functions:sendPrayerRequestNow,functions:sendPrayerRequestTexts,functions:notifyEldersOnPrayerComplete,functions:smsInbound,functions:mcp,functions:notificationOverview,functions:notificationHistory,functions:notificationRevokeToken,functions:notificationTestPush,functions:translateLiturgy,functions:oosUpdateLiturgy,functions:takeAssignment,functions:answerAssignment,functions:inviteToTrade,functions:withdrawTrade,functions:refuseTrade,functions:offerTrade,functions:acceptTrade,functions:setCoverReach,functions:clearTradeNotice,functions:endTradesOnFilledPlace,functions:convertServiceInvolvement,firestore:rules,storage
 ```
 
 | Target | Why it is in the set |
@@ -29,6 +29,10 @@ hosting,functions:publicForm,functions:answerLink,functions:onAttendanceCreated,
 | `functions:notificationTestPush` | Push notifications tab (MS-682). Export name in `functions/index.js` (`onCall`). Pushes to the **caller's own** devices only; the address is `request.auth.uid` and the only payload field read is `confirm`. |
 | `functions:translateLiturgy` | Liturgy translation. Export name in `functions/index.js` (`onCall`). The Order of Service switch and the Word import both call it. It asks Jev with `TYPESAFE_API_KEY`. Without this target those pages still translate, by kind and position. |
 | `functions:oosUpdateLiturgy` | Order of Service liturgy writes (MS-262 / MS-695). Export name in `functions/index.js` (`onCall`). MCP `oos_update_liturgy` and any callable path that saves a Sunday's liturgy slots go through it. Without this target the MS-695 `services.builder.edit` gate fix (#203) and the #202 error message never reach production. |
+| `functions:takeAssignment`, `functions:answerAssignment` | Roles: taking a place and answering one (MS-811, MS-817, MS-818, MS-820). Export names in `functions/index.js` (`onCall`). They decide who may act as a Person (both sides of the link), refuse a quiet decline or a gone Role or slot, and answer a one-off job on its own row. Without these targets those fixes stay off production. |
+| `functions:inviteToTrade`, `functions:withdrawTrade`, `functions:refuseTrade`, `functions:offerTrade`, `functions:acceptTrade`, `functions:setCoverReach`, `functions:clearTradeNotice` | Roles Trades and cover (MS-811, MS-813, MS-816). Export names in `functions/index.js` (`onCall`). Accept reads the Trade inside its transaction, and an uninvited offer only goes against a place on the cover list. |
+| `functions:endTradesOnFilledPlace` | Roles roster trigger (MS-819). Export name in `functions/index.js` (`onDocumentWritten`). It runs the cover sweep, which re-checks the roster in a transaction so a late trigger cannot delete a live cover entry. |
+| `functions:convertServiceInvolvement` | Nightly serving-history conversion (MS-815). Export name in `functions/index.js` (`onSchedule`). A deleted Person is skipped and each Sunday is caught on its own, so one bad row no longer stops the whole run. |
 
 There is deliberately **no** `functions:notificationDevices`. The device list
 rides on `notificationOverview` because on the server both halves are the same
@@ -105,7 +109,7 @@ gh workflow run "Deploy Firebase (hosting + publicForm)" --ref MS-598 -f dry_run
 ```
 
 Then open the run under Actions and confirm the log prints
-`targets=hosting,functions:publicForm,functions:answerLink,functions:onAttendanceCreated,functions:syncAccountRankToPerson,functions:sendPrayerRequestNow,functions:sendPrayerRequestTexts,functions:notifyEldersOnPrayerComplete,functions:smsInbound,functions:mcp,functions:notificationOverview,functions:notificationHistory,functions:notificationRevokeToken,functions:notificationTestPush,functions:translateLiturgy,functions:oosUpdateLiturgy,firestore:rules,storage`
+`targets=hosting,functions:publicForm,functions:answerLink,functions:onAttendanceCreated,functions:syncAccountRankToPerson,functions:sendPrayerRequestNow,functions:sendPrayerRequestTexts,functions:notifyEldersOnPrayerComplete,functions:smsInbound,functions:mcp,functions:notificationOverview,functions:notificationHistory,functions:notificationRevokeToken,functions:notificationTestPush,functions:translateLiturgy,functions:oosUpdateLiturgy,functions:takeAssignment,functions:answerAssignment,functions:inviteToTrade,functions:withdrawTrade,functions:refuseTrade,functions:offerTrade,functions:acceptTrade,functions:setCoverReach,functions:clearTradeNotice,functions:endTradesOnFilledPlace,functions:convertServiceInvolvement,firestore:rules,storage`
 and `dry_run=true`. App Check must stay `monitor`.
 
 Live (push to `main`, or `workflow_dispatch` without `dry_run=true`) waits
