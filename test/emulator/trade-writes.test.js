@@ -63,7 +63,7 @@ suite('the five ways a Trade moves', () => {
             // rankOf reads `users`, because visibility is judged for BOTH
             // parties and only one of them is on the phone.
             db.collection('users').doc('uid-' + id)
-                .set({ personId: id, permissionLevel: 'member' }),
+                .set({ personId: id, accountLevelId: 'level_member' }),
         ])));
 
         await Promise.all([

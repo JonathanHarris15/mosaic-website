@@ -1,0 +1,77 @@
+const { describe, test, before, beforeEach } = require('node:test');
+const assert = require('node:assert');
+const H = require('./harness.js');
+const writes = require('../../functions/trade-writes.js');
+
+// accept() reads the Trade OUTSIDE its transaction and settles from that copy.
+// Here the other party withdraws in the gap between the read and the settle.
+
+const TODAY = '2026-03-01';
+const BOB = 'person-bob';
+const SARAH = 'person-sarah';
+const OCC_A = 'occ-a';
+const OCC_B = 'occ-b';
+const KIDS = { occurrenceId: OCC_A, roleSlug: 'kids', slotId: 's1', date: '2026-03-14' };
+const COFFEE = { occurrenceId: OCC_B, roleSlug: 'coffee', slotId: 's1', date: '2026-03-28' };
+const row = (roleSlug, personId, state) => ({ roleSlug, slotId: 's1', personId, state, stateSetBy: null, stateSetAt: null });
+
+const suite = H.skipReason ? (n) => test(n, { skip: H.skipReason }, () => {}) : describe;
+
+// A db whose first read of one Trade lets `between` run before it returns.
+function gapAfterFirstRead(db, tradeId, between) {
+    let fired = false;
+    return new Proxy(db, { get(target, prop) {
+        if (prop !== 'collection') return Reflect.get(target, prop);
+        return (name) => {
+            const col = target.collection(name);
+            if (name !== 'trades') return col;
+            return new Proxy(col, { get(c, p) {
+                if (p !== 'doc') return Reflect.get(c, p).bind ? Reflect.get(c, p).bind(c) : Reflect.get(c, p);
+                return (id) => {
+                    const ref = c.doc(id);
+                    if (id !== tradeId) return ref;
+                    return new Proxy(ref, { get(r, q) {
+                        if (q !== 'get') { const v = Reflect.get(r, q); return typeof v === 'function' ? v.bind(r) : v; }
+                        return async () => {
+                            const snap = await r.get();
+                            if (!fired) { fired = true; await between(); }
+                            return snap;
+                        };
+                    } });
+                };
+            } });
+        };
+    } });
+}
+
+suite('a Trade withdrawn while it is being accepted', () => {
+    let db;
+    before(() => { db = H.connect(); });
+    beforeEach(async () => {
+        await H.wipe();
+        await Promise.all([BOB, SARAH].map(id => Promise.all([H.seedPerson(db, id),
+            db.collection('users').doc('uid-' + id).set({ personId: id, accountLevelId: 'level_member' })])));
+        await H.seedRole(db, { slug: 'kids', name: 'Kids', slots: [{ id: 's1', requirement: 'either' }], restrictions: [] });
+        await H.seedRole(db, { slug: 'coffee', name: 'Coffee', slots: [{ id: 's1', requirement: 'either' }], restrictions: [] });
+        await H.seedOccurrence(db, { id: OCC_A, date: KIDS.date, visibility: 'member', roster: [row('kids', BOB, 'declined')] });
+        await H.seedOccurrence(db, { id: OCC_B, date: COFFEE.date, visibility: 'member', roster: [row('coffee', SARAH, 'confirmed')] });
+    });
+
+    test('is not settled', { todo: 'accept reads the Trade outside the transaction' }, async () => {
+        // Sarah offers her Coffee for Bob's declined Kids place, uninvited.
+        const inv = await writes.offer(db, { actorId: SARAH, assignment: KIDS, holderId: BOB,
+            offered: [COFFEE], today: TODAY, now: H.now() });
+        assert.equal(inv.ok, true, JSON.stringify(inv));
+
+        let withdrew = null;
+        const racy = gapAfterFirstRead(db, inv.tradeId, async () => {
+            withdrew = await writes.withdraw(db, { actorId: SARAH, tradeId: inv.tradeId, today: TODAY, now: H.now() });
+        });
+        const result = await writes.accept(racy, { actorId: BOB, tradeId: inv.tradeId, chosen: COFFEE, today: TODAY, now: H.now() });
+
+        assert.equal(withdrew && withdrew.ok, true, 'the other party could not back out: ' + JSON.stringify(withdrew));
+        assert.equal(result.ok, false, 'accepted a Trade the other party had already ended');
+        const coffee = await H.rosterOf(db, OCC_B);
+        assert.deepEqual(coffee.map(r => r.personId), [SARAH], 'Sarah lost her Saturday after backing out');
+    });
+});
