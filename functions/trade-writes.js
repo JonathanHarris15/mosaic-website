@@ -74,6 +74,7 @@ const WORDING = {
   offeredDeclined: ["aborted",
     "That one is looking for cover itself now."],
   unknownAction: ["invalid-argument", "That is not something you can do."],
+  tooMany: ["invalid-argument", "Offer five dates at most."],
 };
 
 /**
@@ -253,26 +254,25 @@ async function verdictFor(db, personId, ref, roster) {
 }
 
 /**
- * Who currently holds an Assignment, read from the roster.
+ * The roster row on an Assignment, read from the roster.
  *
  * Outside a transaction on purpose: this is the prologue, and every move below
  * re-reads the roster inside its own transaction before writing. What this
- * answers is "whose place is this to trade", which the caller must not be
- * trusted for and which the cover list does not disclose.
+ * answers is "whose place is this to trade, and is it open", which the caller
+ * must not be trusted for and which the cover list does not disclose.
  *
  * @param {Object} db the Firestore handle
  * @param {Object} ref the Assignment being offered against
- * @return {Promise<?string>} the holder's Person id, or null
+ * @return {Promise<?Object>} the row, or null
  */
-async function currentHolderOf(db, ref) {
+async function placeOf(db, ref) {
   const r = ref || {};
   if (!r.occurrenceId || !r.roleSlug) return null;
   const rosterSnap = await db.collection(OCCURRENCES).doc(r.occurrenceId)
       .collection("roster").get();
-  const held = rosterSnap.docs.map((d) => d.data()).find((a) =>
-    a && a.roleSlug === r.roleSlug &&
-    (a.slotId || null) === (r.slotId || null));
-  return (held && held.personId) || null;
+  return rosterSnap.docs.map((d) => d.data()).find((a) =>
+    a && a.personId && a.roleSlug === r.roleSlug &&
+    (a.slotId || null) === (r.slotId || null)) || null;
 }
 
 /**
@@ -490,20 +490,9 @@ async function offer(db, spec) {
     trade = Object.assign({id: snap.id}, snap.data());
   }
 
-  // ⚠ WHO HOLDS THE PLACE IS READ, NEVER TAKEN FROM THE CALLER.
-  //
-  // A reply reads it off the Trade. An uninvited offer used to trust a
-  // `holderId` the client sent — which was both a way to file an offer against
-  // somebody who has nothing to do with the place, and the reason this door
-  // did not exist at all: the cover list DELIBERATELY does not name who
-  // declined (see cover-store.js), so the one screen an uninvited offer starts
-  // from has no holder to send. Reading it here is what lets the list stay
-  // quiet about the decliner and still be offered against.
-  let holderId = trade ? trade.holderId : null;
-  if (!trade) {
-    const onIt = await currentHolderOf(db, s.assignment);
-    if (!onIt) return refuse("not-found", "Nobody is on that place now.");
-    holderId = onIt;
+  // Before any read it would cost (MS-816).
+  if ((s.offered || []).length > tradeCore.MAX_OFFERED) {
+    return refusalFor(tradeCore.REASONS.TOO_MANY);
   }
 
   // ⚠ EVERY REFERENCE IS RE-RESOLVED FROM FIRESTORE. A reply reuses the one
@@ -517,26 +506,59 @@ async function offer(db, spec) {
   }
   const ref = trade ? trade.assignment : said.assignment;
 
-  const offered = [];
-  for (const put of s.offered || []) {
-    const told = await describeAssignment(db, put);
-    if (!told) return refuse("not-found", "One of those dates has gone.");
-    offered.push(told.assignment);
-  }
-
-  // ⚠ BOTH RUNGS, BEFORE ANYTHING ELSE.
+  // ⚠ SIGHT FIRST, THEN ANYTHING ABOUT WHO IS ON IT (MS-816).
   //
-  // The offerer must be able to see what they are offering against, or an
-  // uninvited offer becomes a way to probe for Events you cannot see. And the
-  // HOLDER must be able to see every Assignment put up, because accepting one
-  // writes them into its `participantIds` — which is precisely how sight of an
-  // Event is granted. Offering somebody a place in the elders' diary would
-  // otherwise hand them the diary.
+  // The offerer must be able to see what they are offering against. This
+  // check used to come after the holder was looked up, so an answer for an
+  // Event you cannot see still told you whether somebody held the place.
   const offererSees = await canSee(db, s.actorId, ref.occurrenceId);
   if (!offererSees) {
     return refuse("permission-denied", "That one is not open to you.",
         "notVisible");
   }
+
+  // ⚠ WHO HOLDS THE PLACE IS READ, NEVER TAKEN FROM THE CALLER.
+  //
+  // A reply reads it off the Trade. An uninvited offer used to trust a
+  // `holderId` the client sent — which was both a way to file an offer against
+  // somebody who has nothing to do with the place, and the reason this door
+  // did not exist at all: the cover list DELIBERATELY does not name who
+  // declined (see cover-store.js), so the one screen an uninvited offer starts
+  // from has no holder to send. Reading it here is what lets the list stay
+  // quiet about the decliner and still be offered against.
+  //
+  // And only a place that IS on the cover list (MS-816): declined, and not
+  // quietly. Anything else gets the same answer whether it is held, empty or
+  // quiet, so the answer says nothing about who is on it.
+  let holderId = trade ? trade.holderId : null;
+  if (!trade) {
+    const row = await placeOf(db, s.assignment);
+    const open = row && row.state === tradeCore.DECLINED && !row.quiet;
+    if (!open) {
+      return refuse("failed-precondition",
+          "That place is not open for cover.", "notOpen");
+    }
+    holderId = row.personId;
+  }
+
+  // Everything put up must be the offerer's own (MS-816). Settling checks
+  // again, but an offer of somebody else's Saturday should never be filed.
+  const offered = [];
+  for (const put of s.offered || []) {
+    const told = await describeAssignment(db, put);
+    if (!told) return refuse("not-found", "One of those dates has gone.");
+    const mine = await placeOf(db, told.assignment);
+    if (!mine || mine.personId !== s.actorId) {
+      return refuse("failed-precondition",
+          "You can only offer dates you are on.", "notHeld");
+    }
+    offered.push(told.assignment);
+  }
+
+  // ⚠ THE HOLDER must be able to see every Assignment put up, because
+  // accepting one writes them into its `participantIds` — which is precisely
+  // how sight of an Event is granted. Offering somebody a place in the elders'
+  // diary would otherwise hand them the diary.
   for (const put of offered) {
     const holderSees = await canSee(db, holderId, put.occurrenceId);
     if (!holderSees) {

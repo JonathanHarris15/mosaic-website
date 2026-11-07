@@ -625,14 +625,133 @@
     //
     // The document and its roster are written together, so the derived
     // participant list can never describe a roster that is not there.
-    async function saveOccurrence(db, occurrence) {
+    //
+    // ⚠ PASS `loaded` (MS-812). The Event page holds a roster it read minutes
+    // ago, and a member can decline, or somebody take a place off the cover
+    // list, in between. Without `loaded` this writes the WHOLE in-memory
+    // roster back, which puts the member's old answer straight back over their
+    // new one. With it, only the rows the editor actually changed are written,
+    // each one checked against what is stored, and a row somebody else has
+    // changed since is refused rather than overwritten. Rows the editor did not
+    // touch are left as they stand, whoever last wrote them.
+    //
+    // Resolves to the payload, with `assignments` as the roster now stored.
+    async function saveOccurrence(db, occurrence, options) {
         const id = occurrence.id || Core.occurrenceId(occurrence.seriesId, occurrence.date);
         if (!id) throw new Error('An occurrence needs either an id or a series and a date.');
+        const loaded = options && options.loaded;
 
         const payload = occurrencePayload(Object.assign({}, occurrence, { id: id }));
-        await occurrenceRef(db, id).set(payload, { merge: true });
-        if (occurrence.assignments) await saveRoster(db, id, occurrence.assignments);
-        return payload;
+        if (!occurrence.assignments || !loaded) {
+            await occurrenceRef(db, id).set(payload, { merge: true });
+            if (occurrence.assignments) await saveRoster(db, id, occurrence.assignments);
+            return Object.assign({}, payload, { assignments: occurrence.assignments });
+        }
+
+        // The document first, without the fields derived from the roster: a
+        // missing occurrence is DENIED, not absent, so the transaction below
+        // could not even read one that is not there yet.
+        const base = Object.assign({}, payload);
+        DERIVED.forEach(key => { delete base[key]; });
+        await occurrenceRef(db, id).set(base, { merge: true });
+
+        const roster = await saveRosterChanges(db, id, loaded, occurrence.assignments);
+        const derived = derivedFields(Object.assign({}, occurrence, { assignments: roster }));
+        return Object.assign({}, payload, derived, { assignments: roster });
+    }
+
+    const DERIVED = ['participantIds', 'needsAttention', 'outForCover'];
+
+    function derivedFields(occurrence) {
+        const assignments = occurrence.assignments || [];
+        return {
+            participantIds: Core.participantIds(assignments),
+            needsAttention: Core.needsAttention({ assignments: assignments }),
+            outForCover: Core.outForCover(
+                Object.assign({}, occurrence, { assignments: assignments })),
+        };
+    }
+
+    // What makes two roster rows "the same row, unchanged". Who set a state and
+    // when are part of it: a member answering again with the same word is still
+    // somebody else writing the row.
+    const ROW_FIELDS = ['personId', 'roleSlug', 'slotId', 'oneOffId', 'label',
+        'state', 'quiet', 'stateSetBy'];
+    function sameRow(a, b) {
+        if (!a || !b) return !a && !b;
+        return ROW_FIELDS.every(k => (a[k] === undefined ? null : a[k]) === (b[k] === undefined ? null : b[k]))
+            && timeKey(a.stateSetAt) === timeKey(b.stateSetAt);
+    }
+    function timeKey(v) {
+        if (v == null) return null;
+        if (typeof v === 'string') return v;
+        if (typeof v.toMillis === 'function') return String(v.toMillis());
+        if (v instanceof Date) return String(v.getTime());
+        return JSON.stringify(v);
+    }
+
+    // The rows a page changed, written in one transaction against what it
+    // loaded. Throws `roster-changed` naming the rows somebody else moved.
+    //
+    // The occurrence document is read INSIDE the transaction and its derived
+    // fields written there too. Every server write to a roster (answer, take,
+    // trade) also writes that document in its own transaction, so if one lands
+    // while this is open, this one is retried, and the untouched rows it then
+    // reads include the change.
+    async function saveRosterChanges(db, occurrenceId, loaded, wanted) {
+        const ref = occurrenceRef(db, occurrenceId);
+        const col = ref.collection(ROSTER);
+        const before = new Map((loaded || []).map(a => [rosterId(a), a]));
+        const after = new Map((wanted || []).map(a => [rosterId(a), a]));
+
+        const touched = [];
+        after.forEach((row, rid) => { if (!sameRow(before.get(rid), row)) touched.push(rid); });
+        before.forEach((row, rid) => { if (!after.has(rid)) touched.push(rid); });
+
+        return db.runTransaction(async tx => {
+            const occSnap = await tx.get(ref);
+            // A plain read, after the document read: anything that committed
+            // before that read is in it; anything after retries this.
+            const all = await col.get();
+            // A row is known by what it holds, not by the id it happens to
+            // be filed under. Older rows may sit under another id; they are
+            // read where they are and moved to the canonical one when written.
+            const filedAs = new Map();
+            all.docs.forEach(d => { filedAs.set(rosterId(d.data() || {}), d.id); });
+            const where = rid => filedAs.get(rid) || rid;
+            const snaps = await Promise.all(touched.map(rid => tx.get(col.doc(where(rid)))));
+
+            const conflicts = [];
+            snaps.forEach((snap, i) => {
+                const rid = touched[i];
+                const stored = snap.exists ? snap.data() : null;
+                if (!sameRow(stored, before.get(rid) || null)) conflicts.push(rid);
+            });
+            if (conflicts.length) {
+                const err = new Error('Somebody else changed this roster since it was opened. ' +
+                    'Reload to see the latest before changing it.');
+                err.code = 'roster-changed';
+                err.conflicts = conflicts;
+                throw err;
+            }
+
+            const rows = new Map(all.docs.map(d => [rosterId(d.data() || {}), d.data()]));
+            touched.forEach(rid => {
+                if (where(rid) !== rid) tx.delete(col.doc(where(rid)));
+                if (after.has(rid)) {
+                    tx.set(col.doc(rid), after.get(rid));
+                    rows.set(rid, after.get(rid));
+                } else {
+                    if (where(rid) === rid) tx.delete(col.doc(rid));
+                    rows.delete(rid);
+                }
+            });
+
+            const roster = Array.from(rows.values());
+            const occ = Object.assign({}, occSnap.exists ? occSnap.data() : {}, { assignments: roster });
+            tx.set(ref, derivedFields(occ), { merge: true });
+            return roster;
+        });
     }
 
     // An occurrence with its roster read back in. The roster read may be refused
@@ -1541,10 +1660,12 @@
             // — clearing a roster is a real change and has to land.
             if (!roster.length && !existing.docs.length) continue;
 
+            // Against the roster read just above, so a member who answers in
+            // the gap keeps their answer or the accept stops, not overwrites.
             await saveOccurrence(db, Object.assign(
                 { id: id, assignments: roster },
                 newOccurrenceFields(series, o.seriesId, day.date)
-            ));
+            ), { loaded: existing.docs.map(doc => doc.data()) });
 
             assignments += drafted.length;
             written.push(day.date);
