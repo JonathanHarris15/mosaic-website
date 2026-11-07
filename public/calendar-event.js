@@ -131,6 +131,7 @@
             occurrence: null,
             series: null,
             assignments: [],
+            storedAssignments: [],
             attendance: [],
             // A file attached to this occurrence (MS-287) — a flyer, a sign-up
             // sheet, a floor plan. Visible to anyone who can see the Event,
@@ -507,6 +508,10 @@
 
                     this.occurrence = loaded;
                     this.assignments = loaded.assignments || [];
+                    // The roster as it was read, so a save writes only what
+                    // this page changed and refuses to overwrite anybody
+                    // else's answer since (MS-812).
+                    this.storedAssignments = this.assignments.slice();
                     this.startOccurrenceDraft();
                     if (this.isEditor) {
                         try {
@@ -871,17 +876,45 @@
             async persist() {
                 this.saving = true;
                 try {
-                    await Store.saveOccurrence(db, Object.assign({}, this.occurrence, {
-                        assignments: this.assignments,
-                    }));
-                    // Keep the derived fields in step locally too, so the banner
-                    // and the flag do not wait for a reload to agree.
-                    this.occurrence.participantIds = Core.participantIds(this.assignments);
+                    await this.saveWithRoster();
                 } catch (e) {
                     console.error('Save failed:', e);
-                    this.error = 'That change could not be saved.';
+                    this.error = e && e.code === 'roster-changed'
+                        ? 'Somebody else changed this roster since you opened it, so that change was not saved. The latest is shown now.'
+                        : 'That change could not be saved.';
+                    if (e && e.code === 'roster-changed') await this.reloadRoster();
                 } finally {
                     this.saving = false;
+                }
+            },
+
+            // Writes only the rows this page changed since it read them
+            // (MS-812), then takes up the roster as it is now stored, which
+            // includes anybody else's change to a row this page left alone.
+            async saveWithRoster() {
+                const saved = await Store.saveOccurrence(db, Object.assign({}, this.occurrence, {
+                    assignments: this.assignments,
+                }), { loaded: this.storedAssignments || [] });
+                this.assignments = saved.assignments || this.assignments;
+                this.storedAssignments = this.assignments.slice();
+                // Keep the derived fields in step locally too, so the banner
+                // and the flag do not wait for a reload to agree.
+                this.occurrence.participantIds = Core.participantIds(this.assignments);
+                this.occurrence.needsAttention = saved.needsAttention;
+                this.occurrence.outForCover = saved.outForCover;
+            },
+
+            async reloadRoster() {
+                try {
+                    const fresh = await Store.loadOccurrence(db, this.occurrence.id);
+                    if (!fresh) return;
+                    this.assignments = fresh.assignments || [];
+                    this.storedAssignments = this.assignments.slice();
+                    this.occurrence.participantIds = Core.participantIds(this.assignments);
+                    this.occurrence.needsAttention = fresh.needsAttention;
+                    this.occurrence.outForCover = fresh.outForCover;
+                } catch (e) {
+                    console.error('Roster reload failed:', e);
                 }
             },
 
@@ -1027,9 +1060,7 @@
                         this.series.colour = slug;
                     } else {
                         this.occurrence.colour = slug;
-                        await Store.saveOccurrence(db, Object.assign({}, this.occurrence, {
-                            assignments: this.assignments,
-                        }));
+                        await this.saveWithRoster();
                     }
                 } catch (e) {
                     console.error('Colour change failed:', e);

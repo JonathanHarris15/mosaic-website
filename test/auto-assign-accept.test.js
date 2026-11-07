@@ -81,6 +81,35 @@ function fakeDb(seed) {
                 },
             };
         },
+        // The roster is saved in a transaction (MS-812): reads, then the
+        // writes applied together on return, like a batch.
+        async runTransaction(fn) {
+            const ops = [];
+            const tx = {
+                async get(ref) {
+                    if (ref._occ) {
+                        const store = rosterOf(ref._occ);
+                        return { exists: ref._rid in store, id: ref._rid, data: () => store[ref._rid] };
+                    }
+                    return ref.get();
+                },
+                set(ref, data, options) { ops.push({ kind: 'set', ref, data, options }); },
+                delete(ref) { ops.push({ kind: 'delete', ref }); },
+            };
+            const out = await fn(tx);
+            committed.push(ops.length);
+            ops.forEach(op => {
+                if (op.ref._occ) {
+                    const store = rosterOf(op.ref._occ);
+                    if (op.kind === 'delete') delete store[op.ref._rid];
+                    else store[op.ref._rid] = op.data;
+                    return;
+                }
+                if (op.kind === 'delete') delete docs[op.ref.path];
+                else docs[op.ref.path] = Object.assign({}, docs[op.ref.path], op.data);
+            });
+            return out;
+        },
         _docs: docs,
         _rosters: rosters,
         _batches: committed,

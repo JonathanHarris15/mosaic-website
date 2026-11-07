@@ -45,7 +45,7 @@ suite('an editor page left open does not undo a member', () => {
         });
     });
 
-    test('a decline made while the Event page was open survives the editor\'s next save', { todo: 'persist() writes the whole stale roster' }, async () => {
+    test('a decline made while the Event page was open survives the editor\'s next save (MS-812)', async () => {
         // 1. The editor opens the date.
         const page = await Store.loadOccurrence(db, OCC);
         assert.equal(page.assignments.find(a => a.personId === ANN).state, 'pending');
@@ -61,7 +61,8 @@ suite('an editor page left open does not undo a member', () => {
         const next = Core.assignToSlot(page.assignments,
             { roleSlug: 'ushers', slotId: 's2', personId: RAY },
             { actorUid: 'uid-editor', at: new Date().toISOString() });
-        await Store.saveOccurrence(db, Object.assign({}, page, { assignments: next }));
+        await Store.saveOccurrence(db, Object.assign({}, page, { assignments: next }),
+            { loaded: page.assignments });
 
         // Ann's no must still be a no.
         const roster = await H.rosterOf(db, OCC);
@@ -71,7 +72,7 @@ suite('an editor page left open does not undo a member', () => {
         assert.equal(occ.needsAttention, true, 'the declined flag was wiped');
     });
 
-    test('somebody who took the place from the cover list keeps it after the editor saves', { todo: 'saveRoster deletes rows the page never saw' }, async () => {
+    test('somebody who took the place from the cover list keeps it after the editor saves (MS-812)', async () => {
         await H.seedPerson(db, 'person-sam');
         await db.collection('users').doc('uid-sam')
             .set({ personId: 'person-sam', accountLevelId: 'level_member' });
@@ -91,11 +92,49 @@ suite('an editor page left open does not undo a member', () => {
         const next = Core.assignToSlot(page.assignments,
             { roleSlug: 'ushers', slotId: 's2', personId: RAY },
             { actorUid: 'uid-editor', at: new Date().toISOString() });
-        await Store.saveOccurrence(db, Object.assign({}, page, { assignments: next }));
+        await Store.saveOccurrence(db, Object.assign({}, page, { assignments: next }),
+            { loaded: page.assignments });
 
         const roster = await H.rosterOf(db, OCC);
         const s1 = roster.filter(r => r.slotId === 's1').map(r => r.personId);
         assert.deepEqual(s1, ['person-sam'], 'slot s1 now holds ' + JSON.stringify(s1));
+    });
+
+    test('an editor change to a row somebody answered since is refused, not applied (MS-812)', async () => {
+        const page = await Store.loadOccurrence(db, OCC);
+        assert.equal((await writes.answer(db, {
+            personId: ANN, roleSlug: 'ushers', slotId: 's1',
+            occurrenceId: OCC, state: 'declined', today: TODAY, now: H.now(),
+        })).ok, true);
+
+        // The editor, not having seen the decline, swaps Ray in for Ann.
+        const next = Core.assignToSlot(Core.clearSlot(page.assignments, 'ushers', 's1'),
+            { roleSlug: 'ushers', slotId: 's1', personId: RAY },
+            { actorUid: 'uid-editor', at: new Date().toISOString() });
+        await assert.rejects(
+            Store.saveOccurrence(db, Object.assign({}, page, { assignments: next }),
+                { loaded: page.assignments }),
+            e => e.code === 'roster-changed');
+
+        const roster = await H.rosterOf(db, OCC);
+        assert.deepEqual(roster.map(r => [r.personId, r.state]), [[ANN, 'declined']]);
+    });
+
+    test('the derived fields describe the stored roster after a save (MS-812)', async () => {
+        const page = await Store.loadOccurrence(db, OCC);
+        assert.equal((await writes.answer(db, {
+            personId: ANN, roleSlug: 'ushers', slotId: 's1',
+            occurrenceId: OCC, state: 'declined', today: TODAY, now: H.now(),
+        })).ok, true);
+        const next = Core.assignToSlot(page.assignments,
+            { roleSlug: 'ushers', slotId: 's2', personId: RAY },
+            { actorUid: 'uid-editor', at: new Date().toISOString() });
+        const saved = await Store.saveOccurrence(db, Object.assign({}, page, { assignments: next }),
+            { loaded: page.assignments });
+
+        const occ = (await db.collection('event_occurrences').doc(OCC).get()).data();
+        assert.deepEqual(occ.participantIds.slice().sort(), [ANN, RAY].sort());
+        assert.equal(saved.assignments.find(a => a.personId === ANN).state, 'declined');
     });
 
     test('a quiet decline cannot be taken by somebody nobody asked', { todo: 'planTake ignores quiet' }, async () => {
@@ -110,7 +149,7 @@ suite('an editor page left open does not undo a member', () => {
         const cover = await db.collection('cover').get();
         assert.equal(cover.size, 0, 'a quiet decline is not advertised');
 
-        // Sam never saw it on the list; he calls the callable with ids he can
+        // Sam never saw it on the list; they call the callable with ids he can
         // guess (occurrence ids are {series}_{date}, slugs are world-readable).
         const took = await writes.take(db, {
             personId: 'person-sam', rank: 'member', roleSlug: 'ushers', slotId: 's1',

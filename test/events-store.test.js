@@ -146,6 +146,27 @@ function fakeDb(collections, viewer) {
                 async commit() { committed.push(ops); },
             };
         },
+        // The roster is saved in a transaction (MS-812). A document this fake
+        // was already asked to write reads back as written, the way the real
+        // one would after the write that creates it.
+        async runTransaction(fn) {
+            const ops = [];
+            const tx = {
+                async get(ref) {
+                    const prior = committed.flat().filter(w => w.path === ref.path && w.kind === 'set');
+                    if (prior.length) {
+                        const data = Object.assign({}, ...prior.map(w => w.data));
+                        return { exists: true, id: ref.id, data: () => data };
+                    }
+                    return ref.get();
+                },
+                set: (ref, data, options) => ops.push({ kind: 'set', path: ref.path, data, options }),
+                delete: ref => ops.push({ kind: 'delete', path: ref.path }),
+            };
+            const out = await fn(tx);
+            committed.push(ops);
+            return out;
+        },
         _committed: committed,
         _queriesRun: queriesRun,
         _flatWrites: () => committed.flat(),
@@ -1480,7 +1501,9 @@ test('an accepted roster can be read back by the editor who wrote it', async () 
     // Play the writes back into the store the fake reads from.
     db._flatWrites().forEach(w => {
         const m = /^event_occurrences\/([^/]+)$/.exec(w.path);
-        if (m) written[m[1]] = w.data;
+        // Merged, as the store's writes are: the roster's derived fields
+        // land in a second write after the document (MS-812).
+        if (m) written[m[1]] = Object.assign({}, written[m[1]], w.data);
     });
 
     const o = await Store.loadOccurrence(db, 'sunday_service_2026-08-09');
