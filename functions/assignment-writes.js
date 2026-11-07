@@ -277,6 +277,7 @@ async function takeContext(db, personId, roleSlug, date, seriesId) {
  * @param {string} spec.occurrenceId the occurrence
  * @param {string} spec.roleSlug the Role being answered for
  * @param {?string} spec.slotId its slot
+ * @param {?string} spec.oneOffId which one-off job, when it is one
  * @param {string} spec.state the answer — confirmed or declined
  * @param {string} spec.today YYYY-MM-DD in the church's timezone
  * @param {*} spec.now a timestamp to stamp the answer with
@@ -308,6 +309,7 @@ async function answer(db, spec) {
       personId: s.personId,
       roleSlug: s.roleSlug,
       slotId: s.slotId || null,
+      oneOffId: s.oneOffId || null,
       state: s.state,
       // Whether this one goes on the open list, or stays between the decliner
       // and the people they ask (MS-213). Absent means "leave it as it was" —
@@ -318,7 +320,12 @@ async function answer(db, spec) {
     });
     if (!plan.ok) return plan;
 
-    tx.set(rosterCol.doc(plan.rosterId), plan.assignment, {merge: true});
+    // Back onto the document the row was read from (MS-818), which for a row
+    // filed under an older id is not the id the plan would build.
+    const at = roster.indexOf(plan.held);
+    const filedAs = at === -1 ? plan.rosterId : rosterSnap.docs[at].id;
+    delete plan.held;
+    tx.set(rosterCol.doc(filedAs), plan.assignment, {merge: true});
     tx.update(occurrenceRef, {
       participantIds: plan.derived.participantIds,
       needsAttention: plan.derived.needsAttention,

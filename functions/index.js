@@ -1019,7 +1019,7 @@ exports.answerAssignment = onCall(
       const db = admin.firestore();
       const {personId} = await linkedPerson.callerOf(db, request.auth.uid);
 
-      const {occurrenceId, roleSlug, slotId, state, quiet} =
+      const {occurrenceId, roleSlug, slotId, oneOffId, state, quiet} =
         request.data || {};
       if (!occurrenceId || !roleSlug) {
         throw new HttpsError(
@@ -1031,6 +1031,7 @@ exports.answerAssignment = onCall(
         occurrenceId: occurrenceId,
         roleSlug: roleSlug,
         slotId: slotId || null,
+        oneOffId: typeof oneOffId === "string" ? oneOffId : null,
         state: state,
         quiet: quiet,
         today: ac.churchToday(new Date()),

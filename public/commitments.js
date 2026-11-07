@@ -282,7 +282,7 @@
                 const state = r.state;
 
                 return Object.assign({}, r, {
-                    key: [r.occurrenceId || r.date, r.roleSlug, r.slotId || 'x'].join('__'),
+                    key: [r.occurrenceId || r.date, r.roleSlug, r.oneOffId || r.slotId || 'x'].join('__'),
                     roleName: r.label || this.roleNameFor(r.roleSlug),
                     // What the job actually is (MS-222), in the editor's own
                     // words. A one-off Role has no definition and so has none —
@@ -674,6 +674,7 @@
                         occurrenceId: row.occurrenceId,
                         roleSlug: row.roleSlug,
                         slotId: row.slotId || null,
+                        oneOffId: row.oneOffId || null,
                         state: state,
                         quiet: quiet === true,
                     });

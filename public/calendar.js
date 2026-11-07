@@ -648,6 +648,7 @@
                         occurrenceId: commitment.occurrenceId,
                         roleSlug: commitment.roleSlug,
                         slotId: commitment.slotId || null,
+                        oneOffId: commitment.oneOffId || null,
                         state: state,
                     });
                 } catch (e) {
