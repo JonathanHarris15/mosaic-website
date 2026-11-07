@@ -137,7 +137,7 @@ suite('an editor page left open does not undo a member', () => {
         assert.equal(saved.assignments.find(a => a.personId === ANN).state, 'declined');
     });
 
-    test('a quiet decline cannot be taken by somebody nobody asked', { todo: 'planTake ignores quiet' }, async () => {
+    test('a quiet decline cannot be taken by somebody nobody asked (MS-817)', async () => {
         await H.seedPerson(db, 'person-sam');
         await db.collection('users').doc('uid-sam')
             .set({ personId: 'person-sam', accountLevelId: 'level_member' });
@@ -155,6 +155,6 @@ suite('an editor page left open does not undo a member', () => {
             personId: 'person-sam', rank: 'member', roleSlug: 'ushers', slotId: 's1',
             occurrenceId: OCC, today: TODAY, now: H.now(),
         });
-        assert.equal(took.ok, false, 'Sam took a place that was never offered to him');
+        assert.equal(took.ok, false, 'Sam took a place that was never offered to them');
     });
 });

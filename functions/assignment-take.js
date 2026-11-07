@@ -141,6 +141,13 @@ function planTake(spec) {
   if (held.state !== STATES.DECLINED) {
     return refuse("aborted", "Somebody has already sorted that one out.");
   }
+  // ⚠ ONLY WHAT THE COVER LIST SHOWS (MS-817). A quiet decline is the holder
+  // saying "I'll sort this myself", and an Event that cannot be covered is the
+  // editor's to fill. Neither is on the list, but the ids are guessable, so a
+  // take sent straight to the callable used to fill them anyway.
+  if (held.quiet === true || !occurrences.canBeCovered(s.occurrence)) {
+    return refuse("failed-precondition", "That place is not open for cover.");
+  }
   if (held.personId === s.personId) {
     return refuse(
         "failed-precondition",
