@@ -101,6 +101,8 @@
         // so a Person the screen offers is one the server will accept.
         NOT_VISIBLE: 'notVisible',
         NOT_ELIGIBLE: 'notEligible',
+        // MS-816. More dates put up than anybody would weigh at once.
+        TOO_MANY: 'tooMany',
     });
 
     // Locked copy (MS-529). The picker prints this on a row that fails
@@ -115,6 +117,11 @@
     // Three at a time. Not so few that Bob is waiting on one person, not so
     // many that declining a Saturday texts the whole church.
     const MAX_INVITATIONS = 3;
+
+    // At most this many of your own dates in one offer (MS-816). An offer is
+    // read on a phone, and a request carrying hundreds of references was also
+    // hundreds of reads on the server before anything was checked.
+    const MAX_OFFERED = 5;
 
     const ENDED = Object.freeze([
         STATES.SETTLED, STATES.REFUSED, STATES.WITHDRAWN,
@@ -246,6 +253,7 @@
             // list. A second, slower way to do the same thing would leave the
             // holder something to clear by hand for no gain.
             if (!offered.length) return refuse(REASONS.NOTHING_OFFERED);
+            if (offered.length > MAX_OFFERED) return refuse(REASONS.TOO_MANY);
             const stale = offered.some(a => datePassed(a, s.today));
             if (stale) return refuse(REASONS.DATE_PASSED);
 
@@ -304,6 +312,7 @@
             }
 
             const offered = s.offered || [];
+            if (offered.length > MAX_OFFERED) return refuse(REASONS.TOO_MANY);
             if (offered.some(a => datePassed(a, s.today))) {
                 return refuse(REASONS.DATE_PASSED);
             }
@@ -508,6 +517,8 @@
         REASONS,
         CAUSES,
         MAX_INVITATIONS,
+        MAX_OFFERED,
+        DECLINED,
         INVITE_NO_ACCOUNT_REASON,
         inviteVisibility,
         inviteEligibility,

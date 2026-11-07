@@ -250,6 +250,19 @@ service cloud.firestore {
       return keyOn(key);
     }
 
+    // MS-821. Who may change or delete a Person outright. isEditor() is true
+    // for ANY one of five edit keys, so a level built to edit hymns could
+    // delete members and rewrite their records. The directory key, or a rank
+    // above editor, or a preset editor level (not a custom map that merely
+    // ranks as one because it edits printables or Services).
+    function editsPeople() {
+      let data = userData();
+      let rank = accessRank();
+      return rank in ['admin', 'elder', 'super_admin', 'pastoral_assistant']
+        || (rank == 'editor' && data != null && !('permissions' in data))
+        || keyOn('directory.edit_identity');
+    }
+
     function editsAsAdmin(key) {
       return keyOn(key);
     }
@@ -358,9 +371,20 @@ service cloud.firestore {
       // map on this write would let the client grant itself doors. The
       // pastoralAssistant field is not a grant; it still may not be set true
       // here. role and permissionLevel are not read.
+      //
+      // MS-811: the keys are an allowlist, not a list of what is barred. A
+      // personId written here made the account count as that Person to every
+      // Roles callable, so a new sign-up could answer, take or trade any
+      // member's places. A list of forbidden keys is the shape that let it
+      // through; only what the sign-up page writes is accepted now. The link
+      // to a Person is made by an admin or a resolved Directory Request.
       allow create: if request.auth != null && request.auth.uid == userId
         && noStoredPassword()
+        && request.resource.data.keys().hasOnly(
+             ['email', 'accountLevelId', 'createdAt', 'dashboardCardOrder'])
         && request.resource.data.accountLevelId == 'level_viewer'
+        // Already outside the allowlist; kept so the two refusals the rest of
+        // the rules tests name stay readable on their own.
         && !('permissions' in request.resource.data)
         && (!('pastoralAssistant' in request.resource.data)
             || request.resource.data.pastoralAssistant != true);
@@ -460,9 +484,43 @@ service cloud.firestore {
     // in the Roles Manager by editors; read like the other config collections so
     // any surface showing who is serving can name the Role. Liturgical Roles are
     // NOT here — they are code-defined and locked, so there is nothing to store.
+    // A Role is held to the model RolesCore.validateDefinition describes: a
+    // servant Role (liturgical ones live in code), a usable slug that never
+    // changes once set, at least one slot, and the 600-character description
+    // cap. Rules cannot loop, so each slot and restriction is left to
+    // validateDefinition; the lists are only bounded. Fields this list does not
+    // name may stay on an older Role, but no write may add or change one.
+    function roleFields() {
+      return ['name', 'slug', 'family', 'slots', 'nextSlotSeq', 'restrictions',
+              'intensity', 'allowsAnotherRole', 'description'];
+    }
+
+    function roleShapeOk(d) {
+      return d.name is string && d.name.size() > 0 && d.name.size() <= 200
+        && d.get('family', '') == 'servant'
+        && d.slots is list && d.slots.size() > 0 && d.slots.size() <= 100
+        && (!('slug' in d) || (d.slug is string && d.slug.size() <= 120
+              && d.slug.matches('^[a-z0-9_]+$')))
+        && (!('nextSlotSeq' in d) || (d.nextSlotSeq is int && d.nextSlotSeq >= 1))
+        && (!('restrictions' in d) || (d.restrictions is list && d.restrictions.size() <= 100))
+        && (!('intensity' in d) || d.intensity == null
+              || ((d.intensity is int || d.intensity is float) && d.intensity >= 0))
+        && (!('allowsAnotherRole' in d) || d.allowsAnotherRole is bool)
+        && (!('description' in d) || d.description == null
+              || (d.description is string && d.description.size() <= 600));
+    }
+
     match /roles/{roleId} {
       allow read: if true;
-      allow create, update, delete: if editsWith('roles.manager.edit');
+      allow create: if editsWith('roles.manager.edit')
+        && request.resource.data.keys().hasOnly(roleFields())
+        && roleShapeOk(request.resource.data);
+      allow update: if editsWith('roles.manager.edit')
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(roleFields())
+        && roleShapeOk(request.resource.data)
+        && (!('slug' in resource.data) || resource.data.slug == null
+              || request.resource.data.get('slug', null) == resource.data.slug);
+      allow delete: if editsWith('roles.manager.edit');
     }
 
     // ── Events, occurrences, and the five-rung visibility ladder ────────────
@@ -827,8 +885,16 @@ service cloud.firestore {
       // Delete stays on the editor ladder — out of this ticket's scope.
       allow create: if editsWith('directory.edit_identity');
       allow create: if isKiosk();
-      allow delete: if isEditor();
-      allow update: if isEditor();
+      // MS-821: the other edit keys keep only what their own pages write to a
+      // Person: the serve counter the Service builder and calendar move, and
+      // the Roles page's "Doesn't serve". First, because it is the cheap one:
+      // the rules engine stops at 1000 expressions per request, and the full
+      // check below spent enough of them that this one ran out.
+      allow update: if request.resource.data.diff(resource.data).affectedKeys()
+            .hasOnly(['totalInvolvements', 'doesNotServe', 'updatedAt'])
+        && isEditor();
+      allow delete: if editsPeople();
+      allow update: if editsPeople();
 
       // MS-709: a greeter fixes a name at the desk (ADR-0075). The name and
       // its remembered parts only — contact, sex, membership and the rest stay
@@ -879,7 +945,18 @@ service cloud.firestore {
       // Person, so it moves with the Person (MS-197, ADR-0031).
       match /involvement/{involvementId} {
         allow read: if isSignedIn();
-        allow create, update, delete: if isEditor();
+        // MS-821: the pages that record serving, not any edit key. The
+        // directory, the Service builder (Sundays) and the Event page (a past
+        // date's open questions).
+        allow create, update, delete: if editsPeople()
+          || keyOn('services.builder.edit')
+          || keyOn('calendar.events.edit');
+        // Auto-assign seeds history it can then weigh (seedServe), and may
+        // take its own seeds back. Only those.
+        allow create: if keyOn('roles.manager.edit')
+          && request.resource.data.get('seeded', false) == true;
+        allow delete: if keyOn('roles.manager.edit')
+          && resource.data.get('seeded', false) == true;
       }
 
       // Which named person was prayed for, and when. The public "was prayed

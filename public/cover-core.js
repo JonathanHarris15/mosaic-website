@@ -48,7 +48,16 @@
     // vocabulary to render rather than a translation layer.
     const REASONS = Object.freeze({
         NOT_VISIBLE: 'notVisible',
+        // MS-820. The Role this place belonged to has been deleted, or the
+        // slot has been removed from it. Either way there are no rules left
+        // to judge it by, and judging it by none is how it got taken.
+        ROLE_GONE: 'roleGone',
+        SLOT_GONE: 'slotGone',
     });
+
+    // The slug every one-off job carries. Restated rather than imported for
+    // the same reason ONE_OFF_DEF is: this module judges, it does not model.
+    const ONE_OFF_SLUG = 'one_off';
 
     // Rules about who may be SEEN never bend — not for an editor, not for
     // anybody (ADR-0021 §1). Everything else in `RolesCore.REASONS` is a rule
@@ -84,6 +93,8 @@
     //   rank       — the asker's Permission Level.
     //   person     — their Person record.
     //   occurrence — the Event occurrence the Assignment sits on.
+    //   roleSlug   — the place's Role slug. Only `one_off` may come without a
+    //                definition (MS-820).
     //   roleDef    — the Role definition, or null for a one-off Role.
     //   slot       — the slot being taken, or null for a one-off Role.
     //   context    — as `RolesCore.candidatesFor` takes it, plus `awayPersonIds`
@@ -114,7 +125,12 @@
             return refused(REASONS.NOT_VISIBLE);
         }
 
-        const isOneOff = !s.roleDef;
+        // ⚠ NO DEFINITION IS NOT THE SAME AS A ONE-OFF (MS-820). A Role that
+        // was deleted leaves its roster rows behind, and those used to be
+        // judged as one-offs: no rules at all.
+        const isOneOff = !s.roleDef && s.roleSlug === ONE_OFF_SLUG;
+        if (!s.roleDef && !isOneOff) return refused(REASONS.ROLE_GONE);
+        if (!isOneOff && !s.slot) return refused(REASONS.SLOT_GONE);
         const def = isOneOff ? ONE_OFF_DEF : s.roleDef;
         const slot = isOneOff ? ONE_OFF_SLOT : s.slot;
         // A one-off has no roster to clash with, so the two list-shaped inputs

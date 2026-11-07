@@ -108,12 +108,38 @@
     // derived from the name ONCE, at creation, and then stored — renaming the
     // Role afterwards must not change the slug, or every Involvement record
     // already written under the old one would be orphaned.
+    // ⚠ A SLUG IS NEVER EMPTY (MS-822). It used to keep a-z and 0-9 and drop
+    // everything else, so "Música" became "m_sica", "Café" collided with
+    // "Caf", and a Role named in another script got no slug at all: every
+    // callable then refused it. Accents are now folded ("musica", "cafe"), and
+    // a name with no Latin letters left gets a short, stable id built from the
+    // name itself, so the same name always gives the same slug and two
+    // different ones do not meet. ASCII names slug exactly as before.
     function slugify(name) {
-        return String(name || '')
-            .trim()
+        const raw = String(name || '').trim();
+        const folded = raw.normalize ? raw.normalize('NFD') : raw;
+        const slug = folded
+            .replace(/[\u0300-\u036f]/g, '')
             .toLowerCase()
             .replace(/[^a-z0-9]+/g, '_')
             .replace(/^_+|_+$/g, '');
+        if (slug || !raw) return slug;
+        return 'role_' + nameHash(raw);
+    }
+
+    // FNV-1a over the name's UTF-16 units, in base 36. Not for security: only
+    // so a fallback slug is short, ASCII, and the same every time.
+    /**
+     * @param {string} text
+     * @returns {string}
+     */
+    function nameHash(text) {
+        let h = 0x811c9dc5;
+        for (let i = 0; i < text.length; i++) {
+            h ^= text.charCodeAt(i);
+            h = Math.imul(h, 0x01000193) >>> 0;
+        }
+        return h.toString(36);
     }
 
     const slugOf = def => (def && def.slug) || slugify(def && def.name);
@@ -144,12 +170,32 @@
     // Slot ids are `s<n>`. The next one is one past the highest `n` ever used in
     // this definition — not `slots.length + 1`, which would re-issue the id of a
     // removed middle slot and hand its assignments to a brand-new slot.
-    function nextSlotId(def) {
-        const highest = (def && def.slots ? def.slots : []).reduce((max, slot) => {
+    // ⚠ NEVER BELOW THE COUNTER (MS-823). This used to read the highest slot
+    // id still present, so removing the last slot and adding another handed
+    // the removed id to a new slot — and every Assignment and serve still
+    // pointing at the old one attached itself to a slot with a different
+    // requirement. The definition now remembers the next number it may issue.
+    // One with no counter (stored before this) starts from its highest slot,
+    // which is what it would have done anyway.
+    /**
+     * @param {?Record<string, *> | undefined} def A Role definition.
+     * @returns {number}
+     */
+    function slotSeqOf(def) {
+        const highest = (def && def.slots ? def.slots : []).reduce((/** @type {number} */ max, /** @type {*} */ slot) => {
             const n = parseInt(String(slot && slot.id).replace(/^s/, ''), 10);
             return Number.isFinite(n) && n > max ? n : max;
         }, 0);
-        return 's' + (highest + 1);
+        const stored = def && Number.isInteger(def.nextSlotSeq) ? def.nextSlotSeq : 0;
+        return Math.max(highest + 1, stored);
+    }
+
+    /**
+     * @param {?Record<string, *> | undefined} def A Role definition.
+     * @returns {string}
+     */
+    function nextSlotId(def) {
+        return 's' + slotSeqOf(def);
     }
 
     // ── Reading a definition ──────────────────────────────────────────────────
@@ -177,6 +223,8 @@
             slug: slugify(name),
             family: FAMILIES.SERVANT,
             slots: [{ id: 's1', requirement: REQUIREMENTS.EITHER }],
+            // The next slot number this Role may issue (MS-823).
+            nextSlotSeq: 2,
             restrictions: [],
             // Written explicitly rather than left absent, so the Roles Manager
             // form has something to render and the defaults are visible to the
@@ -222,14 +270,17 @@
         if (!isRequirement(requirement)) {
             throw new Error('Unknown slot requirement: ' + requirement);
         }
-        return withSlots(def, slotsOf(def).concat([
-            { id: nextSlotId(def), requirement: requirement },
-        ]));
+        const seq = slotSeqOf(def);
+        return Object.assign(withSlots(def, slotsOf(def).concat([
+            { id: 's' + seq, requirement: requirement },
+        ])), { nextSlotSeq: seq + 1 });
     }
 
     function removeSlot(def, slotId) {
         assertEditable(def);
-        return withSlots(def, slotsOf(def).filter(slot => slot.id !== slotId));
+        // Remembered BEFORE the slot goes, so its number is never issued again.
+        return Object.assign(withSlots(def, slotsOf(def).filter((/** @type {{id: string}} */ slot) => slot.id !== slotId)),
+            { nextSlotSeq: slotSeqOf(def) });
     }
 
     function setSlotRequirement(def, slotId, requirement) {
@@ -460,13 +511,53 @@
     // Is there an edge of this Relationship Type between the two? Edges are
     // stored one way round (`fromId` is the priority holder), but "may not serve
     // together" is symmetric, so both orientations count.
-    function joinedBy(relationships, typeId, a, b) {
+    /**
+     * @typedef {{typeId: string, fromId: string, toId: string}} RelEdge
+     *   One stored Relationship edge.
+     * @typedef {{id: string, typeId: string, name?: string, leaderId?: ?string, memberIds?: string[]}} RelGroup
+     *   One Relationship Group.
+     */
+    /**
+     * @param {?RelEdge[] | undefined} relationships
+     * @param {string} typeId
+     * @param {string} a
+     * @param {string} b
+     * @param {Set<string>} [index] `edgeIndex(relationships)`.
+     * @returns {boolean}
+     */
+    function joinedBy(relationships, typeId, a, b, index) {
+        // `index`, when given, is `edgeIndex(relationships)` (MS-814).
+        if (index) return index.has(typeId + '\u0000' + a + '\u0000' + b);
         return (relationships || []).some(edge => (
             edge.typeId === typeId && (
                 (edge.fromId === a && edge.toId === b) ||
                 (edge.fromId === b && edge.toId === a)
             )
         ));
+    }
+
+    // Every edge, both ways round, keyed for a constant-time lookup. Built
+    // once per judging call (MS-814): a large church has thousands of edges
+    // and each candidate was checked against all of them for every seat.
+    //
+    // Cached on the list itself, since the solve hands the same church's list
+    // to every call. The length is checked so a list grown in place is rebuilt.
+    const EDGE_INDEX = new WeakMap();
+    /**
+     * @param {RelEdge[]} relationships
+     * @returns {Set<string>}
+     */
+    function edgeIndex(relationships) {
+        const cached = EDGE_INDEX.get(relationships);
+        if (cached && cached.length === relationships.length) return cached.index;
+        const index = new Set();
+        (relationships || []).forEach(edge => {
+            if (!edge) return;
+            index.add(edge.typeId + '\u0000' + edge.fromId + '\u0000' + edge.toId);
+            index.add(edge.typeId + '\u0000' + edge.toId + '\u0000' + edge.fromId);
+        });
+        EDGE_INDEX.set(relationships, { length: relationships.length, index: index });
+        return index;
     }
 
     // ── Relationship Group membership (MS-141) ────────────────────────────────
@@ -487,17 +578,81 @@
     function inGroup(group, personId) {
         if (!group || !personId) return false;
         if (group.leaderId === personId) return true;
-        return (group.memberIds || []).indexOf(personId) !== -1;
+        const members = group.memberIds || [];
+        // A Set per member list, built once (MS-814). The judge asks this for
+        // every candidate against every group, so a scan of the list each time
+        // made a large church quadratic. Keyed on the list itself, so a group
+        // whose members change gets a new list and a new Set.
+        // The length is checked too, so a list pushed to in place is rebuilt.
+        let cached = MEMBER_SETS.get(members);
+        if (!cached || cached.length !== members.length) {
+            cached = { length: members.length, set: new Set(members) };
+            MEMBER_SETS.set(members, cached);
+        }
+        return cached.set.has(personId);
+    }
+    const MEMBER_SETS = new WeakMap();
+
+    // Every group each Person is in (MS-814). Built once per judging call and
+    // carried on the context, so a large church is not scanned group by group
+    // for every candidate. Built walking the groups in order, so each person's
+    // list keeps the groups' own order.
+    //
+    // Cached on the list the same way; the stamp counts members too, so a
+    // group gaining somebody in place is picked up.
+    const GROUP_INDEX = new WeakMap();
+    /**
+     * @param {RelGroup[]} groups
+     * @returns {Map<string, RelGroup[]>}
+     */
+    function groupIndex(groups) {
+        let members = 0;
+        groups.forEach(g => { members += (g && g.memberIds) ? g.memberIds.length : 0; });
+        const stamp = groups.length + ':' + members;
+        const cached = GROUP_INDEX.get(groups);
+        if (cached && cached.stamp === stamp) return cached.index;
+        /** @type {Map<string, RelGroup[]>} */
+        const index = new Map();
+        const add = (/** @type {?string | undefined} */ personId, /** @type {RelGroup} */ group) => {
+            if (!personId) return;
+            const list = index.get(personId);
+            if (!list) index.set(personId, [group]);
+            else if (list[list.length - 1] !== group) list.push(group);
+        };
+        (groups || []).forEach(g => {
+            if (!g) return;
+            add(g.leaderId, g);
+            (g.memberIds || []).forEach(id => add(id, g));
+        });
+        GROUP_INDEX.set(groups, { stamp: stamp, index: index });
+        return index;
     }
 
-    // The groups of one Type that a Person belongs to.
-    function groupsFor(groups, typeId, personId) {
+    // The groups of one Type that a Person belongs to. `index`, when given,
+    // is `groupIndex(groups)`.
+    /**
+     * @param {?RelGroup[] | undefined} groups
+     * @param {string} typeId
+     * @param {string} personId
+     * @param {Map<string, RelGroup[]>} [index] `groupIndex(groups)`.
+     * @returns {RelGroup[]}
+     */
+    function groupsFor(groups, typeId, personId, index) {
+        if (index) return (index.get(personId) || []).filter(g => g.typeId === typeId);
         return (groups || []).filter(g => g && g.typeId === typeId && inGroup(g, personId));
     }
 
     // The groups of one Type that two People both belong to.
-    function sharedGroups(groups, typeId, a, b) {
-        return groupsFor(groups, typeId, a).filter(g => inGroup(g, b));
+    /**
+     * @param {?RelGroup[] | undefined} groups
+     * @param {string} typeId
+     * @param {string} a
+     * @param {string} b
+     * @param {Map<string, RelGroup[]>} [index] `groupIndex(groups)`.
+     * @returns {RelGroup[]}
+     */
+    function sharedGroups(groups, typeId, a, b, index) {
+        return groupsFor(groups, typeId, a, index).filter(g => inGroup(g, b));
     }
 
     const restrictionsOf = def => (def && Array.isArray(def.restrictions) ? def.restrictions : []);
@@ -585,7 +740,8 @@
             if (rule.kind === RESTRICTIONS.NOT_SAME_GROUP) {
                 for (const holder of opposite) {
                     const shared = sharedGroups(
-                        context.groups, rule.typeId, candidate.id, holder.personId
+                        context.groups, rule.typeId, candidate.id, holder.personId,
+                        context.groupIndex
                     );
                     if (shared.length) {
                         return {
@@ -601,7 +757,7 @@
             }
 
             if (rule.kind === RESTRICTIONS.SAME_GROUP) {
-                const own = groupsFor(context.groups, rule.typeId, candidate.id);
+                const own = groupsFor(context.groups, rule.typeId, candidate.id, context.groupIndex);
                 // No group is ever committed to, for the same reason the
                 // within-Role version doesn't: one group must satisfy EVERY
                 // holder of the paired Role, but which one is not decided here.
@@ -639,8 +795,9 @@
         // whether this place wants a man or whether their spouse is on it. The
         // date is resolved by the caller — `awayPersonIds` is who is Away on
         // THIS date, because being away on the 16th says nothing about the 23rd.
-        if (context && context.awayPersonIds
-            && context.awayPersonIds.indexOf(candidate.id) !== -1) {
+        if (context && (context.awaySet
+            ? context.awaySet.has(candidate.id)
+            : (context.awayPersonIds && context.awayPersonIds.indexOf(candidate.id) !== -1))) {
             return { reason: REASONS.AWAY };
         }
 
@@ -673,7 +830,8 @@
             }
             if (rule.kind === RESTRICTIONS.NOT_TOGETHER) {
                 const clash = seated.find(a => joinedBy(
-                    context.relationships, rule.typeId, candidate.id, a.personId
+                    context.relationships, rule.typeId, candidate.id, a.personId,
+                    context.edgeIndex
                 ));
                 if (clash) {
                     return {
@@ -687,7 +845,8 @@
             if (rule.kind === RESTRICTIONS.NOT_SAME_GROUP) {
                 for (const seat of seated) {
                     const shared = sharedGroups(
-                        context.groups, rule.typeId, candidate.id, seat.personId
+                        context.groups, rule.typeId, candidate.id, seat.personId,
+                        context.groupIndex
                     );
                     if (shared.length) {
                         return {
@@ -709,7 +868,7 @@
             // group satisfies every seat, so the Role can't get pinned to whichever
             // group happened to match first and then wrongly exclude the rest.
             if (rule.kind === RESTRICTIONS.SAME_GROUP) {
-                const own = groupsFor(context.groups, rule.typeId, candidate.id);
+                const own = groupsFor(context.groups, rule.typeId, candidate.id, context.groupIndex);
                 if (own.length === 0) {
                     return { reason: REASONS.NOT_IN_REQUIRED_GROUP, typeId: rule.typeId };
                 }
@@ -748,7 +907,18 @@
     // Everybody comes back, eligible or not, so the UI can grey people out with
     // a reason rather than quietly dropping them.
     function candidatesFor(def, slot, context) {
-        const ctx = context || {};
+        // Indexed once for the whole slot (MS-814): every candidate is judged
+        // against the same groups and the same Away list.
+        const ctx = Object.assign({}, context || {});
+        if (!ctx.groupIndex && Array.isArray(ctx.groups) && ctx.groups.length) {
+            ctx.groupIndex = groupIndex(ctx.groups);
+        }
+        if (Array.isArray(ctx.awayPersonIds) && !ctx.awaySet) {
+            ctx.awaySet = new Set(ctx.awayPersonIds);
+        }
+        if (!ctx.edgeIndex && Array.isArray(ctx.relationships) && ctx.relationships.length) {
+            ctx.edgeIndex = edgeIndex(ctx.relationships);
+        }
 
         // Narrowed once for the whole slot, not once per candidate.
         const seated = (ctx.assigned || []).filter(a => a.slotId !== slot.id);
@@ -799,7 +969,13 @@
     //
     // Empty places produce nothing: leaving one unfilled is a legitimate answer.
     function warningsFor(roster, context) {
-        const ctx = context || {};
+        const ctx = Object.assign({}, context || {});
+        if (!ctx.groupIndex && Array.isArray(ctx.groups) && ctx.groups.length) {
+            ctx.groupIndex = groupIndex(ctx.groups);
+        }
+        if (!ctx.edgeIndex && Array.isArray(ctx.relationships) && ctx.relationships.length) {
+            ctx.edgeIndex = edgeIndex(ctx.relationships);
+        }
         const seats = (roster || []).filter(s => s && s.personId && s.roleSlug);
 
         const defBySlug = {};
@@ -1024,6 +1200,13 @@
 
         const name = def && typeof def.name === 'string' ? def.name.trim() : '';
         if (!name) errors.push('A Role needs a name.');
+        // A stored slug that is not a usable one (MS-822). Every place, cover
+        // entry and Trade names a Role by its slug, so an empty one is a Role
+        // nothing can point at.
+        if (def && def.slug !== undefined && def.slug !== null &&
+            !(typeof def.slug === 'string' && /^[a-z0-9_]+$/.test(def.slug))) {
+            errors.push('A Role needs a usable short name (letters, digits and _).');
+        }
 
         // Only liturgical Roles carry the locked family, and they are defined in
         // code — a stored definition claiming it would forge an undeletable Role.
@@ -1119,6 +1302,8 @@
         inGroup,
         groupsFor,
         sharedGroups,
+        groupIndex,
+        edgeIndex,
         // what the job is (MS-222)
         MAX_DESCRIPTION,
         descriptionOf,
@@ -1126,6 +1311,7 @@
         slotOrder,
         slotCount,
         nextSlotId,
+        slotSeqOf,
         // building
         newDefinition,
         addSlot,

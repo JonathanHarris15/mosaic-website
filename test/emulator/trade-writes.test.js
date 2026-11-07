@@ -5,6 +5,13 @@ const H = require('./harness.js');
 const writes = require('../../functions/trade-writes.js');
 const Core = require('../../public/trade-core.js');
 
+/** @typedef {import('firebase-admin/firestore').Firestore} Firestore */
+/**
+ * What a Trade write hands back: done, or refused and why.
+ * @typedef {{ok: boolean, code?: string, reason?: string, message?: string,
+ *     tradeId?: string}} Outcome
+ */
+
 // The five moves, against a real Firestore (MS-190, MS-211).
 //
 // `trade-core` decides; these prove the plumbing under it. Which matters most
@@ -46,10 +53,11 @@ const suite = H.skipReason
     : describe;
 
 suite('the five ways a Trade moves', () => {
+    /** @type {Firestore} */
     let db;
 
     before(() => {
-        db = H.connect();
+        db = /** @type {Firestore} */ (H.connect());
     });
 
     beforeEach(async () => {
@@ -63,7 +71,7 @@ suite('the five ways a Trade moves', () => {
             // rankOf reads `users`, because visibility is judged for BOTH
             // parties and only one of them is on the phone.
             db.collection('users').doc('uid-' + id)
-                .set({ personId: id, permissionLevel: 'member' }),
+                .set({ personId: id, accountLevelId: 'level_member' }),
         ])));
 
         await Promise.all([
@@ -191,6 +199,68 @@ suite('the five ways a Trade moves', () => {
             assert.equal(result.reason, Core.REASONS.NOTHING_OFFERED);
             assert.deepEqual(await tradesNow(), []);
         });
+
+    // MS-816. An uninvited offer only goes against what the cover list shows,
+    // and only with dates that are the offerer's own.
+    test('an uninvited offer on a place nobody declined is refused without naming anyone (MS-816)',
+        async () => {
+            const held = { occurrenceId: OCC_B, roleSlug: 'coffee', slotId: 's1', date: COFFEE.date };
+            await H.seedOccurrence(db, {
+                id: 'occ-ray', date: '2026-03-21', visibility: 'member', name: 'Morning Service',
+                roster: [assignment('kids', 's1', RAY, 'confirmed')],
+            });
+            const empty = { occurrenceId: OCC_A, roleSlug: 'kids', slotId: 's9', date: KIDS.date };
+            /** @type {Outcome[]} */
+            const results = [];
+            for (const target of [held, empty]) {
+                results.push(/** @type {Outcome} */ (await writes.offer(db, {
+                    actorId: JEN, assignment: target,
+                    offered: [{ occurrenceId: 'occ-ray', roleSlug: 'kids', slotId: 's1', date: '2026-03-21' }],
+                    today: TODAY, now: H.now(),
+                })));
+            }
+            results.forEach(r => {
+                assert.equal(r.ok, false);
+                assert.equal(r.reason, 'notOpen');
+                assert.doesNotMatch(JSON.stringify(r), /person-/);
+            });
+            assert.equal(results[0].message, results[1].message, 'held and empty answer alike');
+            assert.deepEqual(await tradesNow(), []);
+        });
+
+    test('an uninvited offer on a quiet decline is refused (MS-816)', async () => {
+        await H.seedOccurrence(db, {
+            id: 'occ-quiet', date: '2026-03-21', visibility: 'member', name: 'Morning Service',
+            roster: [Object.assign(assignment('kids', 's1', BOB, 'declined'), { quiet: true })],
+        });
+        const r = /** @type {Outcome} */ (await writes.offer(db, {
+            actorId: SARAH, assignment: { occurrenceId: 'occ-quiet', roleSlug: 'kids', slotId: 's1', date: '2026-03-21' },
+            offered: [COFFEE], today: TODAY, now: H.now(),
+        }));
+        assert.equal(r.ok, false);
+        assert.equal(r.reason, 'notOpen');
+    });
+
+    test('you cannot offer somebody else\'s date as yours (MS-816)', async () => {
+        // Coffee on the 28th is Sarah's, not Ray's.
+        const r = /** @type {Outcome} */ (await writes.offer(db, {
+            actorId: RAY, assignment: KIDS, offered: [COFFEE],
+            today: TODAY, now: H.now(),
+        }));
+        assert.equal(r.ok, false);
+        assert.equal(r.reason, 'notHeld');
+        assert.deepEqual(await tradesNow(), []);
+    });
+
+    test('an offer is capped at five dates (MS-816)', async () => {
+        const many = Array.from({ length: Core.MAX_OFFERED + 1 }, () => COFFEE);
+        const r = /** @type {Outcome} */ (await writes.offer(db, {
+            actorId: SARAH, assignment: KIDS, offered: many,
+            today: TODAY, now: H.now(),
+        }));
+        assert.equal(r.ok, false);
+        assert.equal(r.reason, Core.REASONS.TOO_MANY);
+    });
 
     test('an offer naming a date the holder cannot see is refused', async () => {
         // ⚠ THE LEAK THIS CLOSES. Accepting writes you into `participantIds`,

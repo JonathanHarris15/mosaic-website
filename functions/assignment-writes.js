@@ -29,6 +29,8 @@ const at = require("./assignment-take");
 const coverCore = require("./shared/cover-core.js");
 const awayCore = require("./shared/away-core.js");
 
+/** @typedef {import("firebase-admin/firestore").Firestore} Firestore */
+
 const OCCURRENCES = "event_occurrences";
 // Where Event series live — the home of the Cross-Role Rules (MS-221).
 const SERIES = "events";
@@ -117,7 +119,7 @@ function runOrLose(db, body, message) {
  * and the decline path has both — this knows when an advertisement has stopped
  * being true, which is a different and much smaller question.
  *
- * @param {Object} db the Firestore handle
+ * @param {Firestore} db the Firestore handle
  * @param {Object} spec the place, and what is on it now
  * @param {string} spec.occurrenceId the occurrence
  * @param {string} spec.roleSlug the Role
@@ -135,13 +137,29 @@ async function sweepCover(db, spec) {
   // gap to fill.
   if (row && (row.state || null) === aa.STATES.DECLINED) return false;
 
+  // ⚠ THE TRIGGER'S COPY IS ONLY WHAT WAS TRUE WHEN IT FIRED (MS-819).
+  // Triggers arrive late and out of order: a confirm's sweep delivered after
+  // the decline that followed it would delete the advertisement that decline
+  // just put up. So the place is read again, in a transaction with the delete,
+  // and the entry goes only if nothing on the place is declined NOW.
   const ref = db.collection(COVER)
       .doc(aa.coverId(s.occurrenceId, s.roleSlug, s.slotId));
-  const snap = await ref.get();
-  if (!snap.exists) return false;
+  const placeRows = db.collection(OCCURRENCES).doc(s.occurrenceId)
+      .collection("roster").where("roleSlug", "==", s.roleSlug);
 
-  await ref.delete();
-  return true;
+  return db.runTransaction(async (tx) => {
+    const snap = await tx.get(ref);
+    if (!snap.exists) return false;
+    const now = await tx.get(placeRows);
+    const stillDeclined = now.docs.some((d) => {
+      const a = d.data() || {};
+      return (a.slotId || null) === (s.slotId || null) &&
+        a.state === aa.STATES.DECLINED;
+    });
+    if (stillDeclined) return false;
+    tx.delete(ref);
+    return true;
+  });
 }
 
 /**
@@ -277,7 +295,10 @@ async function takeContext(db, personId, roleSlug, date, seriesId) {
  * @param {string} spec.occurrenceId the occurrence
  * @param {string} spec.roleSlug the Role being answered for
  * @param {?string} spec.slotId its slot
+ * @param {?string} [spec.oneOffId] which one-off job, when it is one
  * @param {string} spec.state the answer — confirmed or declined
+ * @param {boolean} [spec.quiet] whether a decline stays off the open list;
+ *   absent leaves it as it was
  * @param {string} spec.today YYYY-MM-DD in the church's timezone
  * @param {*} spec.now a timestamp to stamp the answer with
  * @return {Promise<Object>} the plan that was written, or a refusal
@@ -308,6 +329,7 @@ async function answer(db, spec) {
       personId: s.personId,
       roleSlug: s.roleSlug,
       slotId: s.slotId || null,
+      oneOffId: s.oneOffId || null,
       state: s.state,
       // Whether this one goes on the open list, or stays between the decliner
       // and the people they ask (MS-213). Absent means "leave it as it was" —
@@ -318,7 +340,12 @@ async function answer(db, spec) {
     });
     if (!plan.ok) return plan;
 
-    tx.set(rosterCol.doc(plan.rosterId), plan.assignment, {merge: true});
+    // Back onto the document the row was read from (MS-818), which for a row
+    // filed under an older id is not the id the plan would build.
+    const at = roster.indexOf(plan.held);
+    const filedAs = at === -1 ? plan.rosterId : rosterSnap.docs[at].id;
+    delete plan.held;
+    tx.set(rosterCol.doc(filedAs), plan.assignment, {merge: true});
     tx.update(occurrenceRef, {
       participantIds: plan.derived.participantIds,
       needsAttention: plan.derived.needsAttention,
@@ -400,6 +427,7 @@ async function take(db, spec) {
       rank: s.rank,
       person: context.person,
       occurrence: occurrence,
+      roleSlug: s.roleSlug,
       roleDef: context.roleDef,
       slot: slot,
       context: {

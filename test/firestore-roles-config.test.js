@@ -93,8 +93,24 @@ test('roles and events are writable by editors only', () => {
         );
         assert.ok(block, 'no rule block for /' + collection);
         // MS-722: the level names, OR the MS-695 key Admin Accounts grants.
-        assert.match(block[1], /allow create, update, delete: if editsWith\('(roles\.manager|calendar\.events)\.edit'\)/);
+        const key = collection === 'roles' ? 'roles\\.manager' : 'calendar\\.events';
+        if (collection === 'roles') {
+            // Split so create and update can carry the Role shape check.
+            ['create', 'update', 'delete'].forEach(op => {
+                assert.match(block[1], new RegExp('allow ' + op + ': if editsWith\\(\'' + key + '\\.edit\'\\)'));
+            });
+        } else {
+            assert.match(block[1], new RegExp('allow create, update, delete: if editsWith\\(\'' + key + '\\.edit\'\\)'));
+        }
     });
+});
+
+test('a Role write is held to the Role shape', () => {
+    const block = rules.match(/match \/roles\/\{[^}]+\}\s*\{([\s\S]*?)\n {4}\}/);
+    assert.ok(block);
+    assert.match(block[1], /allow create:[\s\S]*roleShapeOk\(request\.resource\.data\)/);
+    assert.match(block[1], /allow update:[\s\S]*roleShapeOk\(request\.resource\.data\)/);
+    assert.match(rules, /function roleShapeOk\(d\) \{[\s\S]*d\.get\('family', ''\) == 'servant'/);
 });
 
 test('the permission tiers are accessRank and the key helpers', () => {

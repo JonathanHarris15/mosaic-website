@@ -31,8 +31,10 @@ const notify = require("./notification-send");
 const notifyBridge = require("./notification-send-bridge");
 const ac = require("./assignment-conversion");
 const si = require("./service-involvement");
+const siRun = require("./service-involvement-run");
 const dr = require("./directory-request");
 const lu = require("./linked-user");
+const linkedPerson = require("./linked-person");
 const {
   ACCOUNT_RANK_FIELD,
   planPersonProjection,
@@ -953,9 +955,10 @@ exports.takeAssignment = onCall(
       }
 
       const db = admin.firestore();
-      const userSnap = await db.collection("users")
-          .doc(request.auth.uid).get();
-      const user = userSnap.exists ? userSnap.data() : {};
+      // The Person is the one linked BOTH ways (MS-811), never whatever
+      // users/{uid}.personId happens to say.
+      const {user, personId} =
+        await linkedPerson.callerOf(db, request.auth.uid);
 
       const {occurrenceId, roleSlug, slotId} = request.data || {};
       if (!occurrenceId || !roleSlug) {
@@ -964,7 +967,7 @@ exports.takeAssignment = onCall(
       }
 
       const result = await aw.take(db, {
-        personId: user.personId || null,
+        personId: personId,
         rank: AccountLevels.accessRank(user),
         occurrenceId: occurrenceId,
         roleSlug: roleSlug,
@@ -977,7 +980,7 @@ exports.takeAssignment = onCall(
         throw new HttpsError(result.code, result.message);
       }
 
-      log(`takeAssignment: ${user.personId} took ${roleSlug} on ` +
+      log(`takeAssignment: ${personId} took ${roleSlug} on ` +
           `${occurrenceId}` +
           (result.warning ? ` (warned: ${result.warning})` : ""));
       return {success: true, warning: result.warning || null};
@@ -1014,12 +1017,9 @@ exports.answerAssignment = onCall(
       }
 
       const db = admin.firestore();
-      const userSnap = await db.collection("users")
-          .doc(request.auth.uid).get();
-      const personId = userSnap.exists ?
-        (userSnap.data().personId || null) : null;
+      const {personId} = await linkedPerson.callerOf(db, request.auth.uid);
 
-      const {occurrenceId, roleSlug, slotId, state, quiet} =
+      const {occurrenceId, roleSlug, slotId, oneOffId, state, quiet} =
         request.data || {};
       if (!occurrenceId || !roleSlug) {
         throw new HttpsError(
@@ -1031,6 +1031,7 @@ exports.answerAssignment = onCall(
         occurrenceId: occurrenceId,
         roleSlug: roleSlug,
         slotId: slotId || null,
+        oneOffId: typeof oneOffId === "string" ? oneOffId : null,
         state: state,
         quiet: quiet,
         today: ac.churchToday(new Date()),
@@ -1075,9 +1076,7 @@ async function tradeMove(request, run) {
   }
 
   const db = admin.firestore();
-  const userSnap = await db.collection("users").doc(request.auth.uid).get();
-  const personId = userSnap.exists ?
-    (userSnap.data().personId || null) : null;
+  const {personId} = await linkedPerson.callerOf(db, request.auth.uid);
   if (!personId) {
     throw new HttpsError(
         "permission-denied", "Only a linked account can arrange a swap.");
@@ -3324,55 +3323,14 @@ exports.convertServiceInvolvement = onSchedule(
           .where(si.DEFERRED_FLAG, "==", true)
           .get();
 
-      let written = 0;
-      let converted = 0;
-
-      for (const doc of snap.docs) {
-        // The document id IS the date. A Sunday still ahead keeps its flag and
-        // is picked up on the night it finally passes.
-        const records = si.conversion(doc.data(), doc.id, today);
-        if (!records.length) {
-          // Nobody to credit, but the date has passed and the debt is settled —
-          // otherwise an empty Sunday is re-read every night forever.
-          if (doc.id < today) {
-            await doc.ref.set({[si.DEFERRED_FLAG]: false}, {merge: true});
-          }
-          continue;
-        }
-
-        const batch = db.batch();
-        // `totalInvolvements` is a counter the People page and Analytics both
-        // sort by, and the editor used to keep it up as it wrote. Now that the
-        // editor defers, this job owes it — counted per person first, because
-        // one person can hold two Roles on the same Sunday.
-        const gained = new Map();
-
-        records.forEach((record) => {
-          const ref = db.collection("people").doc(record.personId)
-              .collection("involvement").doc(record.id);
-          batch.set(ref, {
-            serviceDate: record.serviceDate,
-            type: record.type,
-            seriesId: ac.SUNDAY_SERVICE_ID,
-            metadata: record.metadata || null,
-            convertedAt: admin.firestore.FieldValue.serverTimestamp(),
-          }, {merge: true});
-          gained.set(record.personId, (gained.get(record.personId) || 0) + 1);
-        });
-
-        gained.forEach((count, personId) => {
-          batch.update(db.collection("people").doc(personId), {
-            totalInvolvements: admin.firestore.FieldValue.increment(count),
-          });
-        });
-
-        // Cleared in the same batch as the writes, so a crash between the two
-        // cannot leave a Sunday paid twice or not at all.
-        batch.set(doc.ref, {[si.DEFERRED_FLAG]: false}, {merge: true});
-        await batch.commit();
-
-        written += records.length;
-        converted += 1;
+      // The document id IS the date. A Sunday still ahead keeps its flag and
+      // is picked up on the night it finally passes. One Sunday that fails is
+      // logged and left flagged; the rest still convert (MS-815).
+      const {written, converted, failed} = await siRun.payAll(
+          db, snap.docs, today, admin.firestore.FieldValue, log);
+      if (failed.length) {
+        log(`convertServiceInvolvement: ${failed.length} Service(s) failed ` +
+            "and stay flagged for tomorrow.");
       }
 
       log(`convertServiceInvolvement: wrote ${written} serve record(s) ` +
@@ -3645,10 +3603,8 @@ exports.answerLink = onCall(
       const data = request.data || {};
       let personId = null;
       if (request.auth) {
-        const userSnap = await db.collection("users")
-            .doc(request.auth.uid).get();
-        const user = userSnap.exists ? userSnap.data() : {};
-        personId = user.personId || null;
+        personId = (await linkedPerson.callerOf(db, request.auth.uid))
+            .personId;
       }
       return answerDoor.handleAnswerLink(db, {
         op: data.op,
@@ -3821,11 +3777,9 @@ exports.publicForm = onCall(
       let rank = null;
       let personId = null;
       if (request.auth) {
-        const userSnap = await db.collection("users")
-            .doc(request.auth.uid).get();
-        const user = userSnap.exists ? userSnap.data() : {};
-        rank = AccountLevels.accessRank(user);
-        personId = user.personId || null;
+        const caller = await linkedPerson.callerOf(db, request.auth.uid);
+        rank = AccountLevels.accessRank(caller.user);
+        personId = caller.personId;
       }
       const caller = {signedIn: !!request.auth, rank: rank};
       const today = ac.churchToday(new Date());

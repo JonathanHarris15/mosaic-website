@@ -254,6 +254,7 @@
                     rank: this.rank,
                     person: this.person,
                     occurrence: occurrence,
+                    roleSlug: entry.roleSlug,
                     roleDef: def,
                     slot: slot,
                     context: {
