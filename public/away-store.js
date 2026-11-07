@@ -45,58 +45,16 @@
 
     // ── Writing ──────────────────────────────────────────────────────────────
     //
-    // Adding a stretch may swallow the ones it joins (AwayCore merges anything
-    // overlapping or merely touching), so the write is the merged document plus
-    // the deletion of whatever it absorbed — in ONE batch. Split across two
-    // writes, a failure between them would leave the old documents behind, and
-    // they would go on making the person away on days they had just redrawn.
-
-    async function addStretch(db, personId, range, author) {
-        if (!personId) throw new Error('An Away needs a person it belongs to.');
-        const existing = await loadStretches(db, personId);
-
-        const who = author || {};
-        const merged = Core.addStretch(existing, {
-            start: range.start,
-            end: range.end,
-            authorPersonId: who.personId || personId,
-            authorUid: who.uid || null,
-            authorName: who.name || null,
-        });
-
-        // The one stretch this add produced — the only member of the merged list
-        // with no id yet, or the one carrying what it absorbed.
-        const written = merged.find(s => !s.id || (s.absorbed && s.absorbed.length));
-        if (!written) return existing;
-
-        const batch = db.batch();
-        const ref = written.id ? awayRef(db, personId).doc(written.id) : awayRef(db, personId).doc();
-
-        const payload = {
-            start: written.start,
-            end: written.end,
-            authorPersonId: written.authorPersonId || null,
-            authorUid: written.authorUid || null,
-            authorName: written.authorName || null,
-            updatedAt: new Date().toISOString(),
-        };
-        batch.set(ref, payload, { merge: true });
-
-        (written.absorbed || []).forEach(id => {
-            if (id !== ref.id) batch.delete(awayRef(db, personId).doc(id));
-        });
-
-        await batch.commit();
-        return merged.map(s => (s === written ? Object.assign({ id: ref.id }, payload) : s));
-    }
+    // The only write: a tap or a drag, marking or clearing days. A mark may
+    // swallow the stretches it joins and a clear may trim or split one, so the
+    // writes and deletes go in ONE batch. Split across two, a failure between
+    // them would leave the old documents behind, and they would go on making
+    // the person away on days they had just redrawn.
 
     // A tap or a drag on the calendar: mark or clear every day from `from` to
     // `to`. Read fresh first and painted onto THAT, so two devices marking
     // different days of the same diary both land — a page writing its own
     // idea of the whole diary would quietly undo the other one.
-    //
-    // One batch, for the same reason as addStretch: a trim and a delete split
-    // across two writes could leave a person away on a day they just cleared.
     async function paintDays(db, personId, paint, author) {
         if (!personId) throw new Error('An Away needs a person it belongs to.');
         const existing = await loadStretches(db, personId);
@@ -128,11 +86,6 @@
 
         await batch.commit();
         return plan.stretches.map(s => written.get(s) || s);
-    }
-
-    async function removeStretch(db, personId, id) {
-        if (!personId || !id) return;
-        await awayRef(db, personId).doc(id).delete();
     }
 
     // ── Who is away, across everybody ────────────────────────────────────────
@@ -232,7 +185,7 @@
     }
 
     const AwayStore = {
-        loadStretches, addStretch, paintDays, removeStretch, loadPlaces,
+        loadStretches, paintDays, loadPlaces,
         loadAwayStretches, loadAwayBetween, loadStretchesOn, loadAwayOn,
     };
 

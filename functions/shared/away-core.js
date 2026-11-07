@@ -132,10 +132,6 @@
         return kept.concat([merged]).sort((x, y) => (x.start < y.start ? -1 : 1));
     }
 
-    function removeStretch(stretches, id) {
-        return (stretches || []).filter(s => s && s.id !== id);
-    }
-
     // THE predicate. Everything downstream — the picker, the fairness solve,
     // auto-assign — asks this and nothing else.
     function isAwayOn(stretches, date) {
@@ -466,7 +462,6 @@
         normalise,
         joins,
         addStretch,
-        removeStretch,
         isAwayOn,
         stretchOn,
         upcoming,
