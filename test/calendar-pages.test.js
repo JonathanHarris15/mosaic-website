@@ -382,6 +382,8 @@ function awayPageWith(db) {
     const page = loadComponent('away.js', 'awayPage', { db: db || fakeAwayDb() });
     page.personId = 'p_me';
     page.subjectId = 'p_me';
+    // Pinned, so the September dates below are never "before today".
+    page.today = '2026-09-01';
     return page;
 }
 
@@ -457,6 +459,26 @@ test('the calendar answers the drag before it is let go', () => {
     const cell = sept.cells.find(c => c.iso === '2026-09-26');
     assert.strictEqual(cell.away, true);
     assert.strictEqual(cell.pending, 'on');
+});
+
+test('a day before today cannot be marked, and a drag stops at today', async () => {
+    // REPORTED FROM A PHONE. The rail starts at this month, so its first days
+    // are already gone — and marking them showed them navy while the sentence,
+    // counting from today, said "No days marked yet".
+    const db = fakeAwayDb();
+    const page = awayPageWith(db);
+    page.today = '2026-11-07';
+
+    await page.toggle('2026-11-02');
+    assert.strictEqual(page.stretches.length, 0, 'a day that has gone was marked');
+    assert.strictEqual(db.commits.length, 0);
+
+    page.press('2026-11-09');
+    page.dragTo('2026-11-01');
+    assert.strictEqual(page.drag.to, '2026-11-07', 'the drag ran back past today');
+    await page.release();
+    assert.deepStrictEqual(page.stretches.map(s => [s.start, s.end]), [['2026-11-07', '2026-11-09']]);
+    assert.match(page.sentence, /^Three days marked/);
 });
 
 test('a cancelled drag changes nothing', () => {

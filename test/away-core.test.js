@@ -397,6 +397,15 @@ test('the days a drag is touching are marked as not saved yet', () => {
     assert.strictEqual(clearing.cells.find(c => c.iso === '2026-09-21').pending, 'off');
 });
 
+test('days before today are marked as gone, today is not', () => {
+    const grid = Core.monthGrid(2026, 8, Object.assign({}, gridOpts, { today: '2026-09-10' }));
+    const at = iso => grid.cells.find(c => c.iso === iso);
+    assert.strictEqual(at('2026-09-09').past, true);
+    assert.strictEqual(at('2026-09-10').past, false, 'today is still yours to mark');
+    assert.strictEqual(at('2026-09-11').past, false);
+    assert.strictEqual(at('2026-09-09').away, true, 'a past away day stopped showing as away');
+});
+
 test('a place you hold turns amber on a day you are away', () => {
     // Same dot, saying "this one is now your problem".
     const grid = Core.monthGrid(2026, 8, gridOpts);
