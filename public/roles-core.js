@@ -452,13 +452,35 @@
     // Is there an edge of this Relationship Type between the two? Edges are
     // stored one way round (`fromId` is the priority holder), but "may not serve
     // together" is symmetric, so both orientations count.
-    function joinedBy(relationships, typeId, a, b) {
+    function joinedBy(relationships, typeId, a, b, index) {
+        // `index`, when given, is `edgeIndex(relationships)` (MS-814).
+        if (index) return index.has(typeId + '\u0000' + a + '\u0000' + b);
         return (relationships || []).some(edge => (
             edge.typeId === typeId && (
                 (edge.fromId === a && edge.toId === b) ||
                 (edge.fromId === b && edge.toId === a)
             )
         ));
+    }
+
+    // Every edge, both ways round, keyed for a constant-time lookup. Built
+    // once per judging call (MS-814): a large church has thousands of edges
+    // and each candidate was checked against all of them for every seat.
+    //
+    // Cached on the list itself, since the solve hands the same church's list
+    // to every call. The length is checked so a list grown in place is rebuilt.
+    const EDGE_INDEX = new WeakMap();
+    function edgeIndex(relationships) {
+        const cached = EDGE_INDEX.get(relationships);
+        if (cached && cached.length === relationships.length) return cached.index;
+        const index = new Set();
+        (relationships || []).forEach(edge => {
+            if (!edge) return;
+            index.add(edge.typeId + '\u0000' + edge.fromId + '\u0000' + edge.toId);
+            index.add(edge.typeId + '\u0000' + edge.toId + '\u0000' + edge.fromId);
+        });
+        EDGE_INDEX.set(relationships, { length: relationships.length, index: index });
+        return index;
     }
 
     // ── Relationship Group membership (MS-141) ────────────────────────────────
@@ -479,17 +501,61 @@
     function inGroup(group, personId) {
         if (!group || !personId) return false;
         if (group.leaderId === personId) return true;
-        return (group.memberIds || []).indexOf(personId) !== -1;
+        const members = group.memberIds || [];
+        // A Set per member list, built once (MS-814). The judge asks this for
+        // every candidate against every group, so a scan of the list each time
+        // made a large church quadratic. Keyed on the list itself, so a group
+        // whose members change gets a new list and a new Set.
+        // The length is checked too, so a list pushed to in place is rebuilt.
+        let cached = MEMBER_SETS.get(members);
+        if (!cached || cached.length !== members.length) {
+            cached = { length: members.length, set: new Set(members) };
+            MEMBER_SETS.set(members, cached);
+        }
+        return cached.set.has(personId);
+    }
+    const MEMBER_SETS = new WeakMap();
+
+    // Every group each Person is in (MS-814). Built once per judging call and
+    // carried on the context, so a large church is not scanned group by group
+    // for every candidate. Built walking the groups in order, so each person's
+    // list keeps the groups' own order.
+    //
+    // Cached on the list the same way; the stamp counts members too, so a
+    // group gaining somebody in place is picked up.
+    const GROUP_INDEX = new WeakMap();
+    function groupIndex(groups) {
+        let members = 0;
+        groups.forEach(g => { members += (g && g.memberIds) ? g.memberIds.length : 0; });
+        const stamp = groups.length + ':' + members;
+        const cached = GROUP_INDEX.get(groups);
+        if (cached && cached.stamp === stamp) return cached.index;
+        const index = new Map();
+        const add = (personId, group) => {
+            if (!personId) return;
+            const list = index.get(personId);
+            if (!list) index.set(personId, [group]);
+            else if (list[list.length - 1] !== group) list.push(group);
+        };
+        (groups || []).forEach(g => {
+            if (!g) return;
+            add(g.leaderId, g);
+            (g.memberIds || []).forEach(id => add(id, g));
+        });
+        GROUP_INDEX.set(groups, { stamp: stamp, index: index });
+        return index;
     }
 
-    // The groups of one Type that a Person belongs to.
-    function groupsFor(groups, typeId, personId) {
+    // The groups of one Type that a Person belongs to. `index`, when given,
+    // is `groupIndex(groups)`.
+    function groupsFor(groups, typeId, personId, index) {
+        if (index) return (index.get(personId) || []).filter(g => g.typeId === typeId);
         return (groups || []).filter(g => g && g.typeId === typeId && inGroup(g, personId));
     }
 
     // The groups of one Type that two People both belong to.
-    function sharedGroups(groups, typeId, a, b) {
-        return groupsFor(groups, typeId, a).filter(g => inGroup(g, b));
+    function sharedGroups(groups, typeId, a, b, index) {
+        return groupsFor(groups, typeId, a, index).filter(g => inGroup(g, b));
     }
 
     const restrictionsOf = def => (def && Array.isArray(def.restrictions) ? def.restrictions : []);
@@ -577,7 +643,8 @@
             if (rule.kind === RESTRICTIONS.NOT_SAME_GROUP) {
                 for (const holder of opposite) {
                     const shared = sharedGroups(
-                        context.groups, rule.typeId, candidate.id, holder.personId
+                        context.groups, rule.typeId, candidate.id, holder.personId,
+                        context.groupIndex
                     );
                     if (shared.length) {
                         return {
@@ -593,7 +660,7 @@
             }
 
             if (rule.kind === RESTRICTIONS.SAME_GROUP) {
-                const own = groupsFor(context.groups, rule.typeId, candidate.id);
+                const own = groupsFor(context.groups, rule.typeId, candidate.id, context.groupIndex);
                 // No group is ever committed to, for the same reason the
                 // within-Role version doesn't: one group must satisfy EVERY
                 // holder of the paired Role, but which one is not decided here.
@@ -631,8 +698,9 @@
         // whether this place wants a man or whether their spouse is on it. The
         // date is resolved by the caller — `awayPersonIds` is who is Away on
         // THIS date, because being away on the 16th says nothing about the 23rd.
-        if (context && context.awayPersonIds
-            && context.awayPersonIds.indexOf(candidate.id) !== -1) {
+        if (context && (context.awaySet
+            ? context.awaySet.has(candidate.id)
+            : (context.awayPersonIds && context.awayPersonIds.indexOf(candidate.id) !== -1))) {
             return { reason: REASONS.AWAY };
         }
 
@@ -665,7 +733,8 @@
             }
             if (rule.kind === RESTRICTIONS.NOT_TOGETHER) {
                 const clash = seated.find(a => joinedBy(
-                    context.relationships, rule.typeId, candidate.id, a.personId
+                    context.relationships, rule.typeId, candidate.id, a.personId,
+                    context.edgeIndex
                 ));
                 if (clash) {
                     return {
@@ -679,7 +748,8 @@
             if (rule.kind === RESTRICTIONS.NOT_SAME_GROUP) {
                 for (const seat of seated) {
                     const shared = sharedGroups(
-                        context.groups, rule.typeId, candidate.id, seat.personId
+                        context.groups, rule.typeId, candidate.id, seat.personId,
+                        context.groupIndex
                     );
                     if (shared.length) {
                         return {
@@ -701,7 +771,7 @@
             // group satisfies every seat, so the Role can't get pinned to whichever
             // group happened to match first and then wrongly exclude the rest.
             if (rule.kind === RESTRICTIONS.SAME_GROUP) {
-                const own = groupsFor(context.groups, rule.typeId, candidate.id);
+                const own = groupsFor(context.groups, rule.typeId, candidate.id, context.groupIndex);
                 if (own.length === 0) {
                     return { reason: REASONS.NOT_IN_REQUIRED_GROUP, typeId: rule.typeId };
                 }
@@ -740,7 +810,18 @@
     // Everybody comes back, eligible or not, so the UI can grey people out with
     // a reason rather than quietly dropping them.
     function candidatesFor(def, slot, context) {
-        const ctx = context || {};
+        // Indexed once for the whole slot (MS-814): every candidate is judged
+        // against the same groups and the same Away list.
+        const ctx = Object.assign({}, context || {});
+        if (!ctx.groupIndex && Array.isArray(ctx.groups) && ctx.groups.length) {
+            ctx.groupIndex = groupIndex(ctx.groups);
+        }
+        if (Array.isArray(ctx.awayPersonIds) && !ctx.awaySet) {
+            ctx.awaySet = new Set(ctx.awayPersonIds);
+        }
+        if (!ctx.edgeIndex && Array.isArray(ctx.relationships) && ctx.relationships.length) {
+            ctx.edgeIndex = edgeIndex(ctx.relationships);
+        }
 
         // Narrowed once for the whole slot, not once per candidate.
         const seated = (ctx.assigned || []).filter(a => a.slotId !== slot.id);
@@ -791,7 +872,13 @@
     //
     // Empty places produce nothing: leaving one unfilled is a legitimate answer.
     function warningsFor(roster, context) {
-        const ctx = context || {};
+        const ctx = Object.assign({}, context || {});
+        if (!ctx.groupIndex && Array.isArray(ctx.groups) && ctx.groups.length) {
+            ctx.groupIndex = groupIndex(ctx.groups);
+        }
+        if (!ctx.edgeIndex && Array.isArray(ctx.relationships) && ctx.relationships.length) {
+            ctx.edgeIndex = edgeIndex(ctx.relationships);
+        }
         const seats = (roster || []).filter(s => s && s.personId && s.roleSlug);
 
         const defBySlug = {};
@@ -1111,6 +1198,8 @@
         inGroup,
         groupsFor,
         sharedGroups,
+        groupIndex,
+        edgeIndex,
         // what the job is (MS-222)
         MAX_DESCRIPTION,
         descriptionOf,

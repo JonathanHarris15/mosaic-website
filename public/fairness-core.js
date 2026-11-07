@@ -616,16 +616,15 @@
             allowsAnotherRole: flagOf[seat.roleSlug] === true,
         }));
 
-        let filled = [];
-        let unfilled = [];
-        let used = 0;
-
-        // Widen rather than fail: pull in the next-least-loaded person and solve
-        // again, until it is fillable or the pool is exhausted. A spot that is
+        // Widen rather than fail: pull in the next-least-loaded people and solve
+        // again, until it is fillable or nobody left could help. A spot that is
         // still unfillable is returned EMPTY WITH A REASON — never quietly
         // dropped, because a hole discovered on a Sunday morning is the failure
         // this whole feature exists to prevent.
-        for (let size = start; size <= ranked.candidates.length; size++) {
+        //
+        // One solve of the date with the `size` least-loaded people in the
+        // pool (plus every Role's guaranteed people).
+        const attempt = size => {
             const taken = {};
             const chosen = [];
             ranked.candidates.slice(0, size).forEach(c => {
@@ -701,11 +700,80 @@
             roles.forEach((role, i) => { rank[role.slug] = i; });
             const byRole = (a, b) => (rank[a.roleSlug] || 0) - (rank[b.roleSlug] || 0);
 
-            filled = seated.slice().sort(byRole);
-            unfilled = gaps.slice().sort(byRole);
-            used = size;
-            if (!gaps.length) break;
+            return {
+                size: size,
+                filled: seated.slice().sort(byRole),
+                unfilled: gaps.slice().sort(byRole),
+            };
+        };
+
+        // ⚠ WIDENING IS A SEARCH, NOT A WALK (MS-814). It used to add one
+        // person and re-solve the whole date, again and again, until the gaps
+        // closed or the church ran out. A Role with fewer people than places
+        // (five on an allowlist, six slots) can never close, so it re-solved
+        // once per member, and at 800 people that froze the page for longer
+        // than anybody would wait.
+        //
+        // Two things fix it. Widening stops where nobody further down the
+        // ranking could fill any place at all: `reach` already lists, across
+        // the whole church, everybody each Role would take, so past the last
+        // of them a bigger pool changes nothing. And the smallest pool that
+        // fills is FOUND, by doubling and then halving, in a handful of solves
+        // rather than one per person. The pool is still a prefix of the load
+        // ranking, so nobody lighter-loaded is ever passed over.
+        const rankOf = {};
+        ranked.candidates.forEach((c, i) => {
+            if (rankOf[c.personId] === undefined) rankOf[c.personId] = i;
+        });
+        let best = attempt(start);
+
+        // Only the Roles still short can be helped, and only by people the
+        // first pool did not already hold: every Role's own people are
+        // guaranteed into it, so an allowlist that is simply too short for its
+        // places stops here rather than pulling in the whole church.
+        const short = {};
+        best.unfilled.forEach(gap => { short[gap.roleSlug] = true; });
+        const inPool = {};
+        ranked.candidates.slice(0, start).forEach(c => { inPool[c.personId] = true; });
+        guaranteed.forEach(personId => { inPool[personId] = true; });
+        let useful = start;
+        reach.forEach(entry => {
+            if (!short[entry.role.slug]) return;
+            entry.reach.forEach(personId => {
+                if (inPool[personId]) return;
+                const at = rankOf[personId];
+                if (at !== undefined && at + 1 > useful) useful = at + 1;
+            });
+        });
+        const limit = Math.min(useful, ranked.candidates.length);
+
+        if (best.unfilled.length && limit > start) {
+            let lo = start;
+            let step = 1;
+            let hi = Math.min(start + step, limit);
+            let tried = attempt(hi);
+            while (tried.unfilled.length && hi < limit) {
+                lo = hi;
+                step *= 2;
+                hi = Math.min(lo + step, limit);
+                tried = attempt(hi);
+            }
+            best = tried;
+            if (!tried.unfilled.length) {
+                // The smallest pool that fills, between the last that did not
+                // (lo) and the first that did (hi).
+                while (hi - lo > 1) {
+                    const mid = Math.floor((lo + hi) / 2);
+                    const at = attempt(mid);
+                    if (at.unfilled.length) lo = mid;
+                    else { hi = mid; best = at; }
+                }
+            }
         }
+
+        const filled = best.filled;
+        const unfilled = best.unfilled;
+        const used = best.size;
 
         return {
             filled: filled,
