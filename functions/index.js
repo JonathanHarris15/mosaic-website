@@ -31,6 +31,7 @@ const notify = require("./notification-send");
 const notifyBridge = require("./notification-send-bridge");
 const ac = require("./assignment-conversion");
 const si = require("./service-involvement");
+const siRun = require("./service-involvement-run");
 const dr = require("./directory-request");
 const lu = require("./linked-user");
 const linkedPerson = require("./linked-person");
@@ -3321,55 +3322,14 @@ exports.convertServiceInvolvement = onSchedule(
           .where(si.DEFERRED_FLAG, "==", true)
           .get();
 
-      let written = 0;
-      let converted = 0;
-
-      for (const doc of snap.docs) {
-        // The document id IS the date. A Sunday still ahead keeps its flag and
-        // is picked up on the night it finally passes.
-        const records = si.conversion(doc.data(), doc.id, today);
-        if (!records.length) {
-          // Nobody to credit, but the date has passed and the debt is settled —
-          // otherwise an empty Sunday is re-read every night forever.
-          if (doc.id < today) {
-            await doc.ref.set({[si.DEFERRED_FLAG]: false}, {merge: true});
-          }
-          continue;
-        }
-
-        const batch = db.batch();
-        // `totalInvolvements` is a counter the People page and Analytics both
-        // sort by, and the editor used to keep it up as it wrote. Now that the
-        // editor defers, this job owes it — counted per person first, because
-        // one person can hold two Roles on the same Sunday.
-        const gained = new Map();
-
-        records.forEach((record) => {
-          const ref = db.collection("people").doc(record.personId)
-              .collection("involvement").doc(record.id);
-          batch.set(ref, {
-            serviceDate: record.serviceDate,
-            type: record.type,
-            seriesId: ac.SUNDAY_SERVICE_ID,
-            metadata: record.metadata || null,
-            convertedAt: admin.firestore.FieldValue.serverTimestamp(),
-          }, {merge: true});
-          gained.set(record.personId, (gained.get(record.personId) || 0) + 1);
-        });
-
-        gained.forEach((count, personId) => {
-          batch.update(db.collection("people").doc(personId), {
-            totalInvolvements: admin.firestore.FieldValue.increment(count),
-          });
-        });
-
-        // Cleared in the same batch as the writes, so a crash between the two
-        // cannot leave a Sunday paid twice or not at all.
-        batch.set(doc.ref, {[si.DEFERRED_FLAG]: false}, {merge: true});
-        await batch.commit();
-
-        written += records.length;
-        converted += 1;
+      // The document id IS the date. A Sunday still ahead keeps its flag and
+      // is picked up on the night it finally passes. One Sunday that fails is
+      // logged and left flagged; the rest still convert (MS-815).
+      const {written, converted, failed} = await siRun.payAll(
+          db, snap.docs, today, admin.firestore.FieldValue, log);
+      if (failed.length) {
+        log(`convertServiceInvolvement: ${failed.length} Service(s) failed ` +
+            "and stay flagged for tomorrow.");
       }
 
       log(`convertServiceInvolvement: wrote ${written} serve record(s) ` +
