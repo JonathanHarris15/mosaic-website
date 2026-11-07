@@ -358,12 +358,18 @@ service cloud.firestore {
       // map on this write would let the client grant itself doors. The
       // pastoralAssistant field is not a grant; it still may not be set true
       // here. role and permissionLevel are not read.
+      //
+      // MS-811: the keys are an allowlist, not a list of what is barred. A
+      // personId written here made the account count as that Person to every
+      // Roles callable, so a new sign-up could answer, take or trade any
+      // member's places. A list of forbidden keys is the shape that let it
+      // through; only what the sign-up page writes is accepted now. The link
+      // to a Person is made by an admin or a resolved Directory Request.
       allow create: if request.auth != null && request.auth.uid == userId
         && noStoredPassword()
-        && request.resource.data.accountLevelId == 'level_viewer'
-        && !('permissions' in request.resource.data)
-        && (!('pastoralAssistant' in request.resource.data)
-            || request.resource.data.pastoralAssistant != true);
+        && request.resource.data.keys().hasOnly(
+             ['email', 'accountLevelId', 'createdAt', 'dashboardCardOrder'])
+        && request.resource.data.accountLevelId == 'level_viewer';
       // Allow users to update ONLY their own dashboard card arrangement.
       // Restricting the affected keys prevents self role-escalation or tampering
       // with any other field (email, personId, etc.).

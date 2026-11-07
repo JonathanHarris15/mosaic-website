@@ -70,13 +70,28 @@ suite('Roles: what the rules actually let through', () => {
         await RT.assertFails(ctx('uid-ann').doc('cover/c1').set({ visibility: 'member' }));
     });
 
-    // A self sign-up must be a viewer with no permissions map, but nothing
-    // stops it naming somebody else's Person. Every Roles callable trusts
-    // users/{uid}.personId and never checks people/{personId}.userId.
-    test('a fresh sign-up cannot claim somebody else\'s Person', { todo: 'users/ self-create does not restrict personId' }, async () => {
+    // MS-811. A self sign-up named somebody else's Person and every Roles
+    // callable believed it. The keys are an allowlist now.
+    test('a fresh sign-up cannot claim somebody else\'s Person (MS-811)', async () => {
         await RT.assertFails(ctx('uid-stranger').doc('users/uid-stranger').set({
             accountLevelId: 'level_viewer', personId: 'p-ann', email: 'x@example.com',
         }));
+        // Nor any key the sign-up page does not write.
+        await RT.assertFails(ctx('uid-stranger').doc('users/uid-stranger').set({
+            accountLevelId: 'level_viewer', email: 'x@example.com', elder: true,
+        }));
+    });
+
+    test('the sign-up page\'s own write still goes through (MS-811)', async () => {
+        await RT.assertSucceeds(ctx('uid-stranger').doc('users/uid-stranger').set({
+            accountLevelId: 'level_viewer', email: 'x@example.com',
+            createdAt: new Date(),
+        }));
+    });
+
+    test('an account cannot point itself at another Person afterwards (MS-811)', async () => {
+        await RT.assertFails(ctx('uid-viewer').doc('users/uid-viewer').update({ personId: 'p-ann' }));
+        await RT.assertFails(ctx('uid-ann').doc('users/uid-ann').update({ personId: 'p-bob' }));
     });
 
     // ADR 0031 keeps `roles` world-readable for the printed guide, but a

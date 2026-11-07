@@ -33,6 +33,7 @@ const ac = require("./assignment-conversion");
 const si = require("./service-involvement");
 const dr = require("./directory-request");
 const lu = require("./linked-user");
+const linkedPerson = require("./linked-person");
 const {
   ACCOUNT_RANK_FIELD,
   planPersonProjection,
@@ -953,9 +954,10 @@ exports.takeAssignment = onCall(
       }
 
       const db = admin.firestore();
-      const userSnap = await db.collection("users")
-          .doc(request.auth.uid).get();
-      const user = userSnap.exists ? userSnap.data() : {};
+      // The Person is the one linked BOTH ways (MS-811), never whatever
+      // users/{uid}.personId happens to say.
+      const {user, personId} =
+        await linkedPerson.callerOf(db, request.auth.uid);
 
       const {occurrenceId, roleSlug, slotId} = request.data || {};
       if (!occurrenceId || !roleSlug) {
@@ -964,7 +966,7 @@ exports.takeAssignment = onCall(
       }
 
       const result = await aw.take(db, {
-        personId: user.personId || null,
+        personId: personId,
         rank: AccountLevels.accessRank(user),
         occurrenceId: occurrenceId,
         roleSlug: roleSlug,
@@ -977,7 +979,7 @@ exports.takeAssignment = onCall(
         throw new HttpsError(result.code, result.message);
       }
 
-      log(`takeAssignment: ${user.personId} took ${roleSlug} on ` +
+      log(`takeAssignment: ${personId} took ${roleSlug} on ` +
           `${occurrenceId}` +
           (result.warning ? ` (warned: ${result.warning})` : ""));
       return {success: true, warning: result.warning || null};
@@ -1014,10 +1016,7 @@ exports.answerAssignment = onCall(
       }
 
       const db = admin.firestore();
-      const userSnap = await db.collection("users")
-          .doc(request.auth.uid).get();
-      const personId = userSnap.exists ?
-        (userSnap.data().personId || null) : null;
+      const {personId} = await linkedPerson.callerOf(db, request.auth.uid);
 
       const {occurrenceId, roleSlug, slotId, state, quiet} =
         request.data || {};
@@ -1075,9 +1074,7 @@ async function tradeMove(request, run) {
   }
 
   const db = admin.firestore();
-  const userSnap = await db.collection("users").doc(request.auth.uid).get();
-  const personId = userSnap.exists ?
-    (userSnap.data().personId || null) : null;
+  const {personId} = await linkedPerson.callerOf(db, request.auth.uid);
   if (!personId) {
     throw new HttpsError(
         "permission-denied", "Only a linked account can arrange a swap.");
@@ -3645,10 +3642,8 @@ exports.answerLink = onCall(
       const data = request.data || {};
       let personId = null;
       if (request.auth) {
-        const userSnap = await db.collection("users")
-            .doc(request.auth.uid).get();
-        const user = userSnap.exists ? userSnap.data() : {};
-        personId = user.personId || null;
+        personId = (await linkedPerson.callerOf(db, request.auth.uid))
+            .personId;
       }
       return answerDoor.handleAnswerLink(db, {
         op: data.op,
@@ -3821,11 +3816,9 @@ exports.publicForm = onCall(
       let rank = null;
       let personId = null;
       if (request.auth) {
-        const userSnap = await db.collection("users")
-            .doc(request.auth.uid).get();
-        const user = userSnap.exists ? userSnap.data() : {};
-        rank = AccountLevels.accessRank(user);
-        personId = user.personId || null;
+        const caller = await linkedPerson.callerOf(db, request.auth.uid);
+        rank = AccountLevels.accessRank(caller.user);
+        personId = caller.personId;
       }
       const caller = {signedIn: !!request.auth, rank: rank};
       const today = ac.churchToday(new Date());
