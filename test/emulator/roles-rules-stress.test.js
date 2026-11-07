@@ -114,16 +114,36 @@ suite('Roles: what the rules actually let through', () => {
     // isEditor() is true for ANY one of directory.edit_identity, printables.edit,
     // services.builder.edit, roles.manager.edit or hymns.edit on a custom level,
     // and people/ update+delete and involvement writes ask isEditor().
-    test('a hymns-only custom level cannot delete a Person or rewrite serving history', { todo: 'isEditor() is one key wide' }, async () => {
+    test('a hymns-only custom level cannot delete a Person or rewrite serving history (MS-821)', async () => {
         const db = ctx('uid-hymns');
         await RT.assertFails(db.doc('people/p-ann/involvement/i1').update({ type: 'preacher' }));
         await RT.assertFails(db.doc('people/p-bob').update({ sex: 'male', tags: ['anything'] }));
         await RT.assertFails(db.doc('people/p-ann').delete());
     });
 
-    test('a Roles-Manager-only custom level cannot delete a Person or invent serving history', { todo: 'isEditor() is one key wide' }, async () => {
+    test('a Roles-Manager-only custom level cannot delete a Person or invent serving history (MS-821)', async () => {
         const db = ctx('uid-rolesmgr');
         await RT.assertFails(db.doc('people/p-bob/involvement/x').set({ type: 'ushers', date: '2025-01-01' }));
+        await RT.assertFails(db.doc('people/p-ann/involvement/i1').delete());
         await RT.assertFails(db.doc('people/p-bob').delete());
+    });
+
+    test('what those levels\' own pages write still goes through (MS-821)', async () => {
+        const roles = ctx('uid-rolesmgr');
+        // Auto-assign seeding history it will weigh, and taking it back.
+        await RT.assertSucceeds(roles.doc('people/p-bob/involvement/seed1').set({ type: 'ushers', serviceDate: '2025-01-01', seeded: true }));
+        await RT.assertSucceeds(roles.doc('people/p-bob/involvement/seed1').delete());
+        // The Roles page's "Doesn't serve".
+        await RT.assertSucceeds(roles.doc('people/p-bob').update({ doesNotServe: true }));
+    });
+
+    test('a directory editor still edits and deletes People (MS-821)', async () => {
+        await env.withSecurityRulesDisabled(async (c) => {
+            await c.firestore().doc('users/uid-dir').set({ personId: 'p-d', permissions: { 'core.sign_in': true, 'directory.edit_identity': true } });
+        });
+        const db = ctx('uid-dir');
+        await RT.assertSucceeds(db.doc('people/p-bob').update({ sex: 'male' }));
+        await RT.assertSucceeds(db.doc('people/p-ann/involvement/i1').update({ type: 'preacher' }));
+        await RT.assertSucceeds(db.doc('people/p-bob').delete());
     });
 });

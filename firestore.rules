@@ -250,6 +250,19 @@ service cloud.firestore {
       return keyOn(key);
     }
 
+    // MS-821. Who may change or delete a Person outright. isEditor() is true
+    // for ANY one of five edit keys, so a level built to edit hymns could
+    // delete members and rewrite their records. The directory key, or a rank
+    // above editor, or a preset editor level (not a custom map that merely
+    // ranks as one because it edits printables or Services).
+    function editsPeople() {
+      let data = userData();
+      let rank = accessRank();
+      return rank in ['admin', 'elder', 'super_admin', 'pastoral_assistant']
+        || (rank == 'editor' && data != null && !('permissions' in data))
+        || keyOn('directory.edit_identity');
+    }
+
     function editsAsAdmin(key) {
       return keyOn(key);
     }
@@ -369,7 +382,12 @@ service cloud.firestore {
         && noStoredPassword()
         && request.resource.data.keys().hasOnly(
              ['email', 'accountLevelId', 'createdAt', 'dashboardCardOrder'])
-        && request.resource.data.accountLevelId == 'level_viewer';
+        && request.resource.data.accountLevelId == 'level_viewer'
+        // Already outside the allowlist; kept so the two refusals the rest of
+        // the rules tests name stay readable on their own.
+        && !('permissions' in request.resource.data)
+        && (!('pastoralAssistant' in request.resource.data)
+            || request.resource.data.pastoralAssistant != true);
       // Allow users to update ONLY their own dashboard card arrangement.
       // Restricting the affected keys prevents self role-escalation or tampering
       // with any other field (email, personId, etc.).
@@ -833,8 +851,16 @@ service cloud.firestore {
       // Delete stays on the editor ladder — out of this ticket's scope.
       allow create: if editsWith('directory.edit_identity');
       allow create: if isKiosk();
-      allow delete: if isEditor();
-      allow update: if isEditor();
+      // MS-821: the other edit keys keep only what their own pages write to a
+      // Person: the serve counter the Service builder and calendar move, and
+      // the Roles page's "Doesn't serve". First, because it is the cheap one:
+      // the rules engine stops at 1000 expressions per request, and the full
+      // check below spent enough of them that this one ran out.
+      allow update: if request.resource.data.diff(resource.data).affectedKeys()
+            .hasOnly(['totalInvolvements', 'doesNotServe', 'updatedAt'])
+        && isEditor();
+      allow delete: if editsPeople();
+      allow update: if editsPeople();
 
       // MS-709: a greeter fixes a name at the desk (ADR-0075). The name and
       // its remembered parts only — contact, sex, membership and the rest stay
@@ -885,7 +911,18 @@ service cloud.firestore {
       // Person, so it moves with the Person (MS-197, ADR-0031).
       match /involvement/{involvementId} {
         allow read: if isSignedIn();
-        allow create, update, delete: if isEditor();
+        // MS-821: the pages that record serving, not any edit key. The
+        // directory, the Service builder (Sundays) and the Event page (a past
+        // date's open questions).
+        allow create, update, delete: if editsPeople()
+          || keyOn('services.builder.edit')
+          || keyOn('calendar.events.edit');
+        // Auto-assign seeds history it can then weigh (seedServe), and may
+        // take its own seeds back. Only those.
+        allow create: if keyOn('roles.manager.edit')
+          && request.resource.data.get('seeded', false) == true;
+        allow delete: if keyOn('roles.manager.edit')
+          && resource.data.get('seeded', false) == true;
       }
 
       // Which named person was prayed for, and when. The public "was prayed
