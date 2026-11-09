@@ -235,6 +235,7 @@ test('a Sunday in the query builder walks Service then the liturgy order; fill-i
     assert.equal(fields.identity.find(f => f.key === 'longDate').label, 'Date');
     assert.ok(fields.identity.some(f => f.key === 'theme'));
     assert.ok(fields.identity.some(f => f.key === 'preacher'));
+    assert.ok(fields.identity.some(f => f.key === 'oosWriter'), 'who wrote the order of service is a Service chip');
     assert.ok(!fields.identity.some(f => f.key === 'keyVerse'), 'key verse is its own scripture row');
     assert.ok(!fields.identity.some(f => f.key === 'prayerLabel'), 'Prayer heading is not a chip');
     assert.ok(!fields.identity.some(f => f.key === 'sermon'));
