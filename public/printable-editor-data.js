@@ -342,6 +342,7 @@
             longDate: true, preacher: true, theme: true,
             serviceLeader: true, musicLeader: true,
             prayerMale: true, prayerFemale: true,
+            oosWriter: true,
         };
         const fields = Data && Data.fieldsFor
             ? Data.fieldsFor('sunday', {}, { liturgy: cat })
