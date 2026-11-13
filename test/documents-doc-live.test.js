@@ -1,7 +1,12 @@
 'use strict';
-// MS-721: event documents, shepherding documents and shepherding form
-// documents follow the whole-document live pattern (DocLive): chip, Retry,
-// "Changed elsewhere" notice with Reload, no manual Save button.
+// MS-721: event documents and shepherding documents follow the whole-document
+// live pattern (DocLive): chip, Retry, "Changed elsewhere" notice with Reload,
+// no manual Save button.
+//
+// A Form Document left this pattern in MS-431: it saves and takes in one answer
+// at a time, so another elder's answer simply arrives and there is nothing to
+// hold back behind a Reload. It keeps the chip and Retry; its own pins are in
+// form-document-page.test.js.
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('fs');
@@ -11,7 +16,6 @@ const read = (f) => fs.readFileSync(path.join(__dirname, '..', 'public', f), 'ut
 const pages = [
     { html: 'event-document.html', js: 'event-document.js', watch: /documents/ },
     { html: 'shepherding-document.html', js: 'shepherding-document.js', watch: /elder_documents/ },
-    { html: 'shepherding-form-document.html', js: 'shepherding-form-document.js', watch: /elder_documents/ },
 ];
 
 for (const p of pages) {
