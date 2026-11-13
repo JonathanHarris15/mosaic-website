@@ -10,6 +10,13 @@ const path = require('node:path');
 // pageFlags.canWriteEditor), not another alias of canDecide.
 
 const Access = require('../public/access-core.js');
+const Levels = require('../public/account-levels-core.js');
+
+function account(preset, extra) {
+    const id = Levels.BUILTIN_LEVEL_IDS[preset];
+    if (!id) return Object.assign({ accountLevelId: null, permissions: {} }, extra || {});
+    return Object.assign({}, Levels.userWriteFromLevel(id), extra || {});
+}
 
 const PUBLIC = path.join(__dirname, '..', 'public');
 const read = (f) => fs.readFileSync(path.join(PUBLIC, f), 'utf8');
@@ -21,8 +28,8 @@ function between(src, from, to) {
     return src.slice(a, b === -1 ? a + 2000 : b);
 }
 
-function flagsOf(permissionLevel, pastoralAssistant) {
-    return Access.pageFlags({ permissionLevel, pastoralAssistant: !!pastoralAssistant });
+function flagsOf(preset) {
+    return Access.pageFlags(account(preset));
 }
 
 // The Track surface: decide (elder / PA) OR editor write. Never grant the
@@ -32,42 +39,52 @@ function canUseTrack(account) {
     return !!(flags.canDecide || flags.canWriteEditor);
 }
 
-const EDITOR = { permissionLevel: 'editor', pastoralAssistant: false };
-const MEMBER = { permissionLevel: 'member', pastoralAssistant: false };
-const PA = { permissionLevel: 'member', pastoralAssistant: true };
-const ELDER = { permissionLevel: 'elder', pastoralAssistant: false };
+const EDITOR = account('editor');
+const MEMBER = account('member');
+const PA = account('pastoral_assistant');
+const ELDER = account('elder');
 
 test('AccessCore: editor writes as editor and does not decide', () => {
-    const editor = flagsOf('editor', false);
+    const editor = flagsOf('editor');
     assert.equal(editor.canWriteEditor, true);
     assert.equal(editor.canDecide, false);
     assert.equal(editor.canReadElder, false);
     assert.equal(Access.writesAsEditor(EDITOR), true);
+    assert.equal(Access.writesAsEditor('editor'), true);
     assert.equal(Access.canDecide(EDITOR), false);
+    assert.equal(Access.writesAsEditor({ permissionLevel: 'editor' }), false);
 });
 
 test('AccessCore: member has neither Track flag', () => {
-    const member = flagsOf('member', false);
+    const member = flagsOf('member');
     assert.equal(member.canWriteEditor, false);
     assert.equal(member.canDecide, false);
 });
 
 test('AccessCore: PA decides and writes as editor, and is not an elder', () => {
-    const pa = flagsOf('member', true);
+    const pa = flagsOf('pastoral_assistant');
     assert.equal(pa.canDecide, true);
     assert.equal(pa.canWriteEditor, true);
+    assert.equal(pa.canReadElder, true);
+    assert.equal(pa.canWriteRecord, true);
+    assert.equal(Access.writesTheRecord(PA), true);
+    assert.equal(Access.writesAsEditor(PA), true);
     assert.equal(Access.isAnElder(PA), false);
-    const role = flagsOf('pastoral_assistant', false);
-    assert.equal(role.canDecide, true);
-    assert.equal(role.canWriteEditor, true);
+    assert.equal(Access.isAnElder('pastoral_assistant'), false);
+    const flag = Access.pageFlags({ permissionLevel: 'member', pastoralAssistant: true });
+    assert.equal(flag.canDecide, false);
+    assert.equal(flag.canWriteEditor, false);
+    assert.equal(flag.canReadElder, false);
+    assert.equal(Access.writesTheRecord({ permissionLevel: 'pastoral_assistant' }), false);
     assert.equal(Access.isAnElder({ permissionLevel: 'pastoral_assistant' }), false);
 });
 
 test('AccessCore: elder decides and writes as editor', () => {
-    const elder = flagsOf('elder', false);
+    const elder = flagsOf('elder');
     assert.equal(elder.canDecide, true);
     assert.equal(elder.canWriteEditor, true);
     assert.equal(Access.isAnElder(ELDER), true);
+    assert.equal(Access.isAnElder({ permissionLevel: 'elder' }), false);
 });
 
 test('locked Track gate: editor and PA and elder yes; plain member no', () => {

@@ -18,6 +18,15 @@ const path = require('node:path');
 const Module = require('node:module');
 
 const FUNCTIONS = path.join(__dirname, '..', 'functions');
+const Levels = require(path.join(__dirname, '..', 'public', 'account-levels-core.js'));
+
+function account(preset, extra) {
+    const id = Levels.BUILTIN_LEVEL_IDS[preset];
+    const base = id
+        ? Levels.userWriteFromLevel(id)
+        : {accountLevelId: null, permissions: {}};
+    return Object.assign({uid: 'uid-1'}, base, extra || {});
+}
 
 // The stubs each tool should end up calling.
 const calls = [];
@@ -189,11 +198,7 @@ async function connectAs(permissionLevel, extras) {
 
     const auth = typeof permissionLevel === 'object'
         ? Object.assign({uid: 'uid-1'}, permissionLevel)
-        : {
-            uid: 'uid-1',
-            permissionLevel,
-            pastoralAssistant: !!(extras && extras.pastoralAssistant),
-        };
+        : account(permissionLevel, extras);
 
     const {buildServer} = require(path.join(FUNCTIONS, 'mcp-server.js'));
     const server = await buildServer({
@@ -262,7 +267,8 @@ describe('the Order of Service MCP server', () => {
         // reason MS-262 chose `oos_` over bare names: a later group can be added
         // without renaming anything a connected client already knows, which is
         // exactly what MS-278 then did.
-        names.forEach((n) => assert.match(n, /^(oos|shep|cal|printable)_/, n));
+        names.forEach(
+            (n) => assert.match(n, /^(oos|shep|cal|printable|resource)_/, n));
     });
 
     // -- The shepherding and calendar groups (MS-278) ---------------------
@@ -439,8 +445,7 @@ describe('the Order of Service MCP server', () => {
     });
 
     test('a Pastoral Assistant can read a profile, write a note, create a document and a task', async () => {
-        const pa = {permissionLevel: 'member', pastoralAssistant: true};
-        const {client} = await connectAs(pa);
+        const {client} = await connectAs('pastoral_assistant');
         for (const [name, args] of [
             ['shep_get_profile', {personId: 'p1'}],
             ['shep_write_note', {personId: 'p1', type: 'Elder Meeting', markdown: 'x'}],
@@ -453,8 +458,7 @@ describe('the Order of Service MCP server', () => {
     });
 
     test('a Pastoral Assistant is admitted on shepherding decision writes', async () => {
-        const pa = {permissionLevel: 'member', pastoralAssistant: true};
-        const {client} = await connectAs(pa);
+        const {client} = await connectAs('pastoral_assistant');
         const cases = [
             ['shep_set_status', {personId: 'p1', urgency: 'urgent', importance: 'important'}],
             ['shep_add_tags', {personId: 'p1', tagIds: ['t1']}],
@@ -470,8 +474,7 @@ describe('the Order of Service MCP server', () => {
     });
 
     test('a Pastoral Assistant may create a calendar event and is not told to become an elder', async () => {
-        const pa = {permissionLevel: 'member', pastoralAssistant: true};
-        const {client} = await connectAs(pa);
+        const {client} = await connectAs('pastoral_assistant');
         const result = await client.callTool({
             name: 'cal_create_event',
             arguments: {name: 'Meeting', visibility: 'elder', date: '2026-09-20'},
@@ -481,8 +484,7 @@ describe('the Order of Service MCP server', () => {
     });
 
     test('a Pastoral Assistant is not refused Order of Service and Printable writes for rank', async () => {
-        const pa = {permissionLevel: 'member', pastoralAssistant: true};
-        const {client} = await connectAs(pa);
+        const {client} = await connectAs('pastoral_assistant');
         for (const name of [
             'oos_update_liturgy', 'oos_update_note', 'oos_update_guidance',
             'oos_score_theme', 'printable_create',
@@ -1174,7 +1176,7 @@ describe('what the MCP Manager is told', () => {
 
     const deps = (siteUrl) => ({
         db: DB,
-        auth: {uid: 'uid-1', permissionLevel: 'editor'},
+        auth: account('editor'),
         geminiKey: () => 'fake-key',
         fieldValues: FIELD_VALUES,
         siteUrl,
@@ -1207,6 +1209,33 @@ describe('what the MCP Manager is told', () => {
         const writes = caps.tools.filter(t => t.writes).map(t => t.name);
         assert.ok(writes.includes('oos_update_liturgy'));
         assert.ok(!writes.includes('oos_get_service'));
+    });
+
+    // ⚠ THE PAGE HIDES A GROUP AN EDITOR CANNOT USE, so a group marked
+    // elder-only that is not one is a capability an editor is never shown.
+    // This used to be worked out as "anything that is not oos_", which was
+    // true until `printable_` arrived and wrong from then on.
+    test('only the genuinely elder-only groups are marked so', async () => {
+        const caps = await describeCapabilities(deps(SITE_URL));
+        const groups = {};
+        caps.tools.forEach(t => {
+            groups[t.group] = groups[t.group] || new Set();
+            groups[t.group].add(t.eldersOnly);
+        });
+        assert.deepStrictEqual(Object.keys(groups).sort(),
+            ['cal', 'oos', 'printable', 'resource', 'shep']);
+        ['shep', 'cal'].forEach(
+            g => assert.deepStrictEqual([...groups[g]], [true], g));
+        ['oos', 'printable', 'resource'].forEach(
+            g => assert.deepStrictEqual([...groups[g]], [false], g));
+    });
+
+    test('the Resources tools are on the manifest, writes and read apart', async () => {
+        const caps = await describeCapabilities(deps(SITE_URL));
+        const mine = caps.tools.filter(t => t.group === 'resource');
+        assert.deepStrictEqual(mine.filter(t => !t.writes).map(t => t.name),
+            ['resource_list']);
+        assert.equal(mine.filter(t => t.writes).length, 9);
     });
 });
 

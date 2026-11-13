@@ -28,7 +28,6 @@
 
   var OVER = { fontFamily: "var(--font-sans)", fontSize: 11, fontWeight: 600, letterSpacing: "0.14em", textTransform: "uppercase", color: "var(--on-surface-variant)" };
   var iconBtn = { width: 34, height: 34, display: "flex", alignItems: "center", justifyContent: "center", border: "none", background: "transparent", color: "var(--on-surface-variant)", cursor: "pointer", borderRadius: 8, flexShrink: 0 };
-  var inputStyle = { width: "100%", boxSizing: "border-box", padding: "10px 12px", background: "var(--surface-container-low)", border: "1px solid var(--outline-variant)", borderRadius: "var(--radius)", outline: "none", fontFamily: "var(--font-sans)", fontSize: 14, color: "var(--on-surface)" };
   function pill(variant) {
     return { padding: "9px 16px", borderRadius: "var(--radius-full)", border: "none", background: variant === "ghost" ? "transparent" : "var(--primary)", color: variant === "ghost" ? "var(--on-surface-variant)" : "var(--on-primary)", fontFamily: "var(--font-sans)", fontSize: 13, fontWeight: 600, cursor: "pointer" };
   }
@@ -324,8 +323,6 @@
     var userKnown = props.user !== undefined;
     var flags = userKnown && props.user && window.AccessCore ? AccessCore.pageFlags(props.user) : null;
     var canReadElder = !!(flags && flags.canReadElder);
-    var canDecide = !!(flags && flags.canDecide);
-    var canWriteRecord = !!(flags && flags.canWriteRecord);
     var isElder = canReadElder;
     var c = createS[0], menuItem = menuS[0], moveItem = moveS[0], delItem = deleteS[0];
     var folderOptions = moveItem ? getFolderOptions(structure, 0, moveItem.type === "folder" ? moveItem.id : null) : [];

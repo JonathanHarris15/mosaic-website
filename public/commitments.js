@@ -32,7 +32,6 @@
     const Commitments = window.CommitmentsCore;
     const Trades = window.TradesStore;
     const TradeView = window.TradesView;
-    const TradeCore = window.TradeCore;
 
     const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June',
         'July', 'August', 'September', 'October', 'November', 'December'];
@@ -82,6 +81,7 @@
 
             rank: null,
             personId: null,
+            account: /** @type {object|null} */ (null),
             today: todayStr(),
 
             rows: [],
@@ -124,17 +124,29 @@
                         if (!user) { this.personId = null; return resolve(null); }
                         const Cache = window.MosaicLocalCache;
                         const known = Cache && Cache.readIdentity(user.uid);
-                        if (known && known.permissionLevel) {
+                        if (known && (known.permissions || known.accountLevelId)) {
                             this.personId = known.personId || null;
-                            return resolve(known.permissionLevel);
+                            const hasMap = known.permissions
+                                && typeof known.permissions === 'object'
+                                && !Array.isArray(known.permissions);
+                            this.account = hasMap
+                                ? { accountLevelId: known.accountLevelId || null, permissions: known.permissions }
+                                : { accountLevelId: known.accountLevelId || null };
+                            const Access = window.AccessCore;
+                            return resolve(Access ? Access.permissionLevelOf(this.account) : 'viewer');
                         }
                         try {
                             const data = await getUserData(user.uid);
                             this.personId = (data && data.personId) || null;
-                            const r = (data && (data.permissionLevel || data.role)) || 'viewer';
-                            if (Cache) {
+                            const flags = window.AccessCore ? AccessCore.pageFlags(data) : null;
+                            this.account = flags ? flags.account : null;
+                            const r = flags ? flags.currentPermissionLevel : 'viewer';
+                            if (Cache && flags) {
                                 Cache.writeIdentity(user.uid, {
-                                    personId: this.personId, permissionLevel: r,
+                                    personId: this.personId,
+                                    permissionLevel: r,
+                                    accountLevelId: flags.account.accountLevelId,
+                                    permissions: flags.account.permissions,
                                 });
                             }
                             resolve(r);
@@ -270,7 +282,7 @@
                 const state = r.state;
 
                 return Object.assign({}, r, {
-                    key: [r.occurrenceId || r.date, r.roleSlug, r.slotId || 'x'].join('__'),
+                    key: [r.occurrenceId || r.date, r.roleSlug, r.oneOffId || r.slotId || 'x'].join('__'),
                     roleName: r.label || this.roleNameFor(r.roleSlug),
                     // What the job actually is (MS-222), in the editor's own
                     // words. A one-off Role has no definition and so has none —
@@ -662,6 +674,7 @@
                         occurrenceId: row.occurrenceId,
                         roleSlug: row.roleSlug,
                         slotId: row.slotId || null,
+                        oneOffId: row.oneOffId || null,
                         state: state,
                         quiet: quiet === true,
                     });

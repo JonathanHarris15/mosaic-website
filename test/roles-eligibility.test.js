@@ -92,15 +92,15 @@ test('an Inactive Person is never proposed', () => {
     assert.equal(resultFor(results, 'frank').reason, Roles.REASONS.INACTIVE);
 });
 
-test('the legacy inactive status is honoured as well as the flag', () => {
-    // CONTEXT.md: `membership.inactive` replaced `membership.status: 'inactive'`.
-    // Read both, so eligibility is right before every record is migrated.
+test('only membership.inactive marks a person inactive (MS-786)', () => {
     const legacy = person('legacy', { sex: 'male', membership: { status: 'inactive' } });
+    const flagged = person('flagged', { sex: 'male', membership: { inactive: true, stage: 'member' } });
     const results = Roles.candidatesFor(roleWith([eitherSlot]), eitherSlot, {
-        people: [legacy],
+        people: [legacy, flagged],
     });
-    assert.equal(resultFor(results, 'legacy').eligible, false);
-    assert.equal(resultFor(results, 'legacy').reason, Roles.REASONS.INACTIVE);
+    assert.equal(resultFor(results, 'legacy').eligible, true);
+    assert.equal(resultFor(results, 'flagged').eligible, false);
+    assert.equal(resultFor(results, 'flagged').reason, Roles.REASONS.INACTIVE);
 });
 
 test('Inactive outranks every other reason, so the user sees the real cause', () => {

@@ -29,10 +29,10 @@ const blockFor = pattern => {
     return m[1];
 };
 
-const eventsBlock = () => blockFor(/match \/events\/\{eventId\}\s*\{([\s\S]*?)\n    \}/);
-const occurrencesBlock = () => blockFor(/match \/event_occurrences\/\{occurrenceId\}\s*\{([\s\S]*?)\n    \}\n/);
-const rosterBlock = () => blockFor(/match \/roster\/\{assignmentId\}\s*\{([\s\S]*?)\n      \}/);
-const attachmentsBlock = () => blockFor(/match \/attachments\/\{attachmentId\}\s*\{([\s\S]*?)\n      \}/);
+const eventsBlock = () => blockFor(/match \/events\/\{eventId\}\s*\{([\s\S]*?)\n {4}\}/);
+const occurrencesBlock = () => blockFor(/match \/event_occurrences\/\{occurrenceId\}\s*\{([\s\S]*?)\n {4}\}\n/);
+const rosterBlock = () => blockFor(/match \/roster\/\{assignmentId\}\s*\{([\s\S]*?)\n {6}\}/);
+const attachmentsBlock = () => blockFor(/match \/attachments\/\{attachmentId\}\s*\{([\s\S]*?)\n {6}\}/);
 const fnBody = name => blockFor(new RegExp('function ' + name + '\\([^)]*\\)\\s*\\{([\\s\\S]*?)\\n    \\}'));
 
 // ── The series collection is closed ───────────────────────────────────────────
@@ -71,9 +71,11 @@ test('all five visibility rungs are named in the rules', () => {
 test('each rung is gated on the rank that owns it', () => {
     const body = fnBody('rankCanSee');
     assert.match(body, /visibility == 'public'/, 'public needs no rank at all');
-    assert.match(body, /isMember\(\) && visibility == 'member'/);
-    assert.match(body, /readsAsEditor\(\) && visibility in \[[^\]]*'editor'/);
-    assert.match(body, /readsAsElder\(\) && visibility == 'elder'/);
+    // Rank, or the matching visibility.rung.* key. A saved map can open one
+    // rung without carrying the whole rank.
+    assert.match(body, /visibility == 'member' && \(isMember\(\) \|\| mapHas\('visibility\.rung\.member'\)\)/);
+    assert.match(body, /visibility == 'editor' && \(readsAsEditor\(\) \|\| mapHas\('visibility\.rung\.editor'\)\)/);
+    assert.match(body, /visibility == 'elder' && \(readsAsElder\(\) \|\| mapHas\('visibility\.rung\.elder'\)\)/);
 });
 
 test('a member cannot reach participant Events by rank alone', () => {
@@ -86,7 +88,8 @@ test('a member cannot reach participant Events by rank alone', () => {
 });
 
 test('an editor and above sees participant Events without holding a Role', () => {
-    assert.match(fnBody('rankCanSee'), /readsAsEditor\(\) && visibility in \[[^\]]*'participant'/);
+    assert.match(fnBody('rankCanSee'),
+        /visibility == 'participant' && \(readsAsEditor\(\) \|\| mapHas\('visibility\.rung\.participant'\)\)/);
 });
 
 // ── Failing closed ────────────────────────────────────────────────────────────
@@ -175,7 +178,7 @@ test('only an editor writes the roster — members confirming for themselves is 
 test('the collection-group roster rule lets you read your own row and nobody else’s', () => {
     // The Calendar needs your own assignments across a whole month without
     // reading anybody else's, so it queries each roster for your Person id.
-    const block = blockFor(/match \/\{path=\*\*\}\/roster\/\{assignmentId\}\s*\{([\s\S]*?)\n    \}/);
+    const block = blockFor(/match \/\{path=\*\*\}\/roster\/\{assignmentId\}\s*\{([\s\S]*?)\n {4}\}/);
     assert.match(block, /resource\.data\.personId == myPersonId\(\)/);
     assert.match(block, /readsAsEditor\(\)/);
     assert.doesNotMatch(block, /allow read: if true/);
@@ -184,7 +187,7 @@ test('the collection-group roster rule lets you read your own row and nobody els
 test('the collection-group roster grants no writes', () => {
     // Writing goes through the occurrence's own roster rule. A collection-group
     // write rule here would be a second, wider door onto the same documents.
-    const block = blockFor(/match \/\{path=\*\*\}\/roster\/\{assignmentId\}\s*\{([\s\S]*?)\n    \}/);
+    const block = blockFor(/match \/\{path=\*\*\}\/roster\/\{assignmentId\}\s*\{([\s\S]*?)\n {4}\}/);
     assert.doesNotMatch(block, /allow (create|update|delete|write)/);
 });
 
@@ -192,9 +195,14 @@ test('the collection-group roster grants no writes', () => {
 
 test('the member floor excludes a viewer', () => {
     const body = fnBody('isMember');
-    assert.match(body, /request\.auth != null/);
+    assert.match(body,
+        /accessRank\(\) in \['member', 'editor', 'admin', 'elder', 'super_admin', 'pastoral_assistant'\]/);
+    assert.match(body, /mapHas\('directory\.view'\)/);
+    assert.match(body, /mapHas\('visibility\.rung\.member'\)/);
+    assert.match(body, /isEditor\(\)/);
     assert.doesNotMatch(body, /'viewer'/, 'a viewer is signed in but sees only public things');
-    ['member', 'editor', 'admin', 'elder', 'super_admin'].forEach(level => {
+    assert.doesNotMatch(body, /'kiosk'/);
+    ['member', 'editor', 'admin', 'elder', 'super_admin', 'pastoral_assistant'].forEach(level => {
         assert.match(body, new RegExp("'" + level + "'"), level + ' is missing from the member floor');
     });
 });
@@ -249,7 +257,7 @@ test('a kiosk is not refused — it already sees every occurrence', () => {
 // and a restated rule is one somebody tightens on one tab and forgets on the
 // other. That is the drift worth a test.
 
-const documentsBlock = () => blockFor(/match \/documents\/\{documentId\}\s*\{([\s\S]*?)\n      \}/);
+const documentsBlock = () => blockFor(/match \/documents\/\{documentId\}\s*\{([\s\S]*?)\n {6}\}/);
 
 test('an Event Document is gated exactly like an Event Attachment, character for character', () => {
     assert.strictEqual(
@@ -281,10 +289,10 @@ test('only an editor may write an Event Document', () => {
 // cannot hide a field. A non-editor who can read the event can read the words
 // and cannot read how it goes out, and cannot write either record.
 
-const seriesWords = () => blockFor(/match \/events\/\{eventId\}\s*\{[\s\S]*?match \/announcements\/\{announcementId\}\s*\{([\s\S]*?)\n      \}/);
-const seriesPlans = () => blockFor(/match \/events\/\{eventId\}\s*\{[\s\S]*?match \/announcement_going_out\/\{announcementId\}\s*\{([\s\S]*?)\n      \}/);
-const occurrenceWords = () => blockFor(/match \/event_occurrences\/\{occurrenceId\}\s*\{[\s\S]*?match \/announcements\/\{announcementId\}\s*\{([\s\S]*?)\n      \}/);
-const occurrencePlans = () => blockFor(/match \/event_occurrences\/\{occurrenceId\}\s*\{[\s\S]*?match \/announcement_going_out\/\{announcementId\}\s*\{([\s\S]*?)\n      \}/);
+const seriesWords = () => blockFor(/match \/events\/\{eventId\}\s*\{[\s\S]*?match \/announcements\/\{announcementId\}\s*\{([\s\S]*?)\n {6}\}/);
+const seriesPlans = () => blockFor(/match \/events\/\{eventId\}\s*\{[\s\S]*?match \/announcement_going_out\/\{announcementId\}\s*\{([\s\S]*?)\n {6}\}/);
+const occurrenceWords = () => blockFor(/match \/event_occurrences\/\{occurrenceId\}\s*\{[\s\S]*?match \/announcements\/\{announcementId\}\s*\{([\s\S]*?)\n {6}\}/);
+const occurrencePlans = () => blockFor(/match \/event_occurrences\/\{occurrenceId\}\s*\{[\s\S]*?match \/announcement_going_out\/\{announcementId\}\s*\{([\s\S]*?)\n {6}\}/);
 
 test('series announcement words follow the series read, and do not widen it', () => {
     const block = seriesWords();

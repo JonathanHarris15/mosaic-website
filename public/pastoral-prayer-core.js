@@ -100,14 +100,25 @@
         return date ? `Last: ${date}` : 'Never prayed for';
     }
 
-    // The two pastoral-prayer subjects on a Sunday. Empty slots are absent.
-    // The same person in both slots is one subject.
+    // Lexicographic sort key for prayer rotation lists. Missing and legacy
+    // sentinel dates sort together as "never prayed for".
+    function rotationSortKey(value) {
+        return normalizeDate(value) || LEGACY_NEVER;
+    }
+
+    // Subjects on a Sunday. Prefer `subjectIds` (requesting-prayer slots).
+    // The older prayerMaleId / prayerFemaleId shape is still read so the
+    // repair script can rebuild history from Sundays that never had order slots.
     function subjectIds(sunday) {
         const ids = [];
-        ['prayerMaleId', 'prayerFemaleId'].forEach(key => {
-            const id = sunday && sunday[key];
+        const push = (id) => {
             if (typeof id === 'string' && id && ids.indexOf(id) === -1) ids.push(id);
-        });
+        };
+        if (sunday && Array.isArray(sunday.subjectIds)) {
+            sunday.subjectIds.forEach(push);
+        }
+        push(sunday && sunday.prayerMaleId);
+        push(sunday && sunday.prayerFemaleId);
         return ids;
     }
 
@@ -120,7 +131,7 @@
 
     // A stored Service document: nested liturgy, or a slot left under the old
     // dotted field name. Names are for the repair log; the ids are what the
-    // decision uses.
+    // decision uses. Historical Sundays still carry prayerMale / prayerFemale.
     function subjectsFromStoredService(date, data) {
         const raw = data || {};
         const liturgy = (raw.liturgy && typeof raw.liturgy === 'object') ? raw.liturgy : {};
@@ -133,8 +144,17 @@
         };
         const male = slot('prayerMale');
         const female = slot('prayerFemale');
+        const ids = [];
+        const names = {};
+        [male, female].forEach((person) => {
+            if (!person.id) return;
+            if (ids.indexOf(person.id) === -1) ids.push(person.id);
+            if (person.name) names[person.id] = person.name;
+        });
         return {
             date: date,
+            subjectIds: ids,
+            subjectNames: names,
             prayerMaleId: male.id,
             prayerMaleName: male.name,
             prayerFemaleId: female.id,
@@ -202,8 +222,8 @@
     // the same people. A subject chosen during the last read is not taken —
     // the page still has them as unsaved, and the next save writes them.
     //
-    // `loadLive` returns `{ prayerMaleId, prayerFemaleId }` for the Sunday on
-    // the page right now. `readHistory(personIds)` resolves to
+    // `loadLive` returns `{ date, subjectIds }` for the Sunday on the page
+    // right now. `readHistory(personIds)` resolves to
     // `{ [personId]: serviceDate[] }`.
     async function takeSundayAfterHistoryRead(loadedSunday, loadLive, readHistory) {
         const stored = {};
@@ -226,8 +246,7 @@
         return {
             savedSunday: {
                 date: (loadedSunday && loadedSunday.date) || saved.date || null,
-                prayerMaleId: saved.prayerMaleId || null,
-                prayerFemaleId: saved.prayerFemaleId || null,
+                subjectIds: subjectIds(saved),
             },
             historyByPerson: stored,
         };
@@ -266,12 +285,17 @@
         (services || []).forEach(service => {
             const sunday = {
                 date: service.date,
-                prayerMaleId: service.prayerMaleId || null,
-                prayerFemaleId: service.prayerFemaleId || null,
+                subjectIds: Array.isArray(service.subjectIds)
+                    ? service.subjectIds.slice()
+                    : subjectIds(service),
             };
-            const names = {};
-            if (sunday.prayerMaleId) names[sunday.prayerMaleId] = service.prayerMaleName || '';
-            if (sunday.prayerFemaleId) names[sunday.prayerFemaleId] = service.prayerFemaleName || '';
+            const names = Object.assign({}, service.subjectNames || {});
+            if (service.prayerMaleId) {
+                names[service.prayerMaleId] = service.prayerMaleName || names[service.prayerMaleId] || '';
+            }
+            if (service.prayerFemaleId) {
+                names[service.prayerFemaleId] = service.prayerFemaleName || names[service.prayerFemaleId] || '';
+            }
             const decision = decidePastoralPrayerSave(sunday, sunday, historyByPerson);
             decision.records.forEach(record => {
                 if (record.change !== 'add') return;
@@ -305,6 +329,7 @@
         latestDate,
         nextLastPrayerDate,
         lastPrayedLabel,
+        rotationSortKey,
         decidePastoralPrayerSave,
         pastoralSubjectIds,
         subjectsFromStoredService,

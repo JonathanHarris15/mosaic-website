@@ -1195,9 +1195,24 @@
       var el = document.getElementById("cal-d-" + upcomingKey);
       if (el) { el.scrollIntoView({ block: "start", behavior: "smooth" }); hlS[1](upcomingKey); setTimeout(function () { hlS[1](null); }, 2000); }
     }
-    function goGuide(s, complete) {
-      if (s && !complete && !window.confirm("Warning: There are elements that you have not completed yet. Please do so before going to the service guide page.\n\nDo you still want to proceed to the editor?")) return;
-      props.nav("serviceGuide");
+    function goGuide(key) {
+      var fallback = "service-builder.html?date=" + encodeURIComponent(key) + "&shell=mobile";
+      Promise.all([data.getLiturgyCatalog(), data.getServices()]).then(function (pair) {
+        var catalog = pair[0];
+        var svc = (pair[1] || []).find(function (row) { return row.date === key; }) || { date: key };
+        var Core = window.LiturgyOrderCore;
+        var occ = window.EventsOccurrenceCore;
+        var occurrenceId = occ ? occ.occurrenceId(occ.SUNDAY_SERVICE_ID, key) : "";
+        var target = Core.serviceGuideTarget(svc, catalog, { date: key, occurrenceId: occurrenceId, viewerCanEdit: true });
+        if (target.enabled && target.href) {
+          var join = target.href.indexOf("?") === -1 ? "?" : "&";
+          window.location.href = target.href + join + "shell=mobile";
+          return;
+        }
+        window.location.href = fallback;
+      }).catch(function () {
+        window.location.href = fallback;
+      });
     }
     function openScheduler() { window.location.href = "service-calendar.html?shell=mobile"; }
 
@@ -1235,7 +1250,7 @@
           </div>
         </div>
         <div style=${{ display: "flex", gap: 8, marginTop: 13 }}>
-          <button onClick=${function () { goGuide(s, complete); }} style=${calActBtn(true)}>${Ic("book-open", 16)} Service Guide</button>
+          <button onClick=${function () { goGuide(key); }} style=${calActBtn(true)}>${Ic("book-open", 16)} Service Guide</button>
           <button onClick=${function () { props.nav("serviceBuilder", { date: key }); }} style=${calActBtn(false)}>${Ic("list-checks", 16)} Order of Service</button>
         </div>
       </div>`;

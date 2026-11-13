@@ -2,6 +2,11 @@ const {describe, test, before} = require('node:test');
 const assert = require('node:assert');
 
 const Actor = require('../functions/mcp-actor.js');
+const Levels = require('../public/account-levels-core.js');
+
+function account(preset, extra) {
+    return Object.assign({}, Levels.userWriteFromLevel(Levels.BUILTIN_LEVEL_IDS[preset]), extra || {});
+}
 const Read = require('../functions/shepherding-read.js');
 const Writes = require('../functions/shepherding-writes.js');
 const Payload = require('../functions/shepherding-payload-writes.js');
@@ -56,9 +61,9 @@ function memoryDb(seed) {
     };
 }
 
-const EDITOR = {permissionLevel: 'editor'};
-const PA = {permissionLevel: 'member', pastoralAssistant: true};
-const MEMBER = {permissionLevel: 'member'};
+const EDITOR = account('editor');
+const PA = account('pastoral_assistant');
+const MEMBER = account('member');
 const ACTOR = {uid: 'uid-1', name: 'Ada Editor', personId: 'person-ada'};
 
 describe('directory details an assistant may change', () => {

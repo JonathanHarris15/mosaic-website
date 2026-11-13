@@ -66,6 +66,14 @@ function catalogWithQuietRows() {
     return { catalog, praise, asked, other, noted, hymn };
 }
 
+test('display rows follow the locked order only', () => {
+    const form = formWith({ load: async () => ({ catalog: Core.standardCatalog(), stored: null }) });
+    form.liturgyCatalog = Core.standardCatalog();
+    const keys = form.displayRows.map((row) => row.key);
+    assert.equal(keys.includes('__legacy_prayer__'), false);
+    assert.equal(keys[keys.length - 1], 'benediction');
+});
+
 test('a row with nothing to enter does not open', () => {
     global.PresenceStore = { release() {}, claim() { return true; }, leave() {} };
     const made = catalogWithQuietRows();

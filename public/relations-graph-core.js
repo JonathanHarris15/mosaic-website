@@ -40,7 +40,7 @@
     function typeIsPrioritized(type) {
         if (!type) return false;
         if (type.kind) return !!type.priority;
-        return !!type.directional; // legacy: `directional` is priority's ancestor
+        return false;
     }
     function isGroupType(type) { return typeKind(type) === 'group'; }
 

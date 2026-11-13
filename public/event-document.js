@@ -123,7 +123,7 @@
                         this.uid = user.uid;
                         try {
                             const data = await getUserData(user.uid);
-                            this.rank = (data && (data.permissionLevel || data.role)) || 'viewer';
+                            this.rank = (window.AccessCore ? AccessCore.permissionLevelOf(data) : 'viewer');
                             this.userName = (data && (data.displayName || data.name)) || null;
                         } catch (e) {
                             this.rank = 'viewer';

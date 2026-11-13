@@ -206,7 +206,8 @@ test('insert, update, move, duplicate and remove all return a new page and leave
     const before = JSON.stringify(page);
 
     const inserted = Core.insertNode(page, 'hdr', Core.buildNode({ tag: 'p', text: 'Sub' }));
-    assert.equal(Core.findNode(inserted, 'hdr').children.length, 2);
+    const insertedHdr = /** @type {any} */ (Core.findNode(inserted, 'hdr'));
+    assert.equal(insertedHdr.children.length, 2);
 
     const updated = Core.updateNode(inserted, 'ttl', { style: { color: 'navy', 'font-size': '' }, text: 'Directory' });
     const ttl = Core.findNode(updated, 'ttl');
@@ -216,7 +217,8 @@ test('insert, update, move, duplicate and remove all return a new page and leave
 
     const moved = Core.moveNode(updated, 'nm', 'hdr', 0);
     assert.equal(moved.ok, true);
-    assert.equal(Core.findNode(moved.page, 'hdr').children[0].id, 'nm');
+    const movedHdr = /** @type {any} */ (Core.findNode(moved.page, 'hdr'));
+    assert.equal(movedHdr.children[0].id, 'nm');
     assert.equal(Core.findNode(moved.page, 'card').children.length, 1);
 
     const dup = Core.duplicateNode(moved.page, 'card');
@@ -335,6 +337,53 @@ test('a list can ask to be left out when it has no rows', () => {
     assert.equal(back.nodes[0].repeat.overflow, 'new-page');
     const round = Core.htmlToNodes(Core.pageToHtml(Core.buildPage(Core.buildTemplate({}), { nodes: back.nodes })));
     assert.equal(round.nodes[0].repeat.omitWhenEmpty, true);
+});
+
+// MS-743 — intentional row range on a Repeat (1-based inclusive; to 0 = through end).
+test('a Repeat remembers a from/to row range; defaults keep the whole list', () => {
+    const whole = Core.buildRepeat({ source: 'people' });
+    assert.equal(whole.from, 0);
+    assert.equal(whole.to, 0);
+    const half = Core.buildRepeat({ source: 'people', from: 1, to: 5 });
+    assert.equal(half.from, 1);
+    assert.equal(half.to, 5);
+    const html = '<div data-repeat=\'{"source":"people","from":6,"to":0}\'></div>';
+    const back = Core.htmlToNodes(html);
+    assert.equal(back.ok, true, (back.problems || []).join(' '));
+    assert.equal(back.nodes[0].repeat.from, 6);
+    assert.equal(back.nodes[0].repeat.to, 0);
+});
+
+test('sliceRows takes a 1-based inclusive range; 0 to means through the end', () => {
+    const rows = ['a', 'b', 'c', 'd', 'e'];
+    assert.deepEqual(Core.sliceRows(rows, 0, 0), rows);
+    assert.deepEqual(Core.sliceRows(rows, 1, 0), rows);
+    assert.deepEqual(Core.sliceRows(rows, 1, 3), ['a', 'b', 'c']);
+    assert.deepEqual(Core.sliceRows(rows, 3, 0), ['c', 'd', 'e']);
+    assert.deepEqual(Core.sliceRows(rows, 4, 5), ['d', 'e']);
+    assert.deepEqual(Core.sliceRows(rows, 6, 0), []);
+    assert.deepEqual(Core.sliceRows(rows, 3, 2), []);
+    assert.deepEqual(Core.sliceRows(rows, 1, 99), rows);
+    assert.equal(Core.sliceRows(null, 1, 2), null);
+});
+
+test('rows that share an index stay together, and a list of distinct indexes still slices by position', () => {
+    const hymn = [
+        { name: 'Amazing Grace', number: 1, page: 1 },
+        { name: 'Amazing Grace', number: 1, page: 2 },
+        { name: 'Doxology', number: 2, page: 1 },
+        { name: 'Holy', number: 3, page: 1 },
+    ];
+    assert.deepEqual(Core.sliceRows(hymn, 1, 1).map((/** @type {any} */ r) => r.page), [1, 2], 'both sheets of hymn 1');
+    assert.deepEqual(Core.sliceRows(hymn, 2, 0).map((/** @type {any} */ r) => r.name), ['Doxology', 'Holy']);
+    assert.deepEqual(Core.sliceRows(hymn, 1, 2).map((/** @type {any} */ r) => r.number), [1, 1, 2]);
+    const people = [
+        { name: 'Ada', number: 1 },
+        { name: 'Bea', number: 2 },
+        { name: 'Cal', number: 3 },
+    ];
+    assert.deepEqual(Core.sliceRows(people, 1, 2).map((/** @type {any} */ r) => r.name), ['Ada', 'Bea']);
+    assert.deepEqual(Core.sliceRows(people, 2, 0).map((/** @type {any} */ r) => r.name), ['Bea', 'Cal']);
 });
 
 // ── The record ───────────────────────────────────────────────────────────────
@@ -478,6 +527,59 @@ test('deleting a middle continuation leaves the list pointing at its start', () 
     assert.deepEqual(left[1].continues, { from: 'pg1', repeat: 'card' });
 });
 
+test('continuation runs: bounds, no insert between sheets, move as a block (MS-760)', () => {
+    const t = Core.buildTemplate({ paper: 'letter', dpi: 96 });
+    const cover = Core.buildPage(t, { id: 'cover', name: 'Cover', nodes: [] });
+    const origin = Core.buildPage(t, { id: 'pg1', name: 'List', nodes: [] });
+    const two = Core.buildPage(t, { id: 'pg2', continues: { from: 'pg1', repeat: 'card' }, nodes: [] });
+    const three = Core.buildPage(t, { id: 'pg3', continues: { from: 'pg1', repeat: 'card' }, nodes: [] });
+    const back = Core.buildPage(t, { id: 'back', name: 'Back', nodes: [] });
+    const pages = [cover, origin, two, three, back];
+    assert.deepEqual(Core.continuationRunBounds(pages, 'pg2'), { start: 1, end: 3, originId: 'pg1' });
+    assert.deepEqual(Core.continuationRunBounds(pages, 'cover'), { start: 0, end: 0, originId: 'cover' });
+    assert.equal(Core.canInsertAfter(pages, 0), true, 'after cover is fine');
+    assert.equal(Core.canInsertAfter(pages, 1), false, 'not between origin and first continuation');
+    assert.equal(Core.canInsertAfter(pages, 2), false, 'not between continuations');
+    assert.equal(Core.canInsertAfter(pages, 3), true, 'after the run is fine');
+    assert.equal(Core.canInsertAfter(pages, 4), true, 'after the last page is fine');
+    const moved = Core.movePageRun(pages, 'pg2', -1);
+    assert.deepEqual(moved.map(p => p.id), ['pg1', 'pg2', 'pg3', 'cover', 'back'], 'the whole run moves earlier');
+    const movedDown = Core.movePageRun(pages, 'cover', 1);
+    assert.deepEqual(movedDown.map(p => p.id), ['pg1', 'pg2', 'pg3', 'cover', 'back'], 'cover jumps past the whole run');
+});
+
+test('a page drag lands in a gap between runs, never on a page or inside a run', () => {
+    const t = Core.buildTemplate({ paper: 'letter', dpi: 96 });
+    const cover = Core.buildPage(t, { id: 'cover', name: 'Cover', nodes: [] });
+    const origin = Core.buildPage(t, { id: 'pg1', name: 'List', nodes: [] });
+    const two = Core.buildPage(t, { id: 'pg2', continues: { from: 'pg1', repeat: 'card' }, nodes: [] });
+    const three = Core.buildPage(t, { id: 'pg3', continues: { from: 'pg1', repeat: 'card' }, nodes: [] });
+    const back = Core.buildPage(t, { id: 'back', name: 'Back', nodes: [] });
+    const pages = [cover, origin, two, three, back];
+
+    assert.deepEqual(Core.pageReorderSlots(pages, 'pg2'), [-1, 4], 'the list run can move before the cover or after the back, not into its own gap');
+    assert.deepEqual(Core.pageReorderSlots(pages, 'cover'), [3, 4], 'cover can follow the run or the back');
+    assert.equal(Core.pageReorderTarget(pages, -1), 'cover');
+    assert.equal(Core.pageReorderTarget(pages, 3), 'back');
+    assert.equal(Core.pageReorderTarget(pages, 4), null);
+
+    const beforeCover = Core.reorderPageRunBefore(pages, 'pg2', Core.pageReorderTarget(pages, -1));
+    assert.deepEqual(beforeCover.map(p => p.id), ['pg1', 'pg2', 'pg3', 'cover', 'back']);
+    const afterBack = Core.reorderPageRunBefore(pages, 'pg2', Core.pageReorderTarget(pages, 4));
+    assert.deepEqual(afterBack.map(p => p.id), ['cover', 'back', 'pg1', 'pg2', 'pg3']);
+    const split = Core.reorderPageRunBefore(pages, 'back', 'pg2');
+    assert.deepEqual(split.map(p => p.id), ['cover', 'back', 'pg1', 'pg2', 'pg3'], 'a landing aimed inside a run snaps to the run boundary');
+
+    const gaps = [
+        { after: -1, top: 0, bottom: 14, legal: true },
+        { after: 0, top: 200, bottom: 214, legal: false },
+        { after: 3, top: 800, bottom: 814, legal: true },
+    ];
+    assert.equal(Core.nearestPageReorderSlot(gaps, 30), -1, 'the pointer near the top gap lands there');
+    assert.equal(Core.nearestPageReorderSlot(gaps, 190), null, 'the gap the page already occupies is not a landing');
+    assert.equal(Core.nearestPageReorderSlot(gaps, 760), 3, 'the nearer legal gap, past the middle of the run');
+});
+
 test('cloning a page for overflow remints every id and keeps the design', () => {
     const { page, template } = directoryPage();
     const copy = Core.clonePage(template, page, { continues: { from: page.id, repeat: 'card' } });
@@ -497,4 +599,149 @@ test('linking adds an id once and unlinking removes it, leaving the rest alone',
     assert.deepEqual(Core.linkPrintable(['a', 'b'], 'b'), ['a', 'b'], 'linking twice is one link');
     assert.deepEqual(Core.unlinkPrintable(['a', 'b'], 'a'), ['b']);
     assert.deepEqual(Core.unlinkPrintable(undefined, 'a'), []);
+});
+
+test('a page number is an element that sits on the page, and mirroring is off until asked', () => {
+    const n = Core.newPageNumber(96);
+    assert.equal(Core.kindOf(n), 'page-number');
+    assert.equal(n.pageNumber.mirror, false);
+    assert.equal(n.pageNumber.anchor, 'bottom-right');
+    assert.equal(n.pageNumber.inset, 36);
+
+    const home = Core.placePageNumber(n, { pageIndex: 0 });
+    const next = Core.placePageNumber(n, { pageIndex: 1 });
+    assert.equal(home.text, '1');
+    assert.equal(next.text, '2');
+    assert.equal(home.style.position, 'absolute');
+    assert.equal(home.style.right, '36px');
+    assert.equal(home.style.bottom, '36px');
+    assert.equal(next.style.right, home.style.right, 'without mirroring the place does not move');
+    assert.equal(next.style.bottom, home.style.bottom);
+    assert.equal(n.pageNumber.mirror, false, 'drawing does not change the element');
+
+    const page = Core.buildPage(Core.buildTemplate({ paper: 'letter', dpi: 96 }), { nodes: [Core.newBox(96)] });
+    const boxId = page.nodes[0].id;
+    const inserted = Core.insertNode(page, boxId, n);
+    assert.equal(inserted.nodes.length, 2);
+    assert.equal(Core.kindOf(inserted.nodes[1]), 'page-number');
+    assert.equal(inserted.nodes[0].children.length, 0, 'it does not go inside the box');
+    const moved = Core.moveNode(inserted, inserted.nodes[1].id, boxId, 0);
+    assert.equal(moved.ok, false);
+    assert.equal(Core.wrapNode(inserted, inserted.nodes[1].id, 96).nodes.length, 2);
+});
+
+test('mirroring reflects a page number across the middle on every other page', () => {
+    const placed = Core.buildNode({
+        tag: 'p',
+        pageNumber: { mirror: true, anchor: 'bottom-right', inset: 48, left: 10, top: 10 },
+    });
+    const odd = Core.placePageNumber(placed, { pageIndex: 0 });
+    const even = Core.placePageNumber(placed, { pageIndex: 1 });
+    assert.equal(odd.style.right, '48px');
+    assert.equal(odd.style.left, undefined);
+    assert.equal(even.style.left, '48px');
+    assert.equal(even.style.right, undefined);
+    assert.equal(even.style.bottom, '48px');
+
+    const free = Core.buildNode({
+        tag: 'p',
+        pageNumber: { mirror: true, anchor: 'free', left: 40, top: 700, inset: 36 },
+    });
+    assert.equal(Core.placePageNumber(free, { pageIndex: 0 }).style.left, '40px');
+    assert.equal(Core.placePageNumber(free, { pageIndex: 1 }).style.right, '40px');
+    assert.equal(Core.placePageNumber(free, { pageIndex: 1 }).style.top, '700px');
+    assert.equal(Core.pageNumberHomeLeft(740, 20, 800, true), 40);
+    assert.equal(Core.pageNumberHomeLeft(40, 20, 800, false), 40);
+
+    const middle = Core.buildNode({
+        tag: 'p',
+        pageNumber: { mirror: true, anchor: 'center', inset: 0, left: 0, top: 0 },
+    });
+    const a = Core.placePageNumber(middle, { pageIndex: 0 });
+    const b = Core.placePageNumber(middle, { pageIndex: 2 });
+    const c = Core.placePageNumber(middle, { pageIndex: 1 });
+    assert.equal(a.style.left, '50%');
+    assert.equal(b.style.left, '50%');
+    assert.equal(c.style.left, '50%');
+    assert.equal(a.style.transform, c.style.transform);
+
+    const kept = Core.updateNode(
+        Core.buildPage(Core.buildTemplate({}), { nodes: [placed] }),
+        placed.id,
+        { pageNumber: { mirror: false } },
+    );
+    assert.equal(Core.findNode(kept, placed.id).pageNumber.mirror, false);
+    assert.equal(Core.findNode(kept, placed.id).pageNumber.anchor, 'bottom-right');
+    assert.equal(Core.findNode(kept, placed.id).pageNumber.inset, 48);
+});
+
+test('a page number round-trips through the code view, and an old chip becomes one', () => {
+    const n = Core.buildNode({
+        tag: 'p',
+        name: 'Folio',
+        pageNumber: { mirror: true, anchor: 'bottom-left', inset: 24, left: 8, top: 9 },
+    });
+    const back = Core.htmlToNodes(Core.nodeToHtml(n, 0));
+    assert.equal(back.ok, true);
+    assert.deepEqual(back.nodes[0].pageNumber, n.pageNumber);
+    assert.equal(back.nodes[0].name, 'Folio');
+
+    const Migrate = require('../public/migrate-printable-page-number-core.js');
+    const legacy = Core.buildNode(Migrate.migrateNode({
+        tag: 'p',
+        text: '1',
+        style: { left: '40px', top: '12px', position: 'absolute' },
+        bind: {
+            text: { source: 'insert_page_number', field: 'number', params: { startAt: 3 } },
+            class: { source: 'insert_page_number', field: 'edgeClass' },
+        },
+    }, Core.normalizePageNumber).node);
+    assert.equal(Core.kindOf(legacy), 'page-number');
+    assert.equal(legacy.pageNumber.mirror, true);
+    assert.equal(legacy.pageNumber.anchor, 'free');
+    assert.equal(legacy.pageNumber.left, 40);
+    assert.equal(legacy.pageNumber.top, 12);
+    assert.equal(legacy.bind, undefined);
+});
+
+test('Start numbering from here is off until asked, and sheets before it are blank', () => {
+    const fresh = Core.newPageNumber(96);
+    assert.equal(fresh.pageNumber.startHere, false);
+    assert.equal(Core.normalizePageNumber({ startHere: 'yes' }).startHere, false);
+    assert.equal(Core.pageNumberLabel(0, 0), '1');
+    assert.equal(Core.pageNumberLabel(2, 0), '3');
+    assert.equal(Core.pageNumberLabel(0, 2), '');
+    assert.equal(Core.pageNumberLabel(2, 2), '1');
+    assert.equal(Core.pageNumberLabel(3, 2), '2');
+
+    const n = Core.newPageNumber(96);
+    assert.equal(Core.placePageNumber(n, { pageIndex: 0, numberOrigin: 2 }).text, '');
+    assert.equal(Core.placePageNumber(n, { pageIndex: 2, numberOrigin: 2 }).text, '1');
+    assert.equal(Core.placePageNumber(n, { pageIndex: 1 }).text, '2', 'omitting the origin keeps 1, 2, 3');
+    assert.equal(n.pageNumber.startHere, false, 'drawing does not turn the restart on');
+
+    const marked = Core.buildNode({
+        tag: 'p',
+        name: 'Folio',
+        pageNumber: { mirror: false, anchor: 'bottom-right', inset: 36, left: 1, top: 2, startHere: true },
+    });
+    const back = Core.htmlToNodes(Core.nodeToHtml(marked, 0));
+    assert.equal(back.ok, true);
+    assert.equal(back.nodes[0].pageNumber.startHere, true);
+    assert.equal(back.nodes[0].pageNumber.anchor, 'bottom-right');
+
+    const kept = Core.updateNode(
+        Core.buildPage(Core.buildTemplate({}), { nodes: [marked] }),
+        marked.id,
+        { pageNumber: { mirror: true } },
+    );
+    assert.equal(Core.findNode(kept, marked.id).pageNumber.startHere, true, 'a place change keeps the restart');
+    assert.equal(Core.findNode(kept, marked.id).pageNumber.mirror, true);
+
+    const pages = [0, 1, 2, 3].map(i => ({
+        pageIndex: i,
+        nodes: [{ id: 'n' + i, tag: 'p', pageNumber: { startHere: i === 2 || i === 3 } }],
+    }));
+    assert.equal(Core.numberOriginFromEntries(pages), 2, 'the earliest restart wins');
+    assert.equal(Core.numberOriginFromEntries([{ nodes: [{ tag: 'p', text: 'x' }] }]), 0);
 });

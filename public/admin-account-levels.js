@@ -31,10 +31,7 @@ async function countUsersPerLevel() {
     levelMemberCounts = {};
     snap.forEach(doc => {
         const data = doc.data();
-        const id = data.accountLevelId
-            || AccountLevelsCore.accountLevelIdForPreset(
-                AccountLevelsCore.presetKeyFromPermissionLevel(
-                    data.permissionLevel || data.role || 'viewer'));
+        const id = data.accountLevelId || AccountLevelsCore.BUILTIN_LEVEL_IDS.viewer;
         levelMemberCounts[id] = (levelMemberCounts[id] || 0) + 1;
     });
 }
@@ -195,14 +192,8 @@ function accountLevelsForSelect() {
 }
 
 function resolveAccountLevelIdForUser(data) {
-    if (data.accountLevelId) return data.accountLevelId;
-    const preset = AccountLevelsCore.presetKeyFromPermissionLevel(
-        data.permissionLevel || data.role || 'viewer');
-    if (data.pastoralAssistant === true
-        && preset !== 'pastoral_assistant' && preset !== 'elder' && preset !== 'super_admin') {
-        return AccountLevelsCore.BUILTIN_LEVEL_IDS.pastoral_assistant;
-    }
-    return AccountLevelsCore.accountLevelIdForPreset(preset);
+    if (data && data.accountLevelId) return data.accountLevelId;
+    return AccountLevelsCore.BUILTIN_LEVEL_IDS.viewer;
 }
 
 async function assignUserAccountLevel(uid, accountLevelId) {

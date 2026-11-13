@@ -283,7 +283,7 @@ window.RolesManager = () => ({
                 name: doc.data().name || doc.id,
                 hiddenFromOthers: doc.data().hiddenFromOthers === true,
             }));
-            this.shepherdingTags = RolesCore.visibleTags(all, this.currentPermissionLevel)
+            this.shepherdingTags = RolesCore.visibleTags(all, this.account || this.currentPermissionLevel)
                 .map(tag => ({ id: tag.id, name: tag.name }));
             const visible = this.shepherdingTags.map(tag => tag.id);
             this.hiddenTagIds = all.map(tag => tag.id).filter(id => visible.indexOf(id) === -1);
@@ -553,10 +553,14 @@ window.RolesManager = () => ({
             initial,
             same: (a, b) => norm(a) === norm(b),
             validate: () => (this.draft && this.draftErrors.length ? { role: this.draftErrors.join(' ') } : null),
-            save: async (patch) => {
+            save: async (/** @type {Record<string, *>} */ patch) => {
                 const definition = this.definitionFromDraft();
+                /** @type {Record<string, *>} */
                 const out = {};
                 Object.keys(patch).forEach(f => { out[f] = definition[f]; });
+                // The slot counter goes with the slots, so a removed slot's id
+                // is never handed out again (MS-823).
+                if ('slots' in out) out.nextSlotSeq = definition.nextSlotSeq;
                 const stored = this.roleDefinitions.find(d => d.id === id) || {};
                 if (!stored.slug) out.slug = definition.slug;
                 try {
@@ -611,7 +615,7 @@ window.RolesManager = () => ({
         if (!this.liveRole || !this.draft) return;
         this.syncingRole = true;
         try {
-            ['name', 'description', 'intensity', 'allowsAnotherRole', 'slots', 'restrictions'].forEach(f => {
+            ['name', 'description', 'intensity', 'allowsAnotherRole', 'slots', 'nextSlotSeq', 'restrictions'].forEach(f => {
                 const v = this.draft[f];
                 this.liveRole.edit(f, v == null || typeof v !== 'object' ? v : JSON.parse(JSON.stringify(v)));
             });
@@ -1274,6 +1278,8 @@ window.RolesManager = () => ({
             slug: this.draft.slug || RolesCore.slugify(this.draft.name),
             family: RolesCore.FAMILIES.SERVANT,
             slots: this.draft.slots,
+            // Never below what this Role has already issued (MS-823).
+            nextSlotSeq: RolesCore.slotSeqOf(this.draft),
             restrictions: this.draftRestrictions,
             // Typed into a number input, which hands back a string when the box
             // is cleared. Normalised once here so what is stored is always the

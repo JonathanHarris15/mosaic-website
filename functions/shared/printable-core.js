@@ -54,6 +54,7 @@
     // a row never share a name. `taken` is the names already in the library.
     function copyName(name, taken) {
         const base = normaliseName(name).replace(/ copy( \d+)?$/, '');
+        /** @type {Record<string, boolean>} */
         const used = {};
         (taken || []).forEach(n => { used[String(n)] = true; });
         let candidate = base + ' copy';
@@ -143,13 +144,20 @@
 
     // What kind of thing an element is, read off its tag and its shape. A
     // box holds children; text holds a run of text; an image holds a src.
+    /** @param {any} node */
     function kindOf(node) {
         if (!node) return 'box';
+        if (isPageNumber(node)) return 'page-number';
         if (node.tag === 'img') return 'image';
         if (node.children && node.children.length) return 'box';
         if (TEXT_TAGS.includes(node.tag)) return 'text';
         if (typeof node.text === 'string' && node.text.length) return 'text';
         return 'box';
+    }
+
+    /** @param {any} node */
+    function isPageNumber(node) {
+        return !!(node && node.pageNumber);
     }
 
     function buildNode(spec) {
@@ -174,13 +182,16 @@
         }
         if (s.bind && Object.keys(s.bind).length) node.bind = clone(s.bind);
         if (s.repeat) node.repeat = buildRepeat(s.repeat);
+        adoptPageNumber(node, s.pageNumber);
         return node;
     }
 
     // What an iterated element remembers: the list it stands for and how the
     // copies are laid out. `continueWith` is the page cloned when overflow
     // needs a *new* page — null means the page the list started on. Each
-    // cloned page is stored and edited on its own.
+    // cloned page is stored and edited on its own. `from` / `to` are a
+    // 1-based inclusive row range (0 = default: from the start / through the
+    // end), so two pages can each take half of the same list.
     function buildRepeat(spec) {
         const s = spec || {};
         const layout = s.layout || {};
@@ -193,12 +204,47 @@
                 gap: Math.max(0, Number(layout.gap) || 0),
                 maxPerPage: Math.max(0, Number(layout.maxPerPage) || 0),
             },
+            from: Math.max(0, Math.round(Number(s.from)) || 0),
+            to: Math.max(0, Math.round(Number(s.to)) || 0),
             overflow: s.overflow === 'new-page' ? 'new-page' : 'clip',
             continueWith: s.continueWith || null,
             // An empty list leaves the page out, the way an unnamed hymn slot
             // contributes no sheet. Anything else still draws the page.
             omitWhenEmpty: s.omitWhenEmpty === true,
         };
+    }
+
+    // Keep only rows in a 1-based inclusive range. `from` 0 or omitted starts
+    // at row 1; `to` 0 or omitted runs through the end. Out of range clamps;
+    // a backwards range is empty.
+    //
+    // Rows that share a `number` are one index (every sheet of one hymn).
+    // A list whose numbers are all different still slices by position, so a
+    // directory's from/to is unchanged.
+    function sliceRows(rows, from, to) {
+        if (!rows) return rows;
+        const start = Math.max(1, Math.round(Number(from)) || 1);
+        const end = Math.max(0, Math.round(Number(to)) || 0);
+        if (end > 0 && end < start) return [];
+        /** @type {Record<string, boolean>} */
+        const shared = {};
+        let shares = false;
+        rows.forEach((/** @type {any} */ row) => {
+            if (!row || typeof row !== 'object' || row.number == null || row.number === '') return;
+            const n = Number(row.number);
+            if (!Number.isFinite(n)) return;
+            const key = String(n);
+            if (shared[key]) shares = true;
+            shared[key] = true;
+        });
+        if (!shares) return rows.slice(start - 1, end > 0 ? end : undefined);
+        return rows.filter((/** @type {any} */ row) => {
+            const n = Number(row && row.number);
+            if (!Number.isFinite(n)) return false;
+            if (n < start) return false;
+            if (end > 0 && n > end) return false;
+            return true;
+        });
     }
 
     // The three things the toolbar adds. Sized so a fresh one is visible on
@@ -224,6 +270,208 @@
         return buildNode({ tag: 'img', name: 'Image', attrs: { src: '', alt: '' }, style: {
             'width': px(u * 120), 'height': px(u * 120), 'object-fit': 'cover',
         } });
+    }
+
+    // A page number sits on the page, out of the flow, above every other
+    // element. `mirror` is off until someone asks: the place they set is the
+    // place on every sheet. On, every other sheet (page 2, 4, 6…) reflects
+    // that place across the vertical middle. `anchor` is a snap; `free` is
+    // where a drag left it. `inset` is how far a snap sits from the paper edge.
+    const PAGE_NUMBER_ANCHORS = ['free', 'top-left', 'top', 'top-right', 'left', 'center', 'right', 'bottom-left', 'bottom', 'bottom-right'];
+
+    function normalizePageNumber(spec) {
+        const s = spec || {};
+        const anchor = PAGE_NUMBER_ANCHORS.indexOf(s.anchor) >= 0 ? s.anchor : 'free';
+        let inset = Math.round(Number(s.inset));
+        if (!Number.isFinite(inset) || inset < 0) inset = 36;
+        const left = Math.round(Number(s.left));
+        const top = Math.round(Number(s.top));
+        return {
+            mirror: s.mirror === true,
+            // Off until asked. The first sheet in the laid-out stack that has
+            // this on shows 1; sheets before it are blank; later sheets count
+            // up. A copied flag on a later sheet does not start again.
+            startHere: s.startHere === true,
+            anchor: anchor,
+            inset: inset,
+            left: Number.isFinite(left) ? left : 0,
+            top: Number.isFinite(top) ? top : 0,
+        };
+    }
+
+    function adoptPageNumber(node, explicit) {
+        if (!explicit) return;
+        const pageNumber = normalizePageNumber(explicit);
+        if (!pageNumber) return;
+        node.pageNumber = pageNumber;
+        delete node.repeat;
+        node.children = [];
+        if (typeof node.text !== 'string') node.text = '';
+    }
+
+    /**
+     * @param {number} dpi
+     * @returns {any}
+     */
+    function newPageNumber(dpi) {
+        const u = unit(dpi);
+        const inset = Math.round(u * 36);
+        return buildNode({
+            tag: 'p',
+            name: 'Page number',
+            text: '',
+            pageNumber: { mirror: false, anchor: 'bottom-right', inset: inset, left: inset, top: inset },
+            style: {
+                'font-family': 'EB Garamond, Georgia, serif',
+                'font-size': px(u * 12),
+                'line-height': '1',
+                'color': '#000000',
+            },
+        });
+    }
+
+    /**
+     * @param {any} node
+     * @param {number} pageIndex
+     */
+    function pageNumberMirrored(node, pageIndex) {
+        if (!node || !node.pageNumber || node.pageNumber.mirror !== true) return false;
+        const idx = Math.round(Number(pageIndex));
+        return Number.isFinite(idx) && idx >= 0 && idx % 2 === 1;
+    }
+
+    // Where a drag on this sheet is stored. The stored left is the place on
+    // pages 1, 3, 5. A drag on a mirrored sheet is reflected back.
+    function pageNumberHomeLeft(visualLeft, width, pageWidth, mirrored) {
+        const v = Number(visualLeft) || 0;
+        const w = Number(width) || 0;
+        const pw = Number(pageWidth) || 0;
+        if (!mirrored) return Math.round(v);
+        return Math.round(pw - v - w);
+    }
+
+    function pageNumberGeometry(spec, mirror) {
+        const inset = px(spec.inset);
+        const left = px(spec.left);
+        const top = px(spec.top);
+        let style;
+        switch (spec.anchor) {
+            case 'top-left': style = { left: inset, top: inset }; break;
+            case 'top': style = { left: '50%', top: inset, transform: 'translateX(-50%)' }; break;
+            case 'top-right': style = { right: inset, top: inset }; break;
+            case 'left': style = { left: inset, top: '50%', transform: 'translateY(-50%)' }; break;
+            case 'center': style = { left: '50%', top: '50%', transform: 'translate(-50%, -50%)' }; break;
+            case 'right': style = { right: inset, top: '50%', transform: 'translateY(-50%)' }; break;
+            case 'bottom-left': style = { left: inset, bottom: inset }; break;
+            case 'bottom': style = { left: '50%', bottom: inset, transform: 'translateX(-50%)' }; break;
+            case 'bottom-right': style = { right: inset, bottom: inset }; break;
+            default: style = { left: left, top: top }; break;
+        }
+        if (!mirror) return style;
+        const out = Object.assign({}, style);
+        if (out.left && out.left !== '50%' && !out.right) {
+            out.right = out.left;
+            delete out.left;
+        } else if (out.right && !out.left) {
+            out.left = out.right;
+            delete out.right;
+        }
+        return out;
+    }
+
+    // The element as it draws on one sheet: the digits, and a place that does
+    // not take part in the flow. Does not change `node`.
+    function placePageNumber(node, ctx) {
+        const spec = normalizePageNumber(node && node.pageNumber);
+        const pageIndex = Math.max(0, Math.round(Number(ctx && ctx.pageIndex)) || 0);
+        const geom = pageNumberGeometry(spec, pageNumberMirrored({ pageNumber: spec }, pageIndex));
+        const style = Object.assign({}, (node && node.style) || {});
+        ['position', 'left', 'right', 'top', 'bottom', 'transform', 'z-index', 'margin', 'white-space', 'user-select'].forEach(k => {
+            delete style[k];
+        });
+        Object.assign(style, geom, {
+            'position': 'absolute',
+            'z-index': '1000',
+            'margin': '0',
+            'white-space': 'nowrap',
+            'user-select': 'none',
+        });
+        const origin = Math.max(0, Math.round(Number(ctx && ctx.numberOrigin)) || 0);
+        return Object.assign({}, node, {
+            text: pageNumberLabel(pageIndex, origin),
+            style: style,
+            pageNumber: spec,
+            children: [],
+        });
+    }
+
+    // The digit on this sheet. `numberOrigin` 0 is today's 1, 2, 3.
+    // A sheet before the origin is blank, so a cover and a contents page
+    // can sit in front of page 1 without a second "1".
+    /**
+     * @param {number} pageIndex
+     * @param {number} numberOrigin
+     */
+    function pageNumberLabel(pageIndex, numberOrigin) {
+        const idx = Math.round(Number(pageIndex));
+        const origin = Math.round(Number(numberOrigin));
+        const i = Number.isFinite(idx) && idx > 0 ? idx : 0;
+        const o = Number.isFinite(origin) && origin > 0 ? origin : 0;
+        const n = i - o + 1;
+        return n < 1 ? '' : String(n);
+    }
+
+    /** @param {any} entry */
+    function entryStartsHere(entry) {
+        if (!entry || typeof entry !== 'object') return false;
+        const lists = [];
+        if (Array.isArray(entry.nodes)) lists.push(entry.nodes);
+        const pageNodes = entry.page && entry.page.nodes;
+        if (Array.isArray(pageNodes) && pageNodes !== entry.nodes) lists.push(pageNodes);
+        let found = false;
+        lists.forEach(nodes => {
+            if (found) return;
+            walk(nodes, node => {
+                if (node && node.pageNumber && node.pageNumber.startHere === true) {
+                    found = true;
+                    return false;
+                }
+            });
+        });
+        return found;
+    }
+
+    // The drawn-sheet index of the earliest "Start numbering from here".
+    // 0 when none is set, which keeps 1, 2, 3. Later flags do not count:
+    // an overflow copy of the element would otherwise restart every sheet.
+    /** @param {any} entries */
+    function numberOriginFromEntries(entries) {
+        const list = entries || [];
+        for (let i = 0; i < list.length; i++) {
+            const entry = list[i];
+            if (!entryStartsHere(entry)) continue;
+            let idx = i;
+            if (entry.pageIndex != null && entry.pageIndex !== '') {
+                const n = Math.round(Number(entry.pageIndex));
+                if (Number.isFinite(n) && n >= 0) idx = n;
+            }
+            return idx;
+        }
+        return 0;
+    }
+
+    /**
+     * @param {any} nodes
+     * @param {number} pageIndex
+     * @param {number} numberOrigin
+     */
+    function stampPageNumberNodes(nodes, pageIndex, numberOrigin) {
+        const label = pageNumberLabel(pageIndex, numberOrigin);
+        walk(nodes, node => {
+            if (!node || !node.pageNumber) return;
+            node.text = label;
+            node.children = [];
+        });
     }
 
     function unit(dpi) { return (Number(dpi) || 96) / 96; }
@@ -336,6 +584,146 @@
             });
         }
         return rest;
+    }
+
+    // The contiguous run a page belongs to when an overflowing list keeps
+    // real pages: the origin plus every stored page that immediately
+    // follows it with continues.from pointing at that origin. A lone page
+    // is a run of one. Used by the pages filmstrip so insert and reorder
+    // cannot split a run.
+    function continuationRunBounds(pages, pageId) {
+        const list = pages || [];
+        const i = list.findIndex(p => p && p.id === pageId);
+        if (i < 0) return null;
+        const page = list[i];
+        const originId = (page.continues && page.continues.from) || page.id;
+        let start = list.findIndex(p => p && p.id === originId);
+        if (start < 0) start = i;
+        let end = start;
+        for (let j = start + 1; j < list.length; j++) {
+            const p = list[j];
+            if (p && p.continues && p.continues.from === originId) end = j;
+            else break;
+        }
+        if (i < start || i > end) return { start: i, end: i, originId: page.id };
+        return { start: start, end: end, originId: originId };
+    }
+
+    // True when a new page may sit after pages[index] — never between two
+    // sheets of the same overflow run.
+    function canInsertAfter(pages, index) {
+        const list = pages || [];
+        if (index < 0 || index >= list.length - 1) return true;
+        const a = list[index];
+        const b = list[index + 1];
+        if (!a || !b || !b.continues || !b.continues.from) return true;
+        const from = b.continues.from;
+        if (a.id === from) return false;
+        if (a.continues && a.continues.from === from) return false;
+        return true;
+    }
+
+    // Move the whole continuation run that holds pageId by `delta` runs
+    // (negative = earlier). Neighbour runs move as blocks too, so a list
+    // that spilled never gets a foreign page between its sheets.
+    function movePageRun(pages, pageId, delta) {
+        const list = (pages || []).slice();
+        const run = continuationRunBounds(list, pageId);
+        if (!run || !delta) return list;
+        const block = list.splice(run.start, run.end - run.start + 1);
+        let dest = run.start;
+        if (delta < 0) {
+            for (let n = 0; n < -delta && dest > 0; n++) {
+                const prev = list[dest - 1];
+                if (!prev) break;
+                const prevRun = continuationRunBounds(list, prev.id);
+                dest = prevRun ? prevRun.start : dest - 1;
+            }
+        } else {
+            for (let n = 0; n < delta && dest < list.length; n++) {
+                const next = list[dest];
+                if (!next) break;
+                const nextRun = continuationRunBounds(list, next.id);
+                dest = nextRun ? nextRun.end + 1 : dest + 1;
+            }
+        }
+        list.splice(dest, 0, ...block);
+        return list;
+    }
+
+    // Gaps a dragged run may land in. `after` is the index of the page the
+    // run should follow, or -1 to land before the first page. The gap the
+    // run already occupies is left out. Nothing inside an overflow run is
+    // a slot — the run moves as a block.
+    function pageReorderSlots(pages, dragPageId) {
+        const list = pages || [];
+        const run = continuationRunBounds(list, dragPageId);
+        if (!run) return [];
+        const slots = [];
+        const consider = (after) => {
+            if (after === run.start - 1 || after === run.end) return;
+            slots.push(after);
+        };
+        consider(-1);
+        for (let i = 0; i < list.length; i++) {
+            if (canInsertAfter(list, i)) consider(i);
+        }
+        return slots;
+    }
+
+    // The page id the run should sit before, or null to land at the end.
+    function pageReorderTarget(pages, afterIndex) {
+        const list = pages || [];
+        const after = Number(afterIndex);
+        if (!list.length || isNaN(after)) return null;
+        if (after < 0) return list[0].id;
+        if (after >= list.length - 1) return null;
+        return list[after + 1].id;
+    }
+
+    // Place dragPageId's whole run before targetPageId. Null target appends.
+    // A landing that would split a run is refused; the list comes back unchanged.
+    function reorderPageRunBefore(pages, dragPageId, targetPageId) {
+        const list = (pages || []).slice();
+        if (!dragPageId || dragPageId === targetPageId) return list;
+        const run = continuationRunBounds(list, dragPageId);
+        if (!run) return list;
+        if (targetPageId) {
+            const tRun = continuationRunBounds(list, targetPageId);
+            if (tRun && dragPageId !== targetPageId
+                && run.originId === tRun.originId
+                && run.start === tRun.start) return list;
+        }
+        const block = list.splice(run.start, run.end - run.start + 1);
+        let dest = targetPageId ? list.findIndex(p => p.id === targetPageId) : list.length;
+        if (dest < 0) dest = list.length;
+        if (targetPageId && dest < list.length) {
+            const at = continuationRunBounds(list, list[dest].id);
+            if (at) dest = at.start;
+        }
+        list.splice(dest, 0, ...block);
+        return list;
+    }
+
+    // Which gap the pointer is in. The nearest slot that is not a legal
+    // landing (the run already sits there) answers null, so the line is
+    // not drawn on a gap that would not move the page.
+    function nearestPageReorderSlot(slots, clientY) {
+        const y = Number(clientY);
+        let best = null;
+        let bestDist = Infinity;
+        (slots || []).forEach(slot => {
+            if (!slot) return;
+            const mid = (Number(slot.top) + Number(slot.bottom)) / 2;
+            const dist = Math.abs(y - mid);
+            const after = Number(slot.after);
+            if (dist < bestDist || (dist === bestDist && best && after < best.after)) {
+                bestDist = dist;
+                best = { after: after, legal: !!slot.legal };
+            }
+        });
+        if (!best || !best.legal || isNaN(best.after)) return null;
+        return best.after;
     }
 
     function num(v, d) { const n = Number(v); return (v != null && !isNaN(n) && n >= 0) ? n : d; }
@@ -498,22 +886,23 @@
         return ancestorsOf(page, candidateId).some(n => n.id === ancestorId);
     }
 
-    function withNodes(page, nodes) {
-        return Object.assign({}, page, { nodes: nodes });
-    }
-
     // Puts an element inside a parent (or at the top level when parentId is
     // null) at `index`, or at the end. A text or image element cannot take
     // children, so it is refused as a parent and the element lands beside it.
     function insertNode(page, parentId, node, index) {
         const next = clone(page);
         const fresh = buildNode(node);
+        // A page number is never inside another element. It sits on the page.
+        if (isPageNumber(fresh)) parentId = null;
         let list = next.nodes;
         if (parentId) {
             const at = locate(next, parentId);
             if (!at) return page;
             const parent = at.list[at.index];
-            if (kindOf(parent) === 'box' && parent.tag !== 'img') {
+            if (isPageNumber(parent)) {
+                list = at.list;
+                index = at.index + 1;
+            } else if (kindOf(parent) === 'box' && parent.tag !== 'img') {
                 if (!parent.children) parent.children = [];
                 delete parent.text;
                 list = parent.children;
@@ -547,6 +936,7 @@
         if (typeof p.text === 'string') node.text = p.text;
         if (typeof p.name === 'string') node.name = p.name.slice(0, 40);
         if (typeof p.tag === 'string') node.tag = p.tag.toLowerCase();
+        if (p.pageNumber) node.pageNumber = normalizePageNumber(Object.assign({}, node.pageNumber, p.pageNumber));
         if (p.bind !== undefined) {
             if (p.bind === null) delete node.bind; else node.bind = clone(p.bind);
         }
@@ -568,6 +958,12 @@
         }
         const at = locate(page, id);
         if (!at) return { ok: false, why: 'That element no longer exists.', page: page };
+        if (isPageNumber(at.list[at.index]) && newParentId) {
+            return { ok: false, why: 'A page number sits on the page.', page: page };
+        }
+        if (newParentId && isPageNumber(findNode(page, newParentId))) {
+            return { ok: false, why: 'A page number does not hold other elements.', page: page };
+        }
         const node = clone(at.list[at.index]);
         // Removing first shifts the index when the move is within one list.
         let target = index;
@@ -596,6 +992,7 @@
     function wrapNode(page, id, dpi) {
         const at = locate(page, id);
         if (!at) return page;
+        if (isPageNumber(at.list[at.index])) return page;
         const inner = clone(at.list[at.index]);
         const box = newBox(dpi);
         box.children = [inner];
@@ -649,6 +1046,7 @@
         if (css) attrs.push('style="' + escapeAttr(css) + '"');
         if (node.bind) attrs.push('data-bind="' + escapeAttr(JSON.stringify(node.bind)) + '"');
         if (node.repeat) attrs.push('data-repeat="' + escapeAttr(JSON.stringify(node.repeat)) + '"');
+        if (node.pageNumber) attrs.push('data-page-number="' + escapeAttr(JSON.stringify(normalizePageNumber(node.pageNumber))) + '"');
         const open = '<' + node.tag + ' ' + attrs.join(' ');
         if (VOID_TAGS.includes(node.tag)) return pad + open + '>';
         if (node.children && node.children.length) {
@@ -754,7 +1152,7 @@
             if (s[i] !== '=') { attrs[name] = ''; continue; }
             i++;
             while (i < s.length && /\s/.test(s[i])) i++;
-            let value = '';
+            let value;
             if (s[i] === '"' || s[i] === "'") {
                 const q = s[i];
                 const end = s.indexOf(q, i + 1);
@@ -782,15 +1180,16 @@
         const id = attrs['data-pid'] || newId();
         const name = attrs['data-name'] || '';
         const style = cssToStyle(attrs.style);
-        let bind = null, repeat = null;
+        let bind = null, repeat = null, pageNumber = null;
         try { if (attrs['data-bind']) bind = JSON.parse(attrs['data-bind']); } catch (e) { bind = null; }
         try { if (attrs['data-repeat']) repeat = JSON.parse(attrs['data-repeat']); } catch (e) { repeat = null; }
-        ['data-pid', 'data-name', 'style', 'data-bind', 'data-repeat'].forEach(k => { delete attrs[k]; });
+        try { if (attrs['data-page-number']) pageNumber = JSON.parse(attrs['data-page-number']); } catch (e) { pageNumber = null; }
+        ['data-pid', 'data-name', 'style', 'data-bind', 'data-repeat', 'data-page-number'].forEach(k => { delete attrs[k]; });
 
         const kids = parsed.children || [];
         const elements = kids.filter(k => k.text == null);
         const texts = kids.filter(k => k.text != null);
-        const spec = { id, tag: parsed.tag, name, attrs, style, bind, repeat };
+        const spec = { id, tag: parsed.tag, name, attrs, style, bind, repeat, pageNumber: pageNumber };
         if (parsed.tag === 'img' || VOID_TAGS.includes(parsed.tag)) {
             // nothing inside
         } else if (elements.length) {
@@ -1027,14 +1426,32 @@
         kindOf,
         buildNode,
         buildRepeat,
+        sliceRows,
         newBox,
         newText,
         newImage,
+        newPageNumber,
+        isPageNumber,
+        normalizePageNumber,
+        placePageNumber,
+        pageNumberLabel,
+        numberOriginFromEntries,
+        stampPageNumberNodes,
+        pageNumberMirrored,
+        pageNumberHomeLeft,
+        PAGE_NUMBER_ANCHORS,
         buildPage,
         buildContinues,
         clonePage,
         continuesForCopy,
         pagesWithout,
+        continuationRunBounds,
+        canInsertAfter,
+        movePageRun,
+        pageReorderSlots,
+        pageReorderTarget,
+        reorderPageRunBefore,
+        nearestPageReorderSlot,
         buildPrintable,
         duplicatePrintable,
         migrate,

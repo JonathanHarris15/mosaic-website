@@ -170,43 +170,10 @@
         lockedKeys: LOCKED_KEYS_BY_PRESET[presetKey] || [],
     })));
 
-    function presetKeyFromPermissionLevel(level) {
-        if (!level) return PRESET_VIEWER;
-        if (BUILTIN_PRESET_KEYS.includes(level)) return level;
-        // A dropdown used to write the account-level id (`level_pastoral_assistant`)
-        // into permissionLevel. That string is not a rung, so member-sync treated
-        // it as below member and put the account back to Member.
-        const fromId = presetKeyFromAccountLevelId(level);
-        if (fromId) return fromId;
-        return PRESET_VIEWER;
-    }
-
-    // How much software access a builtin rung carries. Admin is operational,
-    // not pastoral, so it sits with editor. Pastoral Assistant sits above
-    // editor and below elder: same doors as an elder, not counted as one.
-    const PRESET_RANK = Object.freeze({
-        [PRESET_VIEWER]: 0,
-        [PRESET_KIOSK]: 0,
-        [PRESET_MEMBER]: 1,
-        [PRESET_EDITOR]: 2,
-        [PRESET_ADMIN]: 2,
-        [PRESET_PASTORAL_ASSISTANT]: 3,
-        [PRESET_ELDER]: 4,
-        [PRESET_SUPER_ADMIN]: 5,
-    });
-
-    function higherBuiltin(a, b) {
-        const ra = PRESET_RANK[a];
-        const rb = PRESET_RANK[b];
-        if (ra == null) return b || PRESET_VIEWER;
-        if (rb == null) return a;
-        return rb > ra ? b : a;
-    }
-
     /**
-     * The permission level a map actually grants. Used so a custom level, or a
-     * denormalized map left behind after permissionLevel was overwritten, is
-     * not labeled Member when it opens an elder's doors.
+     * The permission level a map actually grants. Kiosk is tested before
+     * super admin here; accessRank() checks super admin first, because
+     * allOn() also sets system.kiosk.
      * @param {object} perms
      * @return {string}
      */
@@ -228,91 +195,55 @@
     }
 
     /**
-     * The rung an account should be treated as. A builtin accountLevelId wins
-     * over a stale permissionLevel of `member`. A permissions map that grants
-     * an elder's doors wins over a permissionLevel member-sync wrote back.
+     * The map an account opens. A saved `permissions` field is the whole
+     * answer: `system.super_admin: true` is every catalog key, and a field
+     * that is present but not a map is a saved map of no keys. Otherwise a
+     * builtin accountLevelId contributes that preset. Anything else opens
+     * nothing. role, permissionLevel, and pastoralAssistant are not read.
+     * @param {object|string|null} user
+     * @return {object}
+     */
+    function accessMap(user) {
+        // A rank label is that builtin preset. It is not a read of a stored
+        // permissionLevel or role: those fields are ignored on an object.
+        if (typeof user === 'string') {
+            if (PRESET_FROM_LEVEL_ID[user]) return buildPresetPermissions(PRESET_FROM_LEVEL_ID[user]);
+            if (BUILTIN_LEVEL_IDS[user]) return buildPresetPermissions(user);
+            return Catalog.emptyPermissions();
+        }
+        if (!user || typeof user !== 'object') return Catalog.emptyPermissions();
+        if (Object.prototype.hasOwnProperty.call(user, 'permissions')) {
+            const raw = user.permissions;
+            if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+                return Catalog.emptyPermissions();
+            }
+            if (raw['system.super_admin'] === true) return Catalog.allOn();
+            const out = Catalog.emptyPermissions();
+            Catalog.PERMISSION_KEYS.forEach(k => {
+                if (raw[k] === true) out[k] = true;
+            });
+            return out;
+        }
+        const preset = presetKeyFromAccountLevelId(user.accountLevelId);
+        if (preset) return buildPresetPermissions(preset);
+        return Catalog.emptyPermissions();
+    }
+
+    /**
+     * Rank label derived from accessMap. Super admin wins over the kiosk key
+     * allOn() also sets, so a super admin is not a kiosk. A string is not an
+     * account and resolves to viewer.
      * @param {object|string|null} user
      * @return {string}
      */
+    function accessRank(user) {
+        const map = accessMap(user);
+        if (map['system.super_admin'] === true) return PRESET_SUPER_ADMIN;
+        return levelMatchingPermissions(map);
+    }
+
     function canonicalPermissionLevel(user) {
-        if (!user || typeof user !== 'object') {
-            return presetKeyFromPermissionLevel(typeof user === 'string' ? user : null);
-        }
-        const fromId = presetKeyFromAccountLevelId(user.accountLevelId);
-        const fromLevel = presetKeyFromPermissionLevel(user.permissionLevel || user.role);
-        if (fromId) return higherBuiltin(fromId, fromLevel);
-        if (user.permissions && typeof user.permissions === 'object') {
-            return higherBuiltin(fromLevel, levelMatchingPermissions(user.permissions));
-        }
-        return fromLevel || PRESET_VIEWER;
-    }
-
-    // ── What the STORED users/{uid} document says (MS-725, ADR 0082) ────────
-    //
-    // firestore.rules can only read the document. It cannot run
-    // normalizeAccount(), cannot recompute a builtin rung's preset, and cannot
-    // overlay the Pastoral Assistant grant. So a UI gate that claims to mirror
-    // a rule has to be able to ask the same two narrower questions these two
-    // answer — and has to keep being able to ask them after auth.js has
-    // replaced `permissions` with the effective map and `permissionLevel` with
-    // the canonical rung.
-    //
-    // Whoever does that replacing carries the answers forward as
-    // `savedPermissions` and `storedLevel`. A raw document has neither, and
-    // falls through to its own fields, which on a raw document are the stored
-    // ones. Reading these off an already-resolved object is therefore the same
-    // as reading them off the document it came from.
-
-    /**
-     * The permission map an admin SAVED on the account, or null.
-     *
-     * Present exactly when the account has been through Admin → Accounts:
-     * assignUserAccountLevel() writes userWriteFromLevel()'s map every time.
-     * A legacy account that predates MS-695 has none, however editor-ish its
-     * level string.
-     *
-     * @param {object|string|null} value users/{uid}, or an object resolved from it
-     * @return {?object} the saved map, or null
-     */
-    function savedPermissionMap(value) {
-        if (!value || typeof value !== 'object') return null;
-        if ('savedPermissions' in value) {
-            const saved = value.savedPermissions;
-            return (saved && typeof saved === 'object') ? saved : null;
-        }
-        return (value.permissions && typeof value.permissions === 'object')
-            ? value.permissions
-            : null;
-    }
-
-    /**
-     * The permissionLevel string as stored, with the legacy `role` behind it —
-     * what the rules' own permissionLevel() helper reads. NOT the canonical
-     * rung canonicalPermissionLevel() works out.
-     * @param {object|string|null} value users/{uid}, or an object resolved from it
-     * @return {?string} the stored level
-     */
-    function storedPermissionLevel(value) {
-        if (!value || typeof value !== 'object') {
-            return typeof value === 'string' ? value : null;
-        }
-        if ('storedLevel' in value) return value.storedLevel || null;
-        return ('permissionLevel' in value)
-            ? (value.permissionLevel || null)
-            : (value.role || null);
-    }
-
-    /**
-     * The pair to carry forward when `permissions` and `permissionLevel` are
-     * about to be rewritten with resolved values.
-     * @param {object|string|null} value the stored document
-     * @return {{savedPermissions: ?object, storedLevel: ?string}} the markers
-     */
-    function storedMarkers(value) {
-        return {
-            savedPermissions: savedPermissionMap(value),
-            storedLevel: storedPermissionLevel(value),
-        };
+        return accessRank(user);
     }
 
     function accountLevelIdForPreset(presetKey) {
@@ -323,92 +254,30 @@
         return PRESET_FROM_LEVEL_ID[accountLevelId] || null;
     }
 
-    /**
-     * Legacy users → account level id + denormalized permissions.
-     * @param {object} user users/{uid} data
-     * @return {{accountLevelId: string, permissions: object, permissionLevel: string, pastoralAssistant: boolean}}
-     */
-    function migrateLegacyUser(user) {
-        const level = (user && (user.permissionLevel || user.role)) || PRESET_VIEWER;
-        const grant = user && user.pastoralAssistant === true;
-        const presetKey = presetKeyFromPermissionLevel(level);
-        const accountLevelId = user && user.accountLevelId
-            ? user.accountLevelId
-            : accountLevelIdForPreset(presetKey);
-        const permissions = user && user.permissions
-            ? Object.assign(Catalog.emptyPermissions(), user.permissions)
-            : buildPresetPermissions(presetKey);
+    function normalizeAccount(value) {
+        const permissions = accessMap(value);
+        const permissionLevel = accessRank(value);
+        let accountLevelId = null;
+        if (typeof value === 'string') {
+            accountLevelId = BUILTIN_LEVEL_IDS[value]
+                || (PRESET_FROM_LEVEL_ID[value] ? value : null);
+        } else if (value && typeof value === 'object' && value.accountLevelId) {
+            accountLevelId = value.accountLevelId;
+        }
         return {
             accountLevelId,
             permissions,
-            permissionLevel: level,
-            pastoralAssistant: grant,
+            permissionLevel,
+            pastoralAssistant: permissionLevel === PRESET_PASTORAL_ASSISTANT,
         };
     }
 
-    function normalizeAccount(value) {
-        let base;
-        if (!value || typeof value !== 'object') {
-            const level = typeof value === 'string' ? value : null;
-            base = migrateLegacyUser({ permissionLevel: level });
-        } else if (value.permissions && typeof value.permissions === 'object') {
-            base = {
-                accountLevelId: value.accountLevelId || null,
-                permissions: Object.assign(Catalog.emptyPermissions(), value.permissions),
-                permissionLevel: value.permissionLevel || value.role || PRESET_VIEWER,
-                pastoralAssistant: value.pastoralAssistant === true,
-            };
-        } else {
-            base = migrateLegacyUser(value);
-        }
-        // Resolve from the assignment and the map, not from a permissionLevel
-        // member-sync may have written back to "member".
-        const permissionLevel = canonicalPermissionLevel({
-            permissionLevel: base.permissionLevel,
-            accountLevelId: value && value.accountLevelId,
-            permissions: base.permissions,
-        });
-        if (!base.accountLevelId && permissionLevel) {
-            base.accountLevelId = accountLevelIdForPreset(permissionLevel);
-        }
-        base.permissionLevel = permissionLevel;
-        return base;
-    }
-
     function effectivePermissions(account) {
-        const norm = normalizeAccount(account);
-        const custom = !!(norm.accountLevelId
-            && !presetKeyFromAccountLevelId(norm.accountLevelId));
-        let perms;
-        if (!custom && BUILTIN_PRESET_KEYS.includes(norm.permissionLevel)) {
-            // A builtin rung's doors come from the preset. A stale denormalized
-            // map (the Member map left on someone moved to Pastoral Assistant)
-            // must not take those doors away.
-            perms = buildPresetPermissions(norm.permissionLevel);
-        } else if (norm.permissions && norm.permissions['system.super_admin']) {
-            perms = Catalog.allOn();
-        } else {
-            perms = norm.permissions;
-        }
-        if (norm.pastoralAssistant
-            && norm.permissionLevel !== PRESET_ELDER
-            && norm.permissionLevel !== PRESET_SUPER_ADMIN
-            && norm.permissionLevel !== PRESET_PASTORAL_ASSISTANT) {
-            const grant = buildPresetPermissions(PRESET_PASTORAL_ASSISTANT);
-            const merged = Object.assign({}, perms);
-            Catalog.PERMISSION_KEYS.forEach(k => {
-                if (grant[k]) merged[k] = true;
-            });
-            merged['shep.count_as_elder'] = false;
-            merged['shep.elder_assignment.be_assignee'] = false;
-            return merged;
-        }
-        return perms;
+        return accessMap(account);
     }
 
     function hasPermission(account, key) {
-        const perms = effectivePermissions(account);
-        return perms[key] === true;
+        return accessMap(account)[key] === true;
     }
 
     function permissionsForLevelDoc(levelDoc) {
@@ -435,16 +304,9 @@
         const permissions = custom
             ? permissionsForLevelDoc(levelDoc)
             : buildPresetPermissions(presetKey || PRESET_VIEWER);
-        const permissionLevel = fromId
-            || levelMatchingPermissions(permissions)
-            || presetKey
-            || PRESET_VIEWER;
         return {
             accountLevelId: levelId,
             permissions,
-            permissionLevel,
-            role: permissionLevel,
-            pastoralAssistant: false,
         };
     }
 
@@ -491,13 +353,10 @@
         buildPresetPermissions,
         accountLevelIdForPreset,
         presetKeyFromAccountLevelId,
-        presetKeyFromPermissionLevel,
         levelMatchingPermissions,
+        accessMap,
+        accessRank,
         canonicalPermissionLevel,
-        savedPermissionMap,
-        storedPermissionLevel,
-        storedMarkers,
-        migrateLegacyUser,
         normalizeAccount,
         effectivePermissions,
         hasPermission,

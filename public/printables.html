@@ -310,6 +310,12 @@
             .pl-bar { align-items: flex-start; }
             .pl-bar__right { width: 100%; }
             .pl-bar__right .m-search { width: 100%; }
+            /* The name takes the first line beside its icon, and the buttons
+               drop to a line of their own under it. Side by side, four row
+               buttons squeezed a name to "Aud…" and a new name's box to a
+               few letters. */
+            .m-card-list .m-row__main { flex: 1 1 calc(100% - 48px); }
+            .m-card-list .m-row__main + * { margin-left: auto; }
         }
         .m-card-list .m-row { flex-wrap: wrap; }
         .m-row__main { display: block; min-width: 0; }

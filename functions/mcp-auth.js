@@ -35,6 +35,7 @@
 
 const crypto = require("crypto");
 const Access = require("./shared/access-core.js");
+const AccountLevels = require("./shared/account-levels-core.js");
 
 // ⚠ THROW THESE, NEVER A BARE `Error`. The SDK's token endpoint and bearer
 // middleware both end in the same shape: an OAuthError becomes the status it
@@ -185,6 +186,15 @@ class FirebaseClientsStore {
 }
 
 /**
+ * @typedef {object} McpAccount
+ * @property {?string} permissionLevel
+ * @property {boolean} pastoralAssistant
+ * @property {?string} accountLevelId
+ * @property {?string} personId
+ * @property {*} [permissions]
+ */
+
+/**
  * The OAuth server, backed by Firebase Auth for identity and Firestore for
  * everything that has to outlive one Cloud Functions instance.
  */
@@ -312,19 +322,39 @@ class FirebaseOAuthProvider {
   }
 
   /**
-   * The caller's account, read fresh — Permission Level plus the Pastoral
-   * Assistant grant (MS-426).
+   * The caller's account, read fresh (ADR 0084).
+   *
+   * A saved `permissions` field is copied even when it is not a map. Dropping
+   * it would let `accountLevelId` answer, and a present non-map is a saved
+   * map of no keys. `permissionLevel` on the result is the rank derived from
+   * that answer, not the stored ladder.
+   *
    * @param {string} uid the Firebase uid
-   * @return {Promise<{permissionLevel: ?string, pastoralAssistant: boolean}>}
+   * @return {Promise<McpAccount>} the account
    */
   async accountOf(uid) {
     const snap = await this.db.collection("users").doc(uid).get();
-    if (!snap.exists) return {permissionLevel: null, pastoralAssistant: false};
+    if (!snap.exists) {
+      return {
+        permissionLevel: null,
+        pastoralAssistant: false,
+        accountLevelId: null,
+        personId: null,
+      };
+    }
     const data = snap.data() || {};
-    return {
-      permissionLevel: data.permissionLevel || data.role || null,
-      pastoralAssistant: data.pastoralAssistant === true,
+    const rank = AccountLevels.accessRank(data);
+    /** @type {McpAccount} */
+    const account = {
+      accountLevelId: data.accountLevelId || null,
+      permissionLevel: rank,
+      pastoralAssistant: rank === "pastoral_assistant",
+      personId: data.personId || null,
     };
+    if (Object.prototype.hasOwnProperty.call(data, "permissions")) {
+      account.permissions = data.permissions;
+    }
+    return account;
   }
 
   /**
@@ -524,6 +554,8 @@ class FirebaseOAuthProvider {
       throw new InvalidTokenError("This account no longer has editor access.");
     }
 
+    const permissionsPresent = Object.prototype.hasOwnProperty.call(
+        account, "permissions");
     return {
       token,
       clientId: data.clientId,
@@ -536,6 +568,9 @@ class FirebaseOAuthProvider {
         uid: data.uid,
         permissionLevel: account.permissionLevel,
         pastoralAssistant: account.pastoralAssistant,
+        accountLevelId: account.accountLevelId || null,
+        permissions: permissionsPresent ? account.permissions : null,
+        permissionsPresent,
       },
     };
   }

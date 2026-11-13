@@ -13,6 +13,11 @@ const {
 } = require('../functions/member-sync.js');
 
 const Core = require('../public/shepherding-core.js');
+const Levels = require('../public/account-levels-core.js');
+
+function account(preset, extra) {
+    return Object.assign({}, Levels.userWriteFromLevel(Levels.BUILTIN_LEVEL_IDS[preset]), extra || {});
+}
 
 // The member-status sync (users <-> directory people) is ADD-ONLY: a permission
 // level advances a Person along the Membership Track, and the Member tag
@@ -187,28 +192,40 @@ test('a Person with no prior stage reads as a first placement', () => {
 
 // ── Direction B: the Member tag promotes the login ───────────────────────────
 
-test('shouldPromoteToMember: below member → promote', () => {
-    assert.strictEqual(shouldPromoteToMember('viewer'), true);
-    assert.strictEqual(shouldPromoteToMember(undefined), true);
+test('shouldPromoteToMember: a viewer or an empty account promotes; a non-object does not', () => {
+    assert.strictEqual(shouldPromoteToMember({}), true);
+    assert.strictEqual(shouldPromoteToMember({ permissionLevel: 'viewer' }), true);
+    assert.strictEqual(shouldPromoteToMember({ permissionLevel: 'member' }), true);
+    assert.strictEqual(shouldPromoteToMember(account('viewer')), true);
+    assert.strictEqual(shouldPromoteToMember('viewer'), false);
+    assert.strictEqual(shouldPromoteToMember(undefined), false);
+    assert.strictEqual(shouldPromoteToMember(null), false);
 });
 
 test('shouldPromoteToMember: already member+ → never demote, skip', () => {
     for (const r of ['member', 'editor', 'elder', 'admin', 'super_admin', 'pastoral_assistant']) {
-        assert.strictEqual(shouldPromoteToMember(r), false, r);
+        assert.strictEqual(shouldPromoteToMember(account(r)), false, r);
     }
 });
 
 test('shouldPromoteToMember does not turn a Pastoral Assistant back into a member', () => {
-    assert.strictEqual(isMemberOrHigher('level_pastoral_assistant'), true);
-    assert.strictEqual(shouldPromoteToMember('level_pastoral_assistant'), false);
-    assert.strictEqual(shouldPromoteToMember('member', {
+    const byId = {
         permissionLevel: 'member',
         accountLevelId: 'level_pastoral_assistant',
-    }), false);
-    assert.strictEqual(shouldPromoteToMember('member', {
+    };
+    const byMap = {
         permissionLevel: 'member',
         permissions: { 'visibility.lift_hidden_tags': true, 'shep.tags.manage': true },
-    }), false);
+    };
+    assert.strictEqual(isMemberOrHigher('pastoral_assistant'), true);
+    assert.strictEqual(isMemberOrHigher(Levels.accessRank(byId)), true);
+    assert.strictEqual(shouldPromoteToMember(byId), false);
+    assert.strictEqual(shouldPromoteToMember(byMap), false);
+    assert.strictEqual(shouldPromoteToMember(account('pastoral_assistant')), false);
+    assert.strictEqual(shouldPromoteToMember({
+        permissionLevel: 'member',
+        pastoralAssistant: true,
+    }), true);
 });
 
 // ── The two directions must not loop into each other ─────────────────────────
@@ -219,5 +236,5 @@ test('once in sync, neither direction wants to write again', () => {
     // member-or-higher. Without both refusals the two triggers ping-pong.
     const membership = { stage: 'member', inactive: false };
     assert.strictEqual(shouldAdvanceToMember('elder', membership), false);
-    assert.strictEqual(shouldPromoteToMember('elder'), false);
+    assert.strictEqual(shouldPromoteToMember(account('elder')), false);
 });

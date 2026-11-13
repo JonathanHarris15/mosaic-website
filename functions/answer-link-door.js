@@ -21,6 +21,18 @@ const CLOSED = {
   message: "This link has closed.",
 };
 
+const NOT_FOUND = {
+  ok: false,
+  code: "not-found",
+  message: "This link is invalid or has expired.",
+};
+
+const EXPIRED = {
+  ok: false,
+  code: "failed-precondition",
+  message: "This link is invalid or has expired.",
+};
+
 const RATE_LIMITED = {
   ok: false,
   code: "rate-limited",
@@ -28,12 +40,24 @@ const RATE_LIMITED = {
 };
 
 /**
- * Same closed payload every time — unknown, expired, and no-longer-subject
- * must not be distinguishable.
  * @return {Object}
  */
 function closed() {
   return Object.assign({}, CLOSED);
+}
+
+/**
+ * @return {Object}
+ */
+function invalidLink() {
+  return Object.assign({}, NOT_FOUND);
+}
+
+/**
+ * @return {Object}
+ */
+function expiredLink() {
+  return Object.assign({}, EXPIRED);
 }
 
 /**
@@ -122,7 +146,7 @@ async function handleAnswerLink(db, input) {
 async function handleToken(db, args) {
   const {input, token, op, now} = args;
   if (!al.looksLikeAnswerToken(token)) {
-    return closed();
+    return invalidLink();
   }
   const gate = await unknownLookupGate(db, input.callerAddress, now);
   if (!gate.ok) {
@@ -132,11 +156,11 @@ async function handleToken(db, args) {
   const snap = await db.collection(LINKS).doc(id).get();
   if (!snap.exists) {
     await writeLookupCounter(db, input.callerAddress, gate);
-    return closed();
+    return invalidLink();
   }
   const link = snap.data();
   if (!al.linkUsability(link, now).open) {
-    return closed();
+    return expiredLink();
   }
   return dispatchPurpose(db, {
     op,
@@ -260,6 +284,8 @@ module.exports = {
   LINKS,
   LOOKUPS,
   CLOSED,
+  NOT_FOUND,
+  EXPIRED,
   RATE_LIMITED,
   mintAnswerLink,
   handleAnswerLink,

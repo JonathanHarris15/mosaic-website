@@ -103,18 +103,38 @@ test('a Pastoral Assistant answers an elder form and is not counted as an elder'
     assert.deepStrictEqual(fp.RANKS_AT_OR_ABOVE.elder.slice().sort(), ['elder', 'super_admin']);
 });
 
-test('the ladder here matches the one in firestore.rules', () => {
-    // forms-public.js restates isMember()/isEditor()/isElder() because the rules
-    // language cannot export anything. Restated is fine; drifted is not.
+test('the ladder here matches the rank labels firestore.rules uses', () => {
+    // forms-public.js restates who may answer a rung. The rules no longer
+    // publish a permissionLevel() ladder: isMember() and isEditor() list
+    // accessRank() labels, and isElder() is the count-as-elder key. A
+    // pastoral assistant answers the elder rung (rankSatisfies) the way
+    // readsAsElder admits isPastoralAssistant().
     const rules = fs.readFileSync(path.join(__dirname, '..', 'firestore.rules'), 'utf8');
     const listFor = name => {
-        const m = rules.match(new RegExp('function ' + name + '\\(\\)[\\s\\S]*?in \\[([^\\]]+)\\]'));
-        assert.ok(m, 'could not find ' + name + '() in firestore.rules');
+        const m = rules.match(new RegExp(
+            'function ' + name + '\\(\\)[\\s\\S]*?accessRank\\(\\) in \\[([^\\]]+)\\]'));
+        assert.ok(m, 'could not find an accessRank list in ' + name + '()');
         return m[1].split(',').map(s => s.trim().replace(/['"]/g, '')).sort();
     };
     assert.deepStrictEqual(fp.RANKS_AT_OR_ABOVE.member.slice().sort(), listFor('isMember'));
     assert.deepStrictEqual(fp.RANKS_AT_OR_ABOVE.editor.slice().sort(), listFor('isEditor'));
-    assert.deepStrictEqual(fp.RANKS_AT_OR_ABOVE.elder.slice().sort(), listFor('isElder'));
+
+    const isElder = rules.match(/function isElder\(\)\s*\{([\s\S]*?)\n {4}\}/);
+    assert.ok(isElder, 'isElder() missing');
+    assert.match(isElder[1], /return keyOn\('shep\.count_as_elder'\);/);
+    assert.doesNotMatch(isElder[1], /in \[/);
+    assert.deepStrictEqual(fp.RANKS_AT_OR_ABOVE.elder.slice().sort(), ['elder', 'super_admin']);
+    assert.ok(fp.RANKS_AT_OR_ABOVE.member.includes('pastoral_assistant'));
+    assert.ok(fp.RANKS_AT_OR_ABOVE.editor.includes('pastoral_assistant'));
+    assert.strictEqual(fp.rankSatisfies('elder', 'pastoral_assistant'), true);
+    assert.match(rules,
+        /function isPastoralAssistant\(\) \{\s*return accessRank\(\) == 'pastoral_assistant';\s*\}/);
+    const readsAsElder = rules.match(/function readsAsElder\(\)\s*\{([\s\S]*?)\n {4}\}/);
+    assert.ok(readsAsElder, 'readsAsElder() missing');
+    assert.match(readsAsElder[1], /isPastoralAssistant\(\)/);
+    assert.match(readsAsElder[1], /mapGrants\(data\.permissions, 'visibility\.lift_hidden_tags'\)/);
+    assert.match(readsAsElder[1], /accountLevelId == 'level_pastoral_assistant'/);
+    assert.doesNotMatch(readsAsElder[1], /keyOn\(/);
 });
 
 test('a public form is open to a stranger; a members one is not', () => {

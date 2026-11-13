@@ -103,7 +103,7 @@ const inner = 'node --test --test-concurrency=1 ' +
     (process.argv[2] || 'test/emulator/*.test.js');
 const result = spawnSync('npx', [
     'firebase', 'emulators:exec',
-    '--only', 'firestore',
+    '--only', 'firestore,storage,auth',
     '--project', PROJECT_ID,
     inner,
 ], { stdio: 'inherit', env });

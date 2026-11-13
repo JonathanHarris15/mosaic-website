@@ -28,7 +28,7 @@
     function nextPickupCode(used) {
         const taken = {};
         (used || []).forEach(function (c) { if (c) taken[c] = true; });
-        let code = '';
+        let code;
         let n = 0;
         do {
             code = '';

@@ -64,6 +64,16 @@
             .rel-formgrid { grid-template-columns: 1fr !important; }
             .rel-preview-pair { flex-direction: column; gap: 14px; }
             .rv-manage { padding: 16px; }
+            /* The viewer's bar is built in relations-viewer.js with inline
+               styles, so these need !important. On one row it ran to ~600px
+               and put the member search fully off the right edge. On a phone
+               the search takes a row of its own under the title. */
+            [data-rv="bar"] { flex-wrap: wrap !important; height: auto !important; padding: 10px 16px !important; gap: 10px 12px !important; }
+            [data-rv="titleBlock"] { flex: 1 1 auto !important; min-width: 0; }
+            [data-rv="titleBlock"] img { display: none; }
+            [data-rv="searchSlot"] { order: 10; flex: 1 1 100% !important; max-width: none !important; margin: 0 !important; }
+            [data-rv="searchSlot"] > div { max-width: none !important; }
+            [data-rv="authRule"] { display: none; }
         }
     </style>
 

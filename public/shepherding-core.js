@@ -207,11 +207,8 @@
         const out = [];
         (careListDocs || []).forEach(doc => {
             const stored = doc && doc.careListData && doc.careListData[personId];
-            if (!stored) return;
-            // A list from before columns kept one bare body per person: it
-            // reads as the one Notes column (care-list-core.js says the same).
-            const oldShaped = stored.type === 'doc';
-            const cells = oldShaped ? { col_default: stored } : stored;
+            if (!stored || stored.type === 'doc') return;
+            const cells = stored;
             const columns = (doc.careListColumns && doc.careListColumns.length)
                 ? doc.careListColumns : [{ id: 'col_default', name: 'Notes' }];
             Object.keys(cells).forEach(colId => {
@@ -577,17 +574,20 @@
         return PROJECTED_TAG_ID_SET.has(tagId);
     }
 
-    // Does a Person's Linked User make them an elder? Source of truth for the
-    // Elder Tag projection: the linked User's role is exactly 'elder'. Super
-    // Admins are NOT elders (a distinct office). A Person with no Linked User,
-    // or a non-elder role, is not an elder.
+    // Does a Person's Linked User count as an elder? Source of truth for the
+    // Elder Tag projection: accessRank is elder (shep.count_as_elder on the
+    // resolved map). Super Admins are NOT elders. Pastoral Assistants are not.
+    // Stored permissionLevel / role grant nothing.
     function isElderUser(userData) {
-        return !!userData && (userData.permissionLevel || userData.role) === 'elder';
+        const Levels = (typeof AccountLevelsCore !== 'undefined') ? AccountLevelsCore
+            : (typeof require === 'function' ? require('./account-levels-core.js') : null);
+        if (!Levels || !userData || typeof userData !== 'object') return false;
+        return Levels.accessRank(userData) === 'elder';
     }
 
     // Re-project a Person's `tags` for elder-ness: drop the Elder Tag, then re-add
     // it iff they are an elder. Idempotent and order-preserving, exactly like
-    // applyMembershipTags — the linked User's role is the source of truth, never
+    // applyMembershipTags — the linked User's access is the source of truth, never
     // the tags. The pure heart of the MS-92 Elder-Tag projection.
     function applyElderTag(currentTags, isElder) {
         const out = (currentTags || []).filter(function (t) { return t !== ELDER_TAG_ID; });
@@ -675,13 +675,11 @@
         return update;
     }
 
-    // Is a Person off the Track / Inactive? The new source of truth is
-    // membership.inactive (ADR-0012); the legacy `membership.status === 'inactive'`
-    // is honoured too so un-migrated records still read correctly. The single
-    // predicate behind every "active people" filter.
+    // Is a Person off the Track / Inactive? membership.inactive (ADR-0012) is
+    // the single predicate behind every "active people" filter.
     function isInactiveMembership(membership) {
         if (!membership) return false;
-        return !!membership.inactive || membership.status === 'inactive';
+        return !!membership.inactive;
     }
 
     // The Membership Directory visibility rule (ADR-0012). The directory splits
@@ -848,6 +846,51 @@
     // while older notes sit on the profile.
     const NOTES_COLLECTION = 'shepherding_notes';
 
+    // Person.createdAt on the directory record (MS-756).
+    function personCreatedAtMs(person) {
+        return noteCreatedAtMs(person && person.createdAt);
+    }
+
+    // People list sort (MS-756). Newest-first for date added and tag date;
+    // unknown timestamps sink to the bottom. Tie-break on name.
+    function comparePeopleList(a, b, sortBy, options) {
+        const opts = options || {};
+        const tagHolds = opts.tagHolds || {};
+        const tagId = opts.tagId || null;
+        const nameTie = () => String(a && a.name || '').localeCompare(String(b && b.name || ''));
+        if (sortBy === 'name') return nameTie();
+        if (sortBy === 'attention') {
+            const aTs = a && a.lastNoteAt;
+            const bTs = b && b.lastNoteAt;
+            if (!aTs && !bTs) return nameTie();
+            if (!aTs) return -1;
+            if (!bTs) return 1;
+            const aTime = noteCreatedAtMs(aTs);
+            const bTime = noteCreatedAtMs(bTs);
+            const diff = (aTime || 0) - (bTime || 0);
+            return diff !== 0 ? diff : nameTie();
+        }
+        if (sortBy === 'added') {
+            const aMs = personCreatedAtMs(a);
+            const bMs = personCreatedAtMs(b);
+            if (aMs === null && bMs === null) return nameTie();
+            if (aMs === null) return 1;
+            if (bMs === null) return -1;
+            const diff = bMs - aMs;
+            return diff !== 0 ? diff : nameTie();
+        }
+        if (sortBy === 'tagDate' && tagId) {
+            const aSince = ((tagHolds[a && a.id] || {})[tagId] || {}).heldSinceMs;
+            const bSince = ((tagHolds[b && b.id] || {})[tagId] || {}).heldSinceMs;
+            if (aSince == null && bSince == null) return nameTie();
+            if (aSince == null) return 1;
+            if (bSince == null) return -1;
+            const diff = bSince - aSince;
+            return diff !== 0 ? diff : nameTie();
+        }
+        return nameTie();
+    }
+
     function noteCreatedAtMs(value) {
         if (value == null || value === '') return null;
         if (typeof value === 'number' && Number.isFinite(value)) return value;
@@ -1004,6 +1047,8 @@
         // lastNoteAt cache (MS-530)
         NOTES_COLLECTION,
         noteCreatedAtMs,
+        personCreatedAtMs,
+        comparePeopleList,
         latestNoteAt,
         lastNoteAtCreatePatch,
         lastNoteAtFromRemaining,

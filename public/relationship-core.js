@@ -65,42 +65,9 @@
         return typeof v === 'string' && v.trim().length > 0;
     }
 
-    // ── Reading legacy docs (ADR-0014 s6) ─────────────────────────────────────
-
-    // A type doc predates MS-97 if it carries no `kind`.
-    function needsMigration(doc) {
-        return !!doc && typeof doc === 'object' && !KIND_VALUES.includes(doc.kind);
-    }
-
-    // Pure, idempotent mapping from a legacy type doc to the enriched shape.
-    // Legacy docs are all pairwise and carry `{ name, directional }`:
-    //
-    //   directional: true  -> priority: true,  holderLabel = counterpartLabel = name
-    //   directional: false -> priority: false, label = name
-    //
-    // Seeding both role labels from the one old name is lossy on purpose: there
-    // was only ever one label to work with, and it stands in until an elder gives
-    // the type real role names in the manager. The retired `directional` field is
-    // dropped; the backfill removes it from Firestore with FieldValue.delete().
-    function migrateTypeDoc(oldDoc) {
-        if (!oldDoc || typeof oldDoc !== 'object') return oldDoc;
-        if (!needsMigration(oldDoc)) return { ...oldDoc };
-
-        const { directional, ...rest } = oldDoc;
-        const name = oldDoc.name || '';
-        if (directional === true) {
-            return { ...rest, kind: KINDS.PAIRWISE, priority: true, holderLabel: name, counterpartLabel: name };
-        }
-        return { ...rest, kind: KINDS.PAIRWISE, priority: false, label: name };
-    }
-
-    // Every read path goes through this, so a not-yet-backfilled type behaves
-    // exactly like a migrated one. An already-enriched type is returned as-is —
-    // the read paths call this many times per edge, and copying each time would
-    // allocate thousands of throwaway objects across a Relations Viewer render.
+    // Types on disk carry `kind` after the relationship_types backfill (MS-797).
     function normalizeType(type) {
-        if (!type || typeof type !== 'object') return type;
-        return needsMigration(type) ? migrateTypeDoc(type) : type;
+        return type && typeof type === 'object' ? type : type;
     }
 
     // ── Shared with Editors (MS-128) ──────────────────────────────────────────
@@ -397,8 +364,6 @@
         validateEdit,
         canonicalType,
         // migration
-        needsMigration,
-        migrateTypeDoc,
         normalizeType,
     };
 

@@ -1,11 +1,9 @@
 /**
- * The congregation's Liturgy Elements and Liturgy Orders, read server-side
- * (ADR-0080).
+ * The congregation's Liturgy Orders, read server-side (ADR-0080).
  *
- * The same two collections the pages read through
- * public/liturgy-order-store.js. An empty collection reads as the Standard
- * seed (catalogFrom), so a Sunday reads correctly before anybody has opened
- * the management page.
+ * The same collection the pages read through public/liturgy-order-store.js. An
+ * empty collection reads as the Standard seed (catalogFrom), so a Sunday reads
+ * correctly before anybody has opened the management page.
  *
  * ⚠ A FAILED READ THROWS rather than falling back to Standard. The browser
  * falls back because a page should still draw; an assistant reading a Sunday
@@ -22,13 +20,10 @@ const Liturgy = require("./shared/liturgy-order-core.js");
  * @return {Promise<object>} {elements, orders}
  */
 async function loadLiturgyCatalog(db) {
-  const [elements, orders] = await Promise.all([
-    db.collection(Liturgy.COLLECTIONS.elements).get(),
-    db.collection(Liturgy.COLLECTIONS.orders).get(),
-  ]);
+  const orders = await db.collection(Liturgy.COLLECTIONS.orders).get();
   const rows = (snap) =>
     snap.docs.map((d) => Object.assign({}, d.data(), {id: d.id}));
-  return Liturgy.catalogFrom({elements: rows(elements), orders: rows(orders)});
+  return Liturgy.catalogFrom({orders: rows(orders)});
 }
 
 module.exports = {loadLiturgyCatalog};

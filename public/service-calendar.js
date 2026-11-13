@@ -43,6 +43,15 @@ function calendarPage() {
         // are on is remembered on this device, like the view itself.
         liturgyOrders: [],
         tableOrderIds: [],
+        ordersFilterOpen: false,
+        // Fixed coords for the portaled Orders popover — recomputed on open,
+        // scroll, and resize so sticky thead / overflow-hidden shells cannot
+        // clip it (MS-770).
+        ordersPopoverStyle: '',
+
+        get tableOrdersActiveCount() {
+            return this.tableOrderIds.length;
+        },
 
         isTableOrderOn(id) {
             return this.tableOrderIds.includes(id);
@@ -57,10 +66,43 @@ function calendarPage() {
             if (window.refreshCalendar) window.refreshCalendar(this.showHistory);
         },
 
+        toggleOrdersFilter() {
+            this.ordersFilterOpen = !this.ordersFilterOpen;
+            if (!this.ordersFilterOpen) return;
+            this.$nextTick(() => this.positionOrdersPopover());
+        },
+
+        closeOrdersFilter(event) {
+            const btn = this.$refs.ordersFilterBtn;
+            if (btn && event && btn.contains(event.target)) return;
+            this.ordersFilterOpen = false;
+        },
+
+        positionOrdersPopover() {
+            const btn = this.$refs.ordersFilterBtn || document.getElementById('table-orders-filter');
+            if (!btn) return;
+            const rect = btn.getBoundingClientRect();
+            const margin = 8;
+            const width = Math.min(288, window.innerWidth - margin * 2);
+            let left = Math.min(rect.left, window.innerWidth - margin - width);
+            left = Math.max(margin, left);
+            const spaceBelow = window.innerHeight - rect.bottom - margin;
+            const spaceAbove = rect.top - margin;
+            const below = spaceBelow >= 120 || spaceBelow >= spaceAbove;
+            const maxHeight = Math.max(120, Math.min(384, below ? spaceBelow : spaceAbove));
+            const vertical = below
+                ? `top: ${rect.bottom + 6}px;`
+                : `bottom: ${window.innerHeight - rect.top + 6}px;`;
+            this.ordersPopoverStyle =
+                `left: ${left}px; width: ${width}px; max-height: ${maxHeight}px; ${vertical}`;
+        },
+
         syncTableOrders() {
             const catalog = currentCatalog();
-            const all = catalog.orders.map(o => o.id);
-            this.liturgyOrders = LiturgyOrderCore.toggledOrders(catalog, all)
+            const visible = LiturgyOrderCore.visibleOrders(catalog);
+            const all = visible.map(o => o.id);
+            this.liturgyOrders = LiturgyOrderCore.toggledOrders(
+                Object.assign({}, catalog, { orders: visible }), all)
                 .map(o => ({ id: o.id, name: o.name }));
             this.tableOrderIds = currentTableOrderIds().slice();
         },
@@ -72,6 +114,7 @@ function calendarPage() {
             if (typeof db === 'undefined') return;
             setLiturgyCatalog(await LiturgyOrderStore.loadCatalog(db));
             this.syncTableOrders();
+            await loadLiturgyPrintables();
             if (window.refreshCalendar) window.refreshCalendar(this.showHistory);
         },
 
@@ -126,12 +169,7 @@ function calendarPage() {
             this.selectedPersonRef.name = current.name || '';
             this.selectorRoleName = this.getRoleName(field);
             
-            // Set suggestions key if applicable
-            if (field === 'prayerMale') this.activeSuggestionsKey = 'males';
-            else if (field === 'prayerFemale') this.activeSuggestionsKey = 'females';
-            else this.activeSuggestionsKey = null;
-
-            if (this.activeSuggestionsKey) this.fetchPrayerSuggestions();
+            this.activeSuggestionsKey = null;
         },
         
         // One field, one write, nothing else. See the guard in
@@ -184,10 +222,6 @@ function calendarPage() {
                 'serviceLeader': 'Service Leader',
                 'preacher': 'Preacher',
                 'musicLeader': 'Music Leader',
-                'prayerPraiseName': 'Prayer Leader (Praise)',
-                'prayerConfessionName': 'Prayer Leader (Confession)',
-                'prayerMale': 'Male Being Prayed For',
-                'prayerFemale': 'Female Being Prayed For'
             };
             return names[field] || 'Person';
         },
@@ -224,19 +258,11 @@ function calendarPage() {
                     'serviceLeader': 'serviceLeaderId',
                     'musicLeader': 'musicLeaderId',
                     'preacher': 'preacherId',
-                    'prayerPraiseName': 'prayerPraiseId',
-                    'prayerConfessionName': 'prayerConfessionId',
-                    'prayerMale': null,
-                    'prayerFemale': null
                 };
                 const roleMap = {
                     'serviceLeader': 'service_leader',
                     'musicLeader': 'worship_leader',
                     'preacher': 'preacher',
-                    'prayerPraiseName': 'prayer',
-                    'prayerConfessionName': 'prayer',
-                    'prayerMale': 'pastoral_prayer',
-                    'prayerFemale': 'pastoral_prayer'
                 };
 
                 const idField = idFieldMap[this.selectorField];
@@ -247,13 +273,10 @@ function calendarPage() {
                 const chosenName = this.selectedPersonRef.name || '';
                 const newId = chosenId;
                 const role = roleMap[this.selectorField];
-                const isPastoralPrayer = role === 'pastoral_prayer';
 
                 let metadata = null;
-                if (this.selectorField === 'prayerPraiseName') metadata = { prayer_type: 'praise' };
-                if (this.selectorField === 'prayerConfessionName') metadata = { prayer_type: 'confession' };
 
-                if (!isPastoralPrayer && oldId !== newId) {
+                if (oldId !== newId) {
                     if (oldId) {
                         const oldPersonRef = db.collection('people').doc(oldId);
                         let query = oldPersonRef.collection('involvement')
@@ -283,38 +306,6 @@ function calendarPage() {
                     }
                 }
 
-                if (isPastoralPrayer) {
-                    const storedSubjects = PastoralPrayerCore.subjectsFromStoredService(
-                        this.selectorDateKey, svc);
-                    const loaded = {
-                        date: storedSubjects.date,
-                        prayerMaleId: storedSubjects.prayerMaleId,
-                        prayerFemaleId: storedSubjects.prayerFemaleId,
-                    };
-                    const saved = {
-                        date: loaded.date,
-                        prayerMaleId: loaded.prayerMaleId,
-                        prayerFemaleId: loaded.prayerFemaleId,
-                    };
-                    saved[this.selectorField === 'prayerMale' ? 'prayerMaleId' : 'prayerFemaleId'] = chosenId;
-                    const personIds = PastoralPrayerCore.pastoralSubjectIds(loaded, saved);
-                    const historyByPerson = {};
-                    await Promise.all(personIds.map(async (personId) => {
-                        const snap = await db.collection('people').doc(personId)
-                            .collection(PastoralPrayerCore.HISTORY_COLLECTION)
-                            .get(FRESH_READ);
-                        historyByPerson[personId] = snap.docs.map(doc => doc.id);
-                    }));
-                    const decision = PastoralPrayerCore.decidePastoralPrayerSave(
-                        loaded, saved, historyByPerson);
-                    // Cache in this batch, not a follow-up write. A failed
-                    // second write used to leave the history present and the
-                    // picker still saying never.
-                    PastoralPrayerCore.writePastoralPrayerDecision(
-                        batch, db.collection('people'), decision,
-                        firebase.firestore.FieldValue.serverTimestamp());
-                }
-
                 const updates = {
                     updatedAt: firebase.firestore.FieldValue.serverTimestamp()
                 };
@@ -323,33 +314,11 @@ function calendarPage() {
                 if (!serviceDataMap[this.selectorDateKey]) serviceDataMap[this.selectorDateKey] = {};
                 const localSvc = serviceDataMap[this.selectorDateKey];
 
-                if (this.selectorField === 'prayerMale' || this.selectorField === 'prayerFemale') {
-                    // Update liturgy in Firestore
-                    const currentLiturgy = (svc.liturgy && typeof svc.liturgy === 'object') ? { ...svc.liturgy } : {};
-                    currentLiturgy[this.selectorField] = { id: chosenId, name: chosenName };
-                    updates.liturgy = currentLiturgy;
+                updates[this.selectorField] = chosenName;
+                if (idField) updates[idField] = newId || null;
 
-                    // Sync names to Guide elements if they exist
-                    if (svc.guide && svc.guide.elements) {
-                        const prayerEl = svc.guide.elements.find(el => el.type === 'pastoral_prayer');
-                        if (prayerEl) {
-                            if (this.selectorField === 'prayerMale') prayerEl.maleMember = chosenName;
-                            if (this.selectorField === 'prayerFemale') prayerEl.femaleMember = chosenName;
-                            updates.guide = svc.guide;
-                        }
-                    }
-
-                    // Update Local State
-                    if (!localSvc.liturgy) localSvc.liturgy = {};
-                    localSvc.liturgy[this.selectorField] = { id: chosenId, name: chosenName };
-                } else {
-                    updates[this.selectorField] = chosenName;
-                    if (idField) updates[idField] = newId || null;
-
-                    // Update Local State
-                    localSvc[this.selectorField] = chosenName;
-                    if (idField) localSvc[idField] = newId || null;
-                }
+                localSvc[this.selectorField] = chosenName;
+                if (idField) localSvc[idField] = newId || null;
 
                 // Trigger optimistic update
                 injectServiceData(serviceDataMap);
@@ -431,6 +400,21 @@ function calendarPage() {
             this.$watch('showHistory', val => {
                 if (window.refreshCalendar) window.refreshCalendar(val);
             });
+            this.$watch('ordersFilterOpen', open => {
+                if (!open) return;
+                this.$nextTick(() => this.positionOrdersPopover());
+            });
+            this._repositionOrdersPopover = (e) => {
+                if (!this.ordersFilterOpen) return;
+                const pop = document.querySelector('.cal-orders__popover');
+                if (pop && e && pop.contains(e.target)) return;
+                this.positionOrdersPopover();
+            };
+            this._closeOrdersOnResize = () => {
+                if (this.ordersFilterOpen) this.positionOrdersPopover();
+            };
+            window.addEventListener('scroll', this._repositionOrdersPopover, true);
+            window.addEventListener('resize', this._closeOrdersOnResize);
             this.loadLiturgyOrders();
             await this.loadPeopleRegistry();
         },
@@ -678,12 +662,11 @@ function scrollToClosestSunday(sundays) {
 // and "last prayed for" stay correct.
 // ---------------------------------------------------------------------------
 
-// Renders a Service's Baptism Candidates as a display string. Handles the
-// person-ref array and any legacy free-text value still present in the data.
+// Renders a Service's Baptism Candidates as a display string.
 function baptismCandidateNames(svc) {
-    const bap = svc && (svc.liturgy && svc.liturgy.baptism !== undefined ? svc.liturgy.baptism : svc.baptism);
-    if (Array.isArray(bap)) return bap.map(c => c && c.name).filter(Boolean).join(', ');
-    return typeof bap === 'string' ? bap : '';
+    const bap = svc && svc.liturgy && svc.liturgy.baptism;
+    if (!Array.isArray(bap)) return '';
+    return bap.map(c => c && c.name).filter(Boolean).join(', ');
 }
 
 // Service-date helpers delegate to DateUtils (date-utils.js) — the single home
@@ -1161,42 +1144,11 @@ function renderSidebar(grouped) {
 }
 
 window.navigateToGuide = function(date) {
-    const svc = serviceDataMap[date];
-    const guide = svc && svc.guide;
-    const isViewer = !['editor', 'elder', 'admin', 'super_admin'].includes(window.currentPermissionLevel);
-
-    // One shared rule (GuideStore) so the calendar and the editor's
-    // "Generate" button never drift.
-    const target = window.GuideStore
-        ? GuideStore.guideHref(svc || {}, date)
-        : `service-guide-editor.html?date=${encodeURIComponent(date)}`;
-
-    if (!isViewer && svc) {
-        let incomplete = false;
-        if (guide && guide.format === 'v2') {
-            // Compute completeness from the frozen snapshot's required Entry
-            // Fields — the single source of truth the editor uses — so this never
-            // drifts as templates are customised. Fall back to a field heuristic
-            // if the guide modules aren't available for some reason.
-            if (window.GuideStore && guide.snapshot) {
-                incomplete = window.GuideStore.tasksRemaining(guide.snapshot, guide.values || {}) > 0;
-            } else {
-                const v = guide.values || {};
-                const annFilled = Array.isArray(v.announcements) && v.announcements.some(a => a && (a.title || a.content));
-                incomplete = (!v.pp_nation || !v.pp_capital) || (!v.kids_lesson_title || !v.kids_lesson_verse) || !annFilled;
-            }
-        } else {
-            // No template guide yet (none at all, or one from before the
-            // template system that the editor will offer to rebuild).
-            incomplete = true;
-        }
-
-        if (incomplete) {
-            const proceed = confirm("Warning: There are elements that you have not completed yet. Please do so before going to the service guide page.\n\nDo you still want to proceed to the editor?");
-            if (!proceed) return;
-        }
-    }
-    window.location.href = target;
+    // Liturgy Order → linked Printable fill-in view (MS-762). Disabled when
+    // the order has no Printable; no fallback to the old guide editor.
+    const target = serviceGuideForDate(date);
+    if (!target.enabled || !target.href) return;
+    window.location.href = target.href;
 };
 
 function renderList(grouped) {
@@ -1252,10 +1204,7 @@ function renderList(grouped) {
                     const actions = document.createElement('div');
                     actions.className = 'flex flex-col sm:flex-row gap-sm w-full sm:w-auto justify-end flex-shrink-0';
                     actions.innerHTML = `
-                        <button onclick="window.navigateToGuide('${formattedDate}')" class="flex-grow sm:flex-none bg-secondary text-on-secondary px-4 py-2 rounded-full font-label-md text-label-md hover:bg-primary transition-colors flex items-center justify-center gap-2 group/btn">
-                            <span class="material-symbols-outlined text-[18px]">auto_stories</span>
-                            <span>Service Guide</span>
-                        </button>
+                        ${serviceGuideButtonHtml(formattedDate)}
                         <a href="service-builder.html?date=${formattedDate}" class="flex-grow sm:flex-none border border-outline text-secondary px-4 py-2 rounded-full font-label-md text-label-md hover:bg-secondary hover:text-on-secondary hover:border-secondary transition-colors flex items-center justify-center gap-2 group/btn">
                             <span class="material-symbols-outlined text-[18px]">list_alt</span>
                             <span>Order of Service</span>
@@ -1290,10 +1239,79 @@ function renderList(grouped) {
 const TABLE_ORDERS_KEY = 'calendarLiturgyOrders';
 let liturgyCatalog = null;
 let tableOrderIds = null;
+// Printables linked on Liturgy Orders — enables Service Guide buttons (MS-762).
+let liturgyPrintables = {};
 
 function currentCatalog() {
     if (!liturgyCatalog) liturgyCatalog = LiturgyOrderCore.standardCatalog();
     return liturgyCatalog;
+}
+
+async function loadLiturgyPrintables() {
+    const ids = [];
+    (currentCatalog().orders || []).forEach(o => {
+        if (o && o.printableId) ids.push(o.printableId);
+    });
+    if (!ids.length || typeof PrintableStore === 'undefined' || typeof db === 'undefined') {
+        liturgyPrintables = {};
+        return;
+    }
+    try {
+        const list = await PrintableStore.loadLinked(db, ids);
+        const map = {};
+        (list || []).forEach(p => { if (p && p.id) map[p.id] = { memberVisible: !!p.memberVisible }; });
+        liturgyPrintables = map;
+    } catch (e) {
+        console.warn('Liturgy order printables could not be read', e);
+        liturgyPrintables = {};
+    }
+}
+
+function serviceGuideForDate(date) {
+    const svc = serviceDataMap[date] || {};
+    const canEdit = ['editor', 'elder', 'admin', 'super_admin'].includes(window.currentPermissionLevel);
+    const occurrenceId = (typeof EventsOccurrenceCore !== 'undefined')
+        ? EventsOccurrenceCore.occurrenceId(EventsOccurrenceCore.SUNDAY_SERVICE_ID, date)
+        : '';
+    return LiturgyOrderCore.serviceGuideTarget(svc, currentCatalog(), {
+        date: date,
+        occurrenceId: occurrenceId,
+        printables: liturgyPrintables,
+        viewerCanEdit: canEdit,
+    });
+}
+
+function serviceGuideButtonHtml(date, opts) {
+    const options = opts || {};
+    const target = serviceGuideForDate(date);
+    const label = options.label || 'Service Guide';
+    const title = target.enabled
+        ? 'Service Guide'
+        : 'Link a Printable to this Sunday’s Liturgy Order first';
+    if (options.compact) {
+        if (!target.enabled) {
+            return `<button type="button" disabled title="${escapeHtml(title)}" aria-disabled="true"
+                class="p-2 text-outline opacity-40 cursor-not-allowed rounded-full">
+                <span class="material-symbols-outlined text-[20px]">auto_stories</span>
+            </button>`;
+        }
+        return `<button type="button" onclick="window.navigateToGuide('${date}')" title="${escapeHtml(title)}"
+            class="p-2 text-secondary hover:text-primary hover:bg-surface-container rounded-full transition-colors">
+            <span class="material-symbols-outlined text-[20px]">auto_stories</span>
+        </button>`;
+    }
+    if (!target.enabled) {
+        return `<button type="button" disabled title="${escapeHtml(title)}" aria-disabled="true"
+            class="flex-grow sm:flex-none bg-outline-variant text-on-surface-variant opacity-50 cursor-not-allowed px-4 py-2 rounded-full font-label-md text-label-md flex items-center justify-center gap-2">
+            <span class="material-symbols-outlined text-[18px]">auto_stories</span>
+            <span>${escapeHtml(label)}</span>
+        </button>`;
+    }
+    return `<button type="button" onclick="window.navigateToGuide('${date}')" title="${escapeHtml(title)}"
+        class="flex-grow sm:flex-none bg-secondary text-on-secondary px-4 py-2 rounded-full font-label-md text-label-md hover:bg-primary transition-colors flex items-center justify-center gap-2 group/btn">
+        <span class="material-symbols-outlined text-[18px]">auto_stories</span>
+        <span>${escapeHtml(label)}</span>
+    </button>`;
 }
 
 function rememberedTableOrders() {
@@ -1488,9 +1506,7 @@ function renderTable(grouped) {
                         </td>`).join('')}
                         <td class="px-md py-md text-right whitespace-nowrap sticky-column">
                             <div class="flex justify-end gap-xs">
-                                <button onclick="window.navigateToGuide('${formattedDate}')" title="Service Guide" class="p-2 text-secondary hover:text-primary hover:bg-surface-container rounded-full transition-colors">
-                                    <span class="material-symbols-outlined text-[20px]">auto_stories</span>
-                                </button>
+                                ${serviceGuideButtonHtml(formattedDate, { compact: true })}
                                 <a href="service-builder.html?date=${formattedDate}" title="Order of Service" class="p-2 text-secondary hover:text-primary hover:bg-surface-container rounded-full transition-colors">
                                     <span class="material-symbols-outlined text-[20px]">list_alt</span>
                                 </a>
@@ -1512,32 +1528,14 @@ function renderTable(grouped) {
  * Fetch all service documents from Firestore and inject summary info
  * (theme, service leader, preacher) into the matching calendar cards.
  */
-// Older saves used set() with merge and dotted key names like 'liturgy.sermon',
-// which Firestore stores as a literal field name containing a dot rather than
-// as a nested path. Normalize those back into their proper nested structure so
-// the display code (which reads svc.liturgy.sermon) finds the value.
+function dottedKeysCore() {
+    if (typeof window !== 'undefined' && window.ServiceDottedKeysCore) return window.ServiceDottedKeysCore;
+    if (typeof require !== 'undefined') return require('./service-dotted-keys-core.js');
+    throw new Error('ServiceDottedKeysCore is not loaded');
+}
+
 function normalizeServiceDoc(raw) {
-    const data = {};
-    for (const [key, val] of Object.entries(raw || {})) {
-        if (!key.includes('.')) {
-            data[key] = val;
-        }
-    }
-    for (const [key, val] of Object.entries(raw || {})) {
-        if (key.includes('.')) {
-            const parts = key.split('.');
-            let obj = data;
-            for (let i = 0; i < parts.length - 1; i++) {
-                if (typeof obj[parts[i]] !== 'object' || obj[parts[i]] === null) {
-                    obj[parts[i]] = {};
-                }
-                obj = obj[parts[i]];
-            }
-            const leaf = parts[parts.length - 1];
-            if (!obj[leaf]) obj[leaf] = val;
-        }
-    }
-    return data;
+    return dottedKeysCore().readServiceDoc(raw);
 }
 
 // Is this cell's editor open?
@@ -1622,7 +1620,6 @@ async function loadServiceData() {
 }
 
 function injectServiceData(serviceMap) {
-    const user = auth.currentUser;
     let canEdit = false;
     
     // We check role from local storage or global state if possible, 
@@ -1651,15 +1648,8 @@ function injectServiceData(serviceMap) {
             let html = '';
             
             // Badges Row
-            if (svc.hasBaptism || svc.isIrregular) {
+            if (svc.hasBaptism) {
                 html += `<div class="flex flex-wrap gap-2 mb-2">`;
-                if (svc.isIrregular) {
-                    html += `
-                        <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 text-[10px] font-bold uppercase tracking-wider">
-                            <span class="material-symbols-outlined text-[14px]">layers</span>
-                            Irregular
-                        </span>`;
-                }
                 if (svc.hasBaptism) {
                     const baptismName = baptismCandidateNames(svc);
                     html += `
@@ -1712,19 +1702,6 @@ function injectServiceData(serviceMap) {
             }
         }
 
-        // Table View Injection
-        const dateCell = el.querySelector('.sticky-col-left');
-        if (dateCell && svc.isIrregular) {
-            // Check if badge already exists
-            if (!dateCell.querySelector('.irregular-indicator')) {
-                const indicator = document.createElement('span');
-                indicator.className = 'irregular-indicator material-symbols-outlined text-[14px] text-amber-600 ml-1 align-middle cursor-help';
-                indicator.textContent = 'layers';
-                indicator.title = 'Irregular Service';
-                dateCell.appendChild(indicator);
-            }
-        }
-
         const themeCell = el.querySelector('.theme-cell');
         if (themeCell) {
             setCellText(themeCell, svc.theme || '—');
@@ -1755,43 +1732,33 @@ function injectServiceData(serviceMap) {
             if (canEdit) setupInlineEdit(musicCell, dateKey, 'musicLeader');
         }
 
-        const prayerFemaleCell = el.querySelector('.prayer-female-cell');
-        if (prayerFemaleCell) {
-            const val = (svc.liturgy && svc.liturgy.prayerFemale) ? svc.liturgy.prayerFemale.name : '—';
-            const id = (svc.liturgy && svc.liturgy.prayerFemale) ? svc.liturgy.prayerFemale.id : '';
-            if (setCellText(prayerFemaleCell, val || '—')) {
-                prayerFemaleCell.setAttribute('data-person-id', id || '');
-            }
-            if (canEdit) setupInlineEdit(prayerFemaleCell, dateKey, 'prayerFemale');
-        }
-
-        // These two cells are rebuilt from innerHTML rather than written into,
-        // so a snapshot landing mid-edit would take the box away underneath the
-        // person typing in it. Leave the whole cell alone until they are out.
+        // Requesting-prayer subjects are filled on the Order of Service. The
+        // calendar shows the names read-only.
         const pastoralPrayerCell = el.querySelector('.pastoral-prayer-cell');
         if (pastoralPrayerCell && !hasEditorOpen(pastoralPrayerCell)) {
             pastoralPrayerCell.innerHTML = '';
-            
-            const maleRow = document.createElement('div');
-            maleRow.className = 'flex gap-1 items-center';
-            const maleName = (svc.liturgy && svc.liturgy.prayerMale) ? svc.liturgy.prayerMale.name : '—';
-            const maleId = (svc.liturgy && svc.liturgy.prayerMale) ? svc.liturgy.prayerMale.id : '';
-            maleRow.innerHTML = `<span class="opacity-50">M:</span> <span class="male-name-cell">${maleName || '—'}</span>`;
-            maleRow.querySelector('.male-name-cell').setAttribute('data-person-id', maleId || '');
-            
-            const femaleRow = document.createElement('div');
-            femaleRow.className = 'flex gap-1 items-center';
-            const femaleName = (svc.liturgy && svc.liturgy.prayerFemale) ? svc.liturgy.prayerFemale.name : '—';
-            const femaleId = (svc.liturgy && svc.liturgy.prayerFemale) ? svc.liturgy.prayerFemale.id : '';
-            femaleRow.innerHTML = `<span class="opacity-50">F:</span> <span class="female-name-cell">${femaleName || '—'}</span>`;
-            femaleRow.querySelector('.female-name-cell').setAttribute('data-person-id', femaleId || '');
-            
-            pastoralPrayerCell.appendChild(maleRow);
-            pastoralPrayerCell.appendChild(femaleRow);
-
-            if (canEdit) {
-                setupInlineEdit(maleRow.querySelector('.male-name-cell'), dateKey, 'prayerMale');
-                setupInlineEdit(femaleRow.querySelector('.female-name-cell'), dateKey, 'prayerFemale');
+            const names = [];
+            const seen = {};
+            const lit = (svc && svc.liturgy) || {};
+            LiturgyOrderCore.elementsFor(svc, currentCatalog()).forEach((el) => {
+                if (!el || el.kind !== 'prayer' || !el.requests) return;
+                const list = lit[el.id];
+                if (!Array.isArray(list)) return;
+                list.forEach((person) => {
+                    if (!person || !person.id || !person.name || seen[person.id]) return;
+                    seen[person.id] = true;
+                    names.push(person.name);
+                });
+            });
+            if (!names.length) {
+                pastoralPrayerCell.textContent = '—';
+            } else {
+                names.forEach((name) => {
+                    const row = document.createElement('div');
+                    row.className = 'font-body-md text-on-surface-variant text-xs';
+                    row.textContent = name;
+                    pastoralPrayerCell.appendChild(row);
+                });
             }
         }
 
@@ -1878,21 +1845,17 @@ function injectServiceData(serviceMap) {
             
             const praiseRow = document.createElement('div');
             praiseRow.className = 'flex gap-1 items-center';
-            praiseRow.innerHTML = `<span class="opacity-50">P:</span> <span class="praise-name-cell">${svc.prayerPraiseName || '—'}</span>`;
-            praiseRow.querySelector('.praise-name-cell').setAttribute('data-person-id', svc.prayerPraiseId || '');
-            
+            const carried = svc.carriedBy || {};
+            const praise = carried.prayerOfPraise || {};
+            const confession = carried.prayerOfConfession || {};
+            praiseRow.innerHTML = `<span class="opacity-50">P:</span> <span class="praise-name-cell">${praise.name || '—'}</span>`;
+            praiseRow.querySelector('.praise-name-cell').setAttribute('data-person-id', praise.id || '');
             const confRow = document.createElement('div');
             confRow.className = 'flex gap-1 items-center';
-            confRow.innerHTML = `<span class="opacity-50">C:</span> <span class="conf-name-cell">${svc.prayerConfessionName || '—'}</span>`;
-            confRow.querySelector('.conf-name-cell').setAttribute('data-person-id', svc.prayerConfessionId || '');
-            
+            confRow.innerHTML = `<span class="opacity-50">C:</span> <span class="conf-name-cell">${confession.name || '—'}</span>`;
+            confRow.querySelector('.conf-name-cell').setAttribute('data-person-id', confession.id || '');
             prayersCell.appendChild(praiseRow);
             prayersCell.appendChild(confRow);
-
-            if (canEdit) {
-                setupInlineEdit(praiseRow.querySelector('.praise-name-cell'), dateKey, 'prayerPraiseName');
-                setupInlineEdit(confRow.querySelector('.conf-name-cell'), dateKey, 'prayerConfessionName');
-            }
         }
       } catch (err) {
         console.error('Could not draw the service row for', el.dataset.serviceDate, err);
@@ -1917,7 +1880,10 @@ async function writeLiturgyField(dateKey, field, value) {
     // recording it in only one place would make that tag a liar. Clearing a
     // slot takes the tag off with it.
     const remove = firebase.firestore.FieldValue.delete();
-    const authorship = ServiceAuthorship.stampFor(field, value, currentIdentity, stamp, remove);
+    // A typo fixed from here keeps whoever chose the element.
+    const authorship = ServiceAuthorship.stampFor(
+        field, value, currentIdentity, stamp, remove,
+        /** @type {Record<string, *>} */ (serviceDataMap)[dateKey]);
 
     try {
         await ref.update(Object.assign(
@@ -2110,7 +2076,7 @@ function openPersonCellEditor(el, dateKey, field, current) {
                             :class="p.isNew ? 'bg-primary-fixed/30 hover:bg-primary-fixed' : 'hover:bg-primary-fixed'"
                             class="w-full text-left px-4 py-2 transition-colors border-b last:border-0 flex flex-col">
                         <div class="flex items-center justify-between">
-                            <p class="font-label-md text-sm" :class="p.isNew ? 'text-primary' : 'text-on-surface'" x-text="p.isNew ? '+ Add &quot;' + p.name + '&quot; as new person' : p.name"></p>
+                            <p class="font-label-md text-sm" :class="p.isNew ? 'text-primary' : 'text-on-surface'" x-text="p.isNew ? '+ Add &quot;' + p.name + '&quot; as new person' : optionLabel(p)"></p>
                             <span x-show="p.isNew" class="material-symbols-outlined text-[16px] text-primary">person_add</span>
                         </div>
                         <template x-if="!p.isNew && isPastoralPrayerField">
@@ -2200,8 +2166,6 @@ async function writeServiceField(dateKey, field, newVal) {
         'serviceLeader': 'serviceLeaderId',
         'musicLeader': 'musicLeaderId',
         'preacher': 'preacherId',
-        'prayerPraiseName': 'prayerPraiseId',
-        'prayerConfessionName': 'prayerConfessionId'
     };
 
     const updates = {
@@ -2239,7 +2203,7 @@ function setupInlineEdit(el, dateKey, field) {
     el.title = 'Click to edit';
 
     // Check if it's a Person field
-    const personFields = ['serviceLeader', 'musicLeader', 'preacher', 'prayerPraiseName', 'prayerConfessionName', 'prayerMale', 'prayerFemale'];
+    const personFields = ['serviceLeader', 'musicLeader', 'preacher'];
     const element = liturgyElementFor(field);
 
     el.onclick = (e) => {
@@ -2566,6 +2530,24 @@ function personPicker(personRef, parent = null, suggestionsKey = null) {
             const stat = this.field && UsageStats.personStatFor(candidate, this.field);
             return stat && stat.count ? `${stat.count}×` : '';
         },
+        optionLabel(person) {
+            if (!person || person.isNew) return (person && person.name) || '';
+            if (typeof PeoplePickerCore !== 'undefined') {
+                return PeoplePickerCore.optionLabel(person, this.results);
+            }
+            return person.name || '';
+        },
+        finalizePickerResults(found, registry) {
+            if (typeof PeoplePickerCore === 'undefined') return found;
+            let list = PeoplePickerCore.finalizePickerList(found, registry, {
+                keepIds: [this.personRef && this.personRef.id],
+            });
+            const suggestions = this.suggestions;
+            if (suggestions && suggestions.length) {
+                list = PeoplePickerCore.excludeIds(list, suggestions);
+            }
+            return list;
+        },
         get suggestions() {
             let key = this.suggestionsKey;
             if (key === 'activeSuggestionsKey' && this.parent) {
@@ -2619,7 +2601,7 @@ function personPicker(personRef, parent = null, suggestionsKey = null) {
 
             if (hasFuse) {
                 this.hadFuse = true;
-                let found = [];
+                let found;
                 let key = this.suggestionsKey;
                 if (key === 'activeSuggestionsKey' && this.parent) {
                     key = this.parent.activeSuggestionsKey; 
@@ -2641,7 +2623,7 @@ function personPicker(personRef, parent = null, suggestionsKey = null) {
                         found.push({ id: 'NEW', name: this.query.trim(), isNew: true });
                     }
                 }
-                this.results = found;
+                this.results = this.finalizePickerResults(found, registry);
                 return;
             }
 
@@ -2669,7 +2651,7 @@ function personPicker(personRef, parent = null, suggestionsKey = null) {
                     found.push({ id: 'NEW', name: this.query.trim(), isNew: true });
                 }
 
-                this.results = found;
+                this.results = this.finalizePickerResults(found, this.parent && this.parent.peopleRegistry);
             } catch (error) {
                 console.error("Error searching people:", error);
             }
@@ -2741,10 +2723,13 @@ function personPicker(personRef, parent = null, suggestionsKey = null) {
 
 // --- AUTH PROTECTION ---
 auth.onAuthStateChanged(async (user) => {
+    if (!user && typeof window.MosaicEmulatorSignIn === 'function') {
+        try { await window.MosaicEmulatorSignIn(); return; } catch (e) { /* fall through */ }
+    }
     if (user) {
         try {
             const userData = await getUserData(user.uid);
-            const permissionLevel = (userData && (userData.permissionLevel || userData.role)) || 'viewer';
+            const permissionLevel = (window.AccessCore ? AccessCore.permissionLevelOf(userData) : 'viewer');
             window.currentPermissionLevel = permissionLevel;
             // Needed before the first edit, so an element decided here records
             // who decided it (MS-246).
@@ -2781,19 +2766,15 @@ auth.onAuthStateChanged(async (user) => {
                 // which would leave you looking newly arrived for half a
                 // minute after closing the tab.
                 window.addEventListener('beforeunload', () => PresenceStore.leave());
-                const importBtn = document.getElementById('import-docx-btn');
-                if (importBtn) {
-                    importBtn.classList.remove('hidden');
-                    if (window.initDocxImporter) {
+                if (AccessCore.canUseServiceCalendarWeekTools(userData)) {
+                    document.body.classList.add('can-week-shift');
+                    const importBtn = document.getElementById('import-docx-btn');
+                    if (importBtn && window.initDocxImporter) {
                         window.initDocxImporter(() => {
                             location.reload();
                         });
                     }
                 }
-                const injectBtn = document.getElementById('inject-service-btn');
-                if (injectBtn) injectBtn.classList.remove('hidden');
-                const removeBtn = document.getElementById('remove-service-btn');
-                if (removeBtn) removeBtn.classList.remove('hidden');
                 // Re-inject data to enable edit handlers
                 if (Object.keys(serviceDataMap).length > 0) {
                     injectServiceData(serviceDataMap);
@@ -2804,6 +2785,7 @@ auth.onAuthStateChanged(async (user) => {
         }
     } else {
         document.body.classList.remove('can-edit');
+        document.body.classList.remove('can-week-shift');
     }
 });
 

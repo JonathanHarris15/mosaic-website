@@ -153,6 +153,31 @@ test('the list wrapper is laid out across, down, or in columns filled top to bot
     assert.equal(cols['grid-template-rows'], 'repeat(4, auto)');
 });
 
+test('a repeated list item is not wrapped in a flex box, so its marker can draw', () => {
+    const t = Core.buildTemplate({ paper: 'letter', dpi: 96 });
+    const page = Core.buildPage(t, { id: 'pg', nodes: [
+        { id: 'list', tag: 'ul', children: [
+            { id: 'item', tag: 'li', text: 'Question', repeat: {
+                source: 'questions', params: {},
+                layout: { direction: 'column', perLine: 1, gap: 6 },
+                overflow: 'clip',
+            } },
+        ] },
+    ] });
+    const r = Render.expandPage(page, {
+        rowsFor: () => [{ text: 'One' }, { text: 'Two' }],
+        valueFor: (bind, row) => row ? { ok: true, value: row.text } : { ok: false, why: 'empty' },
+    });
+    const wrap = r.nodes[0].children[0];
+    assert.equal(wrap.attrs['data-list-of'], 'item');
+    assert.equal(wrap.style.display, 'contents');
+    assert.equal(wrap.style['flex-direction'], undefined);
+    assert.equal(wrap.children.length, 2);
+    assert.equal(wrap.children[0].tag, 'li');
+    assert.equal(wrap.children[1].style['margin-top'], '6px');
+    assert.equal(wrap.children[0].style['margin-top'], undefined);
+});
+
 test('the overflowing lists on a page are found in tree order', () => {
     assert.deepEqual(Render.overflowingRepeats(directoryPage()).map(n => n.id), ['card']);
 });

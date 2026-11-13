@@ -2,14 +2,12 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     
-    // Effective permission level for the signed-in user. Reads the new
-    // `permissionLevel` field, falling back to the legacy `role` field during the
-    // MS-119 migration while both coexist (MS-127 drops `role` afterwards).
-    // Callers guard on request.auth first, so this get() only runs when signed in.
-    function permissionLevel() {
-      let d = get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
-      return ('permissionLevel' in d) ? d.permissionLevel : d.role;
-    }
+    // MS-776: a saved permissions map is the whole answer. `system.super_admin`
+    // opens every catalog key. A permissions field that is present but not a
+    // map opens nothing. With no permissions field, a builtin accountLevelId
+    // contributes that preset. role, permissionLevel, and pastoralAssistant
+    // grant nothing. Super admin is decided before kiosk, because the super
+    // admin preset also sets system.kiosk.
 
     // Somebody holding an account, which is NOT the same as `request.auth !=
     // null` — and on this project the difference is the whole boundary.
@@ -35,143 +33,316 @@ service cloud.firestore {
         && request.auth.token.firebase.sign_in_provider != 'anonymous';
     }
 
-    // Helper to check if user is admin
+    function signedInUserData() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+
+    function userDocExists() {
+      return isSignedIn()
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid));
+    }
+
+    function mapGrants(perms, key) {
+      return perms is map && (
+        (('system.super_admin' in perms) && perms['system.super_admin'] == true)
+        || ((key in perms) && perms[key] == true)
+      );
+    }
+
+    function grantsElder(key) {
+      return key == 'core.sign_in' || key == 'visibility.rung.public'
+        || key == 'visibility.rung.member' || key == 'visibility.rung.participant'
+        || key == 'visibility.rung.editor' || key == 'visibility.rung.elder'
+        || key == 'visibility.lift_hidden_tags' || key == 'directory.view'
+        || key == 'directory.edit_identity' || key == 'directory.resolve_requests'
+        || key == 'shep.dashboard.view' || key == 'shep.profile.view'
+        || key == 'shep.notes.view' || key == 'shep.documents.view'
+        || key == 'shep.tasks.view' || key == 'shep.care_lists.view'
+        || key == 'shep.relationships.view' || key == 'shep.forms.view'
+        || key == 'shep.presence.view' || key == 'shep.notes.write'
+        || key == 'shep.documents.write' || key == 'shep.tasks.write'
+        || key == 'shep.care_lists.write' || key == 'shep.forms.write'
+        || key == 'shep.panels.write' || key == 'shep.tags.manage'
+        || key == 'shep.status.manage' || key == 'shep.views.manage'
+        || key == 'shep.relationships.manage'
+        || key == 'shep.elder_assignment.set'
+        || key == 'shep.membership_stage.set' || key == 'shep.explain_changes'
+        || key == 'shep.prayer.send' || key == 'shep.forms.lock_elder'
+        || key == 'shep.guidance.lock' || key == 'shep.count_as_elder'
+        || key == 'shep.elder_assignment.be_assignee' || key == 'calendar.view'
+        || key == 'calendar.events.edit' || key == 'calendar.away.view'
+        || key == 'calendar.away.edit' || key == 'services.builder.view'
+        || key == 'services.builder.edit' || key == 'services.week_shift'
+        || key == 'services.guidance.view' || key == 'hymns.view'
+        || key == 'hymns.edit' || key == 'printables.view'
+        || key == 'printables.edit' || key == 'roles.manager.view'
+        || key == 'roles.manager.edit' || key == 'resources.edit'
+        || key == 'analytics.view' || key == 'admin.mcp.view';
+    }
+
+    function grantsPastoralAssistant(key) {
+      return key == 'core.sign_in' || key == 'visibility.rung.public'
+        || key == 'visibility.rung.member' || key == 'visibility.rung.participant'
+        || key == 'visibility.rung.editor' || key == 'visibility.rung.elder'
+        || key == 'visibility.lift_hidden_tags' || key == 'directory.view'
+        || key == 'directory.edit_identity' || key == 'directory.resolve_requests'
+        || key == 'shep.dashboard.view' || key == 'shep.profile.view'
+        || key == 'shep.notes.view' || key == 'shep.documents.view'
+        || key == 'shep.tasks.view' || key == 'shep.care_lists.view'
+        || key == 'shep.relationships.view' || key == 'shep.forms.view'
+        || key == 'shep.presence.view' || key == 'shep.notes.write'
+        || key == 'shep.documents.write' || key == 'shep.tasks.write'
+        || key == 'shep.care_lists.write' || key == 'shep.forms.write'
+        || key == 'shep.panels.write' || key == 'shep.tags.manage'
+        || key == 'shep.status.manage' || key == 'shep.views.manage'
+        || key == 'shep.relationships.manage'
+        || key == 'shep.elder_assignment.set'
+        || key == 'shep.membership_stage.set' || key == 'shep.explain_changes'
+        || key == 'shep.prayer.send' || key == 'shep.forms.lock_elder'
+        || key == 'shep.guidance.lock' || key == 'calendar.view'
+        || key == 'calendar.events.edit' || key == 'calendar.away.view'
+        || key == 'calendar.away.edit' || key == 'services.builder.view'
+        || key == 'services.builder.edit' || key == 'services.week_shift'
+        || key == 'services.guidance.view' || key == 'hymns.view'
+        || key == 'hymns.edit' || key == 'printables.view'
+        || key == 'printables.edit' || key == 'roles.manager.view'
+        || key == 'roles.manager.edit' || key == 'resources.edit'
+        || key == 'analytics.view' || key == 'admin.mcp.view';
+    }
+
+    function grantsEditor(key) {
+      return key == 'core.sign_in' || key == 'visibility.rung.public'
+        || key == 'visibility.rung.member' || key == 'visibility.rung.participant'
+        || key == 'visibility.rung.editor' || key == 'directory.view'
+        || key == 'directory.edit_identity' || key == 'directory.resolve_requests'
+        || key == 'shep.forms.view' || key == 'calendar.view'
+        || key == 'calendar.events.edit' || key == 'calendar.away.view'
+        || key == 'calendar.away.edit' || key == 'services.builder.view'
+        || key == 'services.builder.edit' || key == 'services.guidance.view'
+        || key == 'hymns.view' || key == 'hymns.edit' || key == 'printables.view'
+        || key == 'printables.edit' || key == 'roles.manager.view'
+        || key == 'roles.manager.edit' || key == 'resources.edit'
+        || key == 'admin.mcp.view';
+    }
+
+    function grantsAdmin(key) {
+      return key == 'core.sign_in' || key == 'visibility.rung.public'
+        || key == 'visibility.rung.member' || key == 'visibility.rung.participant'
+        || key == 'visibility.rung.editor' || key == 'directory.view'
+        || key == 'directory.edit_identity' || key == 'directory.resolve_requests'
+        || key == 'shep.forms.view' || key == 'calendar.view'
+        || key == 'calendar.events.edit' || key == 'calendar.away.view'
+        || key == 'calendar.away.edit' || key == 'services.builder.view'
+        || key == 'services.builder.edit' || key == 'services.guidance.view'
+        || key == 'hymns.view' || key == 'hymns.edit' || key == 'printables.view'
+        || key == 'printables.edit' || key == 'roles.manager.view'
+        || key == 'roles.manager.edit' || key == 'resources.edit'
+        || key == 'admin.dashboard.access' || key == 'admin.sms.manage'
+        || key == 'admin.push.manage' || key == 'admin.accounts.view'
+        || key == 'admin.accounts.provision'
+        || key == 'admin.accounts.assign_level' || key == 'admin.levels.manage'
+        || key == 'admin.mcp.view';
+    }
+
+    function grantsMember(key) {
+      return key == 'core.sign_in' || key == 'visibility.rung.public'
+        || key == 'visibility.rung.member' || key == 'directory.view';
+    }
+
+    function grantsViewer(key) {
+      return key == 'core.sign_in' || key == 'visibility.rung.public';
+    }
+
+    function grantsKiosk(key) {
+      return key == 'core.sign_in' || key == 'visibility.rung.public'
+        || key == 'system.kiosk';
+    }
+
+    function presetGrants(id, key) {
+      return id == 'level_super_admin' ? true
+        : id == 'level_elder' ? grantsElder(key)
+        : id == 'level_pastoral_assistant' ? grantsPastoralAssistant(key)
+        : id == 'level_editor' ? grantsEditor(key)
+        : id == 'level_admin' ? grantsAdmin(key)
+        : id == 'level_member' ? grantsMember(key)
+        : id == 'level_viewer' ? grantsViewer(key)
+        : id == 'level_kiosk' ? grantsKiosk(key)
+        : false;
+    }
+
+    // The Rules compiler inlines every call into every allow. keyOn() inlines
+    // presetGrants, which is the whole builtin matrix. accessRank / isEditor /
+    // rankCanSee called that often enough that `projects/...:test` — the
+    // compile step deploy runs before it uploads — sat until the service's
+    // deadline and came back HTTP 503. Nothing was released. The matrix stays
+    // in keyOn(), which editsWith / isElder / hasPermission call once. The
+    // helpers below answer the same questions from one user doc: a saved map
+    // is the whole answer, otherwise the builtin accountLevelId. role,
+    // permissionLevel, and pastoralAssistant grant nothing. Super admin is
+    // still decided before kiosk, because the super admin preset also sets
+    // system.kiosk.
+
+    function userData() {
+      return userDocExists() ? signedInUserData() : null;
+    }
+
+    function mapHas(key) {
+      let data = userData();
+      return data != null && ('permissions' in data) && mapGrants(data.permissions, key);
+    }
+
+    function rankFromMap(perms) {
+      return mapGrants(perms, 'system.super_admin') ? 'super_admin'
+        : mapGrants(perms, 'system.kiosk') ? 'kiosk'
+        : mapGrants(perms, 'shep.count_as_elder') ? 'elder'
+        : mapGrants(perms, 'visibility.lift_hidden_tags') ? 'pastoral_assistant'
+        : mapGrants(perms, 'admin.dashboard.access') ? 'admin'
+        : (mapGrants(perms, 'directory.edit_identity')
+            || mapGrants(perms, 'services.builder.edit')
+            || mapGrants(perms, 'printables.edit')) ? 'editor'
+        : mapGrants(perms, 'directory.view') ? 'member'
+        : 'viewer';
+    }
+
+    function rankFromLevelId(id) {
+      return id == 'level_super_admin' ? 'super_admin'
+        : id == 'level_kiosk' ? 'kiosk'
+        : id == 'level_elder' ? 'elder'
+        : id == 'level_pastoral_assistant' ? 'pastoral_assistant'
+        : id == 'level_admin' ? 'admin'
+        : id == 'level_editor' ? 'editor'
+        : id == 'level_member' ? 'member'
+        : 'viewer';
+    }
+
+    function keyOn(key) {
+      let data = userData();
+      return data != null && (
+        ('permissions' in data)
+          ? mapGrants(data.permissions, key)
+          : (('accountLevelId' in data) && presetGrants(data.accountLevelId, key))
+      );
+    }
+
+    function accessRank() {
+      let data = userData();
+      return !userDocExists() ? ''
+        : !('permissions' in data) ? rankFromLevelId(('accountLevelId' in data) ? data.accountLevelId : '')
+        : (data.permissions is map) ? rankFromMap(data.permissions) : 'viewer';
+    }
+
     function isAdmin() {
-      return request.auth != null && permissionLevel() in ['admin', 'super_admin'];
+      return accessRank() == 'admin'
+        || accessRank() == 'super_admin'
+        || mapHas('admin.dashboard.access');
     }
 
-    // Helper to check if user is editor
     function isEditor() {
-      return request.auth != null && (
-        permissionLevel() in ['editor', 'admin', 'elder', 'super_admin', 'pastoral_assistant']
-        || isPastoralAssistant()
-      );
+      return accessRank() in ['editor', 'admin', 'elder', 'super_admin', 'pastoral_assistant']
+        || mapHas('directory.edit_identity')
+        || mapHas('printables.edit')
+        || mapHas('services.builder.edit')
+        || mapHas('roles.manager.edit')
+        || mapHas('hymns.edit');
     }
 
-    // MS-722 (ADR 0081): a write door names the MS-695 permission key that
-    // Admin Accounts grants for the page that writes there, so a custom
-    // level built from Member plus that key (Admin → Accounts) can do what
-    // its page offers. WRITE paths only; reads are untouched. Signed out is
-    // still no: hasPermission needs a user doc.
-    //
-    // ⚠ MS-725 (ADR 0082): ONCE A MAP HAS BEEN SAVED ON THE ACCOUNT, THE KEY
-    // IS THE WHOLE ANSWER. MS-722 kept isEditor() as a plain OR so nobody
-    // lost a door, and that made the grant one-way: an account whose stored
-    // permissionLevel is `editor` kept all nineteen doors however the admin
-    // set the map, so unticking a key in Admin → Accounts changed nothing.
-    // A permission that cannot be taken away is not a permission.
-    //
-    // usesPermissionMap() is the marker, and it is the marker because it is
-    // exactly what Admin → Accounts writes: assignUserAccountLevel() stores
-    // userWriteFromLevel()'s `permissions` map on users/{uid} every time a
-    // level is assigned. An account that has never been through that screen
-    // has no map to read, so it keeps the level names — the same shape
-    // readsAsEditor(), writesTheRecord() and countsAsElder() already use.
     function editsWith(key) {
-      return hasPermission(key) || (!usesPermissionMap() && isEditor());
+      return keyOn(key);
     }
 
-    // MS-727: the same shape as editsWith, on the admin ladder. app_config
-    // was isAdmin() (admin / super_admin by name). A custom level holding
-    // admin.dashboard.access can now write what the Admin Dashboard offers;
-    // a leftover account with no map still uses the level names. Using
-    // editsWith here would let every leftover editor in — the wrong OR.
+    // MS-821. Who may change or delete a Person outright. isEditor() is true
+    // for ANY one of five edit keys, so a level built to edit hymns could
+    // delete members and rewrite their records. The directory key, or a rank
+    // above editor, or a preset editor level (not a custom map that merely
+    // ranks as one because it edits printables or Services).
+    function editsPeople() {
+      let data = userData();
+      let rank = accessRank();
+      return rank in ['admin', 'elder', 'super_admin', 'pastoral_assistant']
+        || (rank == 'editor' && data != null && !('permissions' in data))
+        || keyOn('directory.edit_identity');
+    }
+
     function editsAsAdmin(key) {
-      return hasPermission(key) || (!usesPermissionMap() && isAdmin());
+      return keyOn(key);
     }
 
-    // Helper to check if user is a member or above. The floor of the `member`
-    // visibility rung (MS-99): a viewer is signed in but sees only public things.
     function isMember() {
-      return request.auth != null && (
-        permissionLevel() in ['member', 'editor', 'admin', 'elder', 'super_admin', 'pastoral_assistant']
-        || isPastoralAssistant()
-      );
+      return accessRank() in ['member', 'editor', 'admin', 'elder', 'super_admin', 'pastoral_assistant']
+        || mapHas('directory.view')
+        || mapHas('visibility.rung.member')
+        || isEditor();
     }
 
-    // The Person record this signed-in User is linked to, or null. Event
-    // `participant` visibility is answered against Person ids, not User ids.
     function myPersonId() {
       let d = get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
       return ('personId' in d) ? d.personId : null;
     }
 
-    // Helper to check if user is elder or super_admin
     function isElder() {
-      return request.auth != null && permissionLevel() in ['elder', 'super_admin'];
+      return keyOn('shep.count_as_elder');
     }
 
-    // Pastoral Assistant is the permissionLevel `pastoral_assistant` (ADR-0076).
-    // The old `pastoralAssistant` flag still counts, so an account granted
-    // that way keeps the doors until an admin sets the role. Fail closed: a
-    // missing user doc is not a Pastoral Assistant. isElder() is not this —
-    // a Pastoral Assistant is never counted as an elder.
     function isPastoralAssistant() {
-      return request.auth != null
-        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
-        && (permissionLevel() == 'pastoral_assistant'
-            || get(/databases/$(database)/documents/users/$(request.auth.uid)).data.pastoralAssistant == true);
-    }
-
-    // MS-695: denormalized permission map on users/{uid}. When absent, fall
-    // back to the permissionLevel ladder (MS-119 / ADR-0077).
-    function signedInUserData() {
-      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
-    }
-
-    function usesPermissionMap() {
-      return isSignedIn()
-        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
-        && ('permissions' in signedInUserData());
+      return accessRank() == 'pastoral_assistant';
     }
 
     function hasPermission(key) {
-      return usesPermissionMap()
-        && signedInUserData().permissions[key] == true;
+      return keyOn(key);
     }
 
-    // isPastoralAssistant() is consulted even when a permissions map is
-    // present. Assigning Pastoral Assistant used to leave a Member map (or
-    // member-sync wrote permissionLevel back to member while the map was
-    // right). The rung itself still opens an elder's doors. countsAsElder
-    // does not: a Pastoral Assistant is never an elder.
+    // Presets that hold visibility.lift_hidden_tags are super admin, elder, and
+    // pastoral assistant. A saved map does not get those for free: only the
+    // lift key, or a rank of pastoral assistant (which itself required the key).
     function readsAsElder() {
-      return hasPermission('visibility.lift_hidden_tags')
-        || isPastoralAssistant()
-        || (!usesPermissionMap() && isElder());
+      let data = userData();
+      return data != null && (
+        ('permissions' in data)
+          ? (mapGrants(data.permissions, 'visibility.lift_hidden_tags') || isPastoralAssistant())
+          : (('accountLevelId' in data) && (
+              data.accountLevelId == 'level_super_admin'
+              || data.accountLevelId == 'level_elder'
+              || data.accountLevelId == 'level_pastoral_assistant'))
+      );
     }
 
     function readsAsEditor() {
-      return hasPermission('directory.edit_identity')
-        || hasPermission('printables.edit')
-        || isPastoralAssistant()
-        || (!usesPermissionMap() && isEditor());
+      return isEditor() || isPastoralAssistant();
     }
 
+    // shep.notes.write on a preset is the same three levels as the lift key.
+    // A map can hold the key without that rank, and a pastoral assistant rank
+    // can hold the rank without the key. Both still write.
     function writesTheRecord() {
-      return hasPermission('shep.notes.write')
-        || isPastoralAssistant()
-        || (!usesPermissionMap() && isElder());
+      let data = userData();
+      return data != null && (
+        ('permissions' in data)
+          ? (mapGrants(data.permissions, 'shep.notes.write') || isPastoralAssistant())
+          : (('accountLevelId' in data) && (
+              data.accountLevelId == 'level_super_admin'
+              || data.accountLevelId == 'level_elder'
+              || data.accountLevelId == 'level_pastoral_assistant'))
+      );
     }
 
-    // MS-594: shepherding decision/write actions in software. Same grant as
-    // writesTheRecord; a separate name so counted-as-elder (isElder) stays
-    // permission-level only.
     function canDecide() {
-      return hasPermission('shep.tags.manage')
-        || isPastoralAssistant()
-        || (!usesPermissionMap() && isElder());
+      let data = userData();
+      return data != null && (
+        ('permissions' in data)
+          ? (mapGrants(data.permissions, 'shep.tags.manage') || isPastoralAssistant())
+          : (('accountLevelId' in data) && (
+              data.accountLevelId == 'level_super_admin'
+              || data.accountLevelId == 'level_elder'
+              || data.accountLevelId == 'level_pastoral_assistant'))
+      );
     }
 
     function countsAsElder() {
-      return hasPermission('shep.count_as_elder')
-        || (!usesPermissionMap() && isElder());
+      return keyOn('shep.count_as_elder');
     }
 
-    // A Kiosk is its own permissionLevel, not a rung on the ladder (MS-318,
-    // ADR-0041). Parallel to isElder()/isAdmin(): an allowlist of one value.
     function isKiosk() {
-      return request.auth != null && permissionLevel() == 'kiosk';
+      return accessRank() == 'kiosk';
     }
 
     // ⚠ NO USER DOCUMENT MAY CARRY A PASSWORD (MS-241, ADR-0040).
@@ -196,11 +367,25 @@ service cloud.firestore {
       // Allow users to create their own document as 'viewer' (permission level).
       // During the MS-119 migration the client writes both permissionLevel and the
       // legacy role; accept whichever the new doc carries.
+      // Self-signup is a viewer account level and nothing else. A permissions
+      // map on this write would let the client grant itself doors. The
+      // pastoralAssistant field is not a grant; it still may not be set true
+      // here. role and permissionLevel are not read.
+      //
+      // MS-811: the keys are an allowlist, not a list of what is barred. A
+      // personId written here made the account count as that Person to every
+      // Roles callable, so a new sign-up could answer, take or trade any
+      // member's places. A list of forbidden keys is the shape that let it
+      // through; only what the sign-up page writes is accepted now. The link
+      // to a Person is made by an admin or a resolved Directory Request.
       allow create: if request.auth != null && request.auth.uid == userId
         && noStoredPassword()
-        && (('permissionLevel' in request.resource.data)
-            ? request.resource.data.permissionLevel == 'viewer'
-            : request.resource.data.role == 'viewer')
+        && request.resource.data.keys().hasOnly(
+             ['email', 'accountLevelId', 'createdAt', 'dashboardCardOrder'])
+        && request.resource.data.accountLevelId == 'level_viewer'
+        // Already outside the allowlist; kept so the two refusals the rest of
+        // the rules tests name stay readable on their own.
+        && !('permissions' in request.resource.data)
         && (!('pastoralAssistant' in request.resource.data)
             || request.resource.data.pastoralAssistant != true);
       // Allow users to update ONLY their own dashboard card arrangement.
@@ -299,9 +484,43 @@ service cloud.firestore {
     // in the Roles Manager by editors; read like the other config collections so
     // any surface showing who is serving can name the Role. Liturgical Roles are
     // NOT here — they are code-defined and locked, so there is nothing to store.
+    // A Role is held to the model RolesCore.validateDefinition describes: a
+    // servant Role (liturgical ones live in code), a usable slug that never
+    // changes once set, at least one slot, and the 600-character description
+    // cap. Rules cannot loop, so each slot and restriction is left to
+    // validateDefinition; the lists are only bounded. Fields this list does not
+    // name may stay on an older Role, but no write may add or change one.
+    function roleFields() {
+      return ['name', 'slug', 'family', 'slots', 'nextSlotSeq', 'restrictions',
+              'intensity', 'allowsAnotherRole', 'description'];
+    }
+
+    function roleShapeOk(d) {
+      return d.name is string && d.name.size() > 0 && d.name.size() <= 200
+        && d.get('family', '') == 'servant'
+        && d.slots is list && d.slots.size() > 0 && d.slots.size() <= 100
+        && (!('slug' in d) || (d.slug is string && d.slug.size() <= 120
+              && d.slug.matches('^[a-z0-9_]+$')))
+        && (!('nextSlotSeq' in d) || (d.nextSlotSeq is int && d.nextSlotSeq >= 1))
+        && (!('restrictions' in d) || (d.restrictions is list && d.restrictions.size() <= 100))
+        && (!('intensity' in d) || d.intensity == null
+              || ((d.intensity is int || d.intensity is float) && d.intensity >= 0))
+        && (!('allowsAnotherRole' in d) || d.allowsAnotherRole is bool)
+        && (!('description' in d) || d.description == null
+              || (d.description is string && d.description.size() <= 600));
+    }
+
     match /roles/{roleId} {
       allow read: if true;
-      allow create, update, delete: if editsWith('roles.manager.edit');
+      allow create: if editsWith('roles.manager.edit')
+        && request.resource.data.keys().hasOnly(roleFields())
+        && roleShapeOk(request.resource.data);
+      allow update: if editsWith('roles.manager.edit')
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(roleFields())
+        && roleShapeOk(request.resource.data)
+        && (!('slug' in resource.data) || resource.data.slug == null
+              || request.resource.data.get('slug', null) == resource.data.slug);
+      allow delete: if editsWith('roles.manager.edit');
     }
 
     // ── Events, occurrences, and the five-rung visibility ladder ────────────
@@ -341,9 +560,10 @@ service cloud.firestore {
     // Role on them.
     function rankCanSee(visibility) {
       return visibility == 'public'
-        || (isMember() && visibility == 'member')
-        || (readsAsEditor() && visibility in ['member', 'participant', 'editor'])
-        || (readsAsElder() && visibility == 'elder');
+        || (visibility == 'member' && (isMember() || mapHas('visibility.rung.member')))
+        || (visibility == 'participant' && (readsAsEditor() || mapHas('visibility.rung.participant')))
+        || (visibility == 'editor' && (readsAsEditor() || mapHas('visibility.rung.editor')))
+        || (visibility == 'elder' && (readsAsElder() || mapHas('visibility.rung.elder')));
     }
 
     // The one rung rank cannot answer, checked against the occurrence's own
@@ -627,10 +847,6 @@ service cloud.firestore {
       allow read: if true;
       allow create, update, delete: if editsWith('services.builder.edit');
     }
-    match /liturgy_elements/{elementId} {
-      allow read: if true;
-      allow create, update, delete: if editsWith('services.builder.edit');
-    }
     match /liturgy_orders/{orderId} {
       allow read: if true;
       allow create, update, delete: if editsWith('services.builder.edit');
@@ -669,8 +885,16 @@ service cloud.firestore {
       // Delete stays on the editor ladder — out of this ticket's scope.
       allow create: if editsWith('directory.edit_identity');
       allow create: if isKiosk();
-      allow delete: if isEditor();
-      allow update: if isEditor();
+      // MS-821: the other edit keys keep only what their own pages write to a
+      // Person: the serve counter the Service builder and calendar move, and
+      // the Roles page's "Doesn't serve". First, because it is the cheap one:
+      // the rules engine stops at 1000 expressions per request, and the full
+      // check below spent enough of them that this one ran out.
+      allow update: if request.resource.data.diff(resource.data).affectedKeys()
+            .hasOnly(['totalInvolvements', 'doesNotServe', 'updatedAt'])
+        && isEditor();
+      allow delete: if editsPeople();
+      allow update: if editsPeople();
 
       // MS-709: a greeter fixes a name at the desk (ADR-0075). The name and
       // its remembered parts only — contact, sex, membership and the rest stay
@@ -721,7 +945,18 @@ service cloud.firestore {
       // Person, so it moves with the Person (MS-197, ADR-0031).
       match /involvement/{involvementId} {
         allow read: if isSignedIn();
-        allow create, update, delete: if isEditor();
+        // MS-821: the pages that record serving, not any edit key. The
+        // directory, the Service builder (Sundays) and the Event page (a past
+        // date's open questions).
+        allow create, update, delete: if editsPeople()
+          || keyOn('services.builder.edit')
+          || keyOn('calendar.events.edit');
+        // Auto-assign seeds history it can then weigh (seedServe), and may
+        // take its own seeds back. Only those.
+        allow create: if keyOn('roles.manager.edit')
+          && request.resource.data.get('seeded', false) == true;
+        allow delete: if keyOn('roles.manager.edit')
+          && resource.data.get('seeded', false) == true;
       }
 
       // Which named person was prayed for, and when. The public "was prayed
@@ -816,26 +1051,6 @@ service cloud.firestore {
       allow delete: if isKiosk();
     }
 
-    // Households (MS-319): the foyer grouping the kiosk used to keep. Since
-    // MS-709 (ADR-0075) the kiosk groups by the `families` records and no
-    // screen reads or writes this collection; the rules stay until the
-    // leftover documents are cleared.
-    match /households/{householdId} {
-      allow read: if isSignedIn() || isKiosk();
-      allow create: if isKiosk() || isEditor();
-      // A Kiosk may only ADD (MS-321). The name may not change and nobody
-      // already in may be dropped, so "put my brother in the Harris household"
-      // is legal and renaming or emptying one is not. That is the whole
-      // difference between a greeter and an editor, said in the rule rather
-      // than trusted to the page — and it is what lets the kiosk grow a
-      // household instead of minting a second one beside it.
-      allow update: if isEditor() || (isKiosk()
-        && (!('name' in resource.data) || request.resource.data.name == resource.data.name)
-        && request.resource.data.memberIds is list
-        && request.resource.data.memberIds.hasAll(resource.data.memberIds));
-      allow delete: if isEditor();
-    }
-
     // Shepherding System — elders and super_admins only
     match /shepherding_tags/{tagId} {
       allow read: if readsAsElder();
@@ -905,13 +1120,6 @@ service cloud.firestore {
       allow write: if canDecide();
     }
 
-    // Superseded by shepherding_tasks (MS-79). Left readable so the migration
-    // can be checked before anything is thrown away.
-    match /shepherding_reminders/{reminderId} {
-      allow read: if readsAsElder();
-      allow write: if canDecide();
-    }
-
     // A Task, and the standing commitment behind a repeating one — one
     // collection, because a series IS a Task that happens more than once.
     // Elder-gated, like everything else on the Shepherd Dashboard: pastoral
@@ -927,11 +1135,6 @@ service cloud.firestore {
     match /shepherding_task_occurrences/{occurrenceId} {
       allow read: if readsAsElder();
       allow write: if writesTheRecord();
-    }
-
-    match /elder_meetings/{meetingId} {
-      allow read: if readsAsElder();
-      allow write: if isElder();
     }
 
     match /elder_documents/{docId} {
@@ -1236,6 +1439,50 @@ service cloud.firestore {
     match /printable_templates/{templateId} {
       allow read: if readsAsEditor();
       allow write: if editsWith('printables.edit');
+    }
+
+    // ── The Resources library (MS-693, ADR-0083) ────────────────────────────
+    //
+    // The church's shelf: old Bible studies, sermon manuscripts, the new
+    // member packet, a Google Doc somebody keeps updating. ONE library, not
+    // one per group — every member reads the same shelf.
+    //
+    // ⚠ THE READ IS isMember(), AND THAT IS A DELIBERATELY DIFFERENT FLOOR
+    // FROM THE PRINTABLES BLOCK ABOVE. Printables are an editor's working
+    // material that a member sees only when one is published to them.
+    // Resources are published BY DEFINITION — the whole feature is "here is
+    // the shelf" — so there is no per-record visibility flag to check and no
+    // rung above member to climb. What it is NOT is `isSignedIn()`: a viewer
+    // is an account somebody made for themselves on a self-service sign-up
+    // page (MS-240), and handing that account the congregation's study
+    // material would make the shelf public with an email address in front of
+    // it.
+    //
+    // The write is one key on the ordinary editor ladder. Resources is a new
+    // surface, so a saved map that lacks the key takes nothing away from
+    // anybody: there was nothing here to lose.
+    //
+    // No field-shape clauses. A resource record is a name, a folder id, a
+    // storage path or a URL, and a pin rank; nothing in it is a permission, a
+    // visibility stamp, or a claim about a person, so there is no field whose
+    // forging would buy an editor something they cannot already do by writing
+    // the whole document.
+    match /resources/{resourceId} {
+      allow read: if isMember();
+      allow create, update, delete: if editsWith('resources.edit');
+    }
+
+    // Where a resource is filed: a name and the folder it sits in. A resource
+    // remembers its folder; a folder does not remember its resources
+    // (ADR-0054), so two editors filing at the same moment write two
+    // different records instead of two versions of one tree.
+    //
+    // A folder carries a pinRank of its own — the Pinned card holds folders
+    // and files in one order (ADR-0083) — which is why this collection takes
+    // the same gate rather than a narrower one.
+    match /resource_folders/{folderId} {
+      allow read: if isMember();
+      allow create, update, delete: if editsWith('resources.edit');
     }
 
     // One person's answers. Editors read them on the Responses tab; the

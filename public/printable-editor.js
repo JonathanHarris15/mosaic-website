@@ -1,8 +1,9 @@
 // The Printable editor (MS-393, MS-394) — where pages are laid out.
 //
-// Three parts: a CANVAS in the middle showing every page with generous space
-// around it, an ELEMENT PANEL on the left carrying the element tree and the
-// controls for whatever is selected, and the DATA DRAWER on the right (MS-396).
+// Four parts: a PAGES filmstrip on the far left (MS-760), an ELEMENT PANEL
+// with the selected page's tree and controls, a CANVAS in the middle showing
+// every page with generous space around it, and the DATA DRAWER on the right
+// (MS-396).
 //
 // Alpine drives the panels, the header and the dialogs. The canvas and the
 // tree are drawn by hand from the model — a page is a tree of elements that
@@ -19,16 +20,20 @@
 
 function printableEditor() {
     const global = window;
+    // Tests install PrintableCore on the real global. The editor's `window`
+    // argument is the page, which does not carry it.
+    const PrintableCore = /** @type {any} */ (/** @type {any} */ (globalThis).PrintableCore);
     // Things Alpine must NOT make reactive: DOM handles, the undo stack, the
     // CodeMirror instances (a proxied CodeMirror throws on click — see
     // service-guide-manager.js), and the drag state, which changes on every
     // mouse move and would re-run every getter if it were reactive.
     const ui = {
-        viewport: null, world: null, tree: null,
+        viewport: null, world: null, tree: null, pagesStrip: null,
         history: [], future: [],
         drag: null,          // { kind: 'pan'|'move'|'resize', ... }
         panelW: { left: 0, right: 0 },   // 0 until the stored width is read
         treeDrag: null,      // { nodeId, pageId }
+        pageDrag: null,      // { pageId } while reordering in the filmstrip
         cm: { html: null, css: null },
         pageEls: {},         // pageId -> the rendered page element
         editingText: null,   // node id being edited inline
@@ -36,6 +41,7 @@ function printableEditor() {
 
     const PAD = 600;         // world padding round the pages, so panning never feels pinned
     const GAP = 80;          // between pages
+    const PAGES_STRIP_W = 148; // fixed filmstrip; not a resizable panel
 
     // Each panel's width, dragged on its border and remembered per browser.
     // `narrow` is the width below which a field row stacks its label above
@@ -95,6 +101,17 @@ function printableEditor() {
         // and remembering which fidelity the panel is showing them at.
         sides: {},
         sideFields: [{ key: 'padding', label: 'Padding', min: 0 }, { key: 'margin', label: 'Margin', min: null }],
+        pageNumberSpots: [
+            { anchor: 'top-left', label: 'Top left', icon: 'north_west' },
+            { anchor: 'top', label: 'Top', icon: 'north' },
+            { anchor: 'top-right', label: 'Top right', icon: 'north_east' },
+            { anchor: 'left', label: 'Left', icon: 'west' },
+            { anchor: 'center', label: 'Middle', icon: 'adjust' },
+            { anchor: 'right', label: 'Right', icon: 'east' },
+            { anchor: 'bottom-left', label: 'Bottom left', icon: 'south_west' },
+            { anchor: 'bottom', label: 'Bottom', icon: 'south' },
+            { anchor: 'bottom-right', label: 'Bottom right', icon: 'south_east' },
+        ],
         borderFields: [{ key: 'border-width', label: 'Border', min: 0 }],
         customCss: '',
         pageProps: { marginMode: 'all', all: 0, tb: 0, lr: 0, top: 0, right: 0, bottom: 0, left: 0, bg: '#ffffff', name: '' },
@@ -104,6 +121,11 @@ function printableEditor() {
         savingTemplate: false,
         templateName: '',
         fileMenu: false,
+        folioPadOpen: false,
+        folioPadEntries: [],
+        folioPadBrushIndex: null,
+        folioPadError: '',
+        folioPadBaseCount: 0,
         codeOpen: false,
         codeTab: 'html',
         codeProblem: '',
@@ -116,12 +138,12 @@ function printableEditor() {
 
         // ── Derived ──────────────────────────────────────────────────────
 
-        get canEdit() { return AccessCore.writesAsEditor(this.permissionLevel); },
+        get canEdit() { return AccessCore.writesAsEditor(this.account || this.permissionLevel); },
         get template() { return this.project ? this.project.template : null; },
         get pages() { return this.project ? this.project.pages : []; },
         get currentPage() {
             if (!this.project) return null;
-            return this.pages.find(p => p.id === this.selection.pageId) || this.pages[0] || null;
+            return this.pages.find((/** @type {any} */ p) => p.id === this.selection.pageId) || this.pages[0] || null;
         },
         get selectedNode() {
             const page = this.currentPage;
@@ -159,7 +181,8 @@ function printableEditor() {
                 try {
                     const userData = await getUserData(user.uid);
                     this.currentUserData = userData || null;
-                    this.permissionLevel = (userData && (userData.permissionLevel || userData.role)) || 'viewer';
+                    this.account = userData || null;
+                    this.permissionLevel = (window.AccessCore ? AccessCore.permissionLevelOf(userData) : 'viewer');
                     if (!this.canEdit) { window.location.href = 'index.html'; return; }
                     this.currentUser = user;
                     if (!this.id) { this.problem = 'No printable was named. Open one from the library.'; return; }
@@ -187,6 +210,8 @@ function printableEditor() {
             ui.viewport = document.getElementById('pe-viewport');
             ui.world = document.getElementById('pe-world');
             ui.tree = document.getElementById('pe-tree');
+            ui.pagesStrip = document.getElementById('pe-pages-strip');
+            this.bindPageStripDrag();
             if (!ui.viewport || !ui.world) return;
             this.bindCanvasEvents();
             this.bindKeys();
@@ -214,7 +239,7 @@ function printableEditor() {
         panelLimits(side) {
             const spec = PANELS[side];
             const other = side === 'left' ? 'right' : 'left';
-            const room = window.innerWidth - CANVAS_FLOOR - (ui.panelW[other] || PANELS[other].def);
+            const room = window.innerWidth - CANVAS_FLOOR - PAGES_STRIP_W - (ui.panelW[other] || PANELS[other].def);
             const max = Math.max(spec.min, Math.min(spec.max, room));
             return { min: spec.min, max: max };
         },
@@ -424,17 +449,24 @@ function printableEditor() {
                 const pendingWrites = !!(snap.metadata && snap.metadata.hasPendingWrites);
                 if (!pendingWrites && !self.renaming && data.name) self.project.name = data.name;
                 self._live.remote(data, { pendingWrites });
-            }, { onError: (e) => console.warn('Printable is not following live changes:', e && e.message) });
+            }, { onError: (/** @type {any} */ e) => console.warn('Printable is not following live changes:', e && e.message) });
         },
         adoptPrintable(data) {
             if (!this.project) return;
             clearTimeout(this._saveTimer);
+            // Undo is pages+inputs only. A DocLive adopt that fingerprints
+            // differently (or carries stamps) but lands on the same pages and
+            // inputs must not wipe the stack — otherwise our own save echo
+            // makes Undo a no-op (MS-721).
+            const before = this.snapshot();
             const next = PrintableCore.migrate(data);
             Object.assign(this.project, next, { id: this.project.id });
             if (!this.pages.find(p => p.id === this.selection.pageId)) this.selection.pageId = this.pages[0] ? this.pages[0].id : null;
             if (this.selection.nodeId && !this.selectedNode) this.selection.nodeId = null;
-            ui.history = [this.snapshot()];
-            ui.future = [];
+            if (this.snapshot() !== before) {
+                ui.history = [this.snapshot()];
+                ui.future = [];
+            }
             this.renderAll();
             this.readProps();
         },
@@ -508,7 +540,13 @@ function printableEditor() {
 
         addPage(afterId) {
             const page = PrintableCore.buildPage(this.template, {});
-            const i = afterId ? this.pages.findIndex(p => p.id === afterId) : this.pages.length - 1;
+            let i = afterId ? this.pages.findIndex(p => p.id === afterId) : this.pages.length - 1;
+            if (i < 0) i = this.pages.length - 1;
+            // Never split an overflow run — jump to the end of that run.
+            while (i >= 0 && i < this.pages.length - 1 && !PrintableCore.canInsertAfter(this.pages, i)) {
+                const run = PrintableCore.continuationRunBounds(this.pages, this.pages[i].id);
+                i = run ? run.end : i + 1;
+            }
             this.project.pages.splice(i + 1, 0, page);
             this.commit();
             this.renderAll();
@@ -550,12 +588,21 @@ function printableEditor() {
         },
 
         movePage(pageId, delta) {
-            const i = this.pages.findIndex(p => p.id === pageId);
-            const j = i + delta;
-            if (i < 0 || j < 0 || j >= this.pages.length) return;
-            const list = this.project.pages;
-            const [pg] = list.splice(i, 1);
-            list.splice(j, 0, pg);
+            if (!delta) return;
+            const before = this.pages.map(p => p.id).join(',');
+            const next = PrintableCore.movePageRun(this.pages, pageId, delta > 0 ? 1 : -1);
+            if (next.map(p => p.id).join(',') === before) return;
+            this.project.pages = next;
+            this.commit();
+            this.renderAll();
+        },
+
+        // Drop a page run so it sits before targetPageId (or at the end when
+        // target is null). Refuses a landing that would split another run.
+        reorderPageBefore(dragPageId, targetPageId) {
+            const next = PrintableCore.reorderPageRunBefore(this.pages, dragPageId, targetPageId);
+            if (next.map(p => p.id).join(',') === this.pages.map(p => p.id).join(',')) return;
+            this.project.pages = next;
             this.commit();
             this.renderAll();
         },
@@ -565,18 +612,24 @@ function printableEditor() {
             this.selection.nodeId = null;
             this.readProps();
             this.refreshOverlays();
+            this.markPagesStripSelection();
             this.renderTree();
             this.syncCode();
         },
 
         // ── Elements ─────────────────────────────────────────────────────
 
+        /**
+         * @param {any} pageId
+         * @param {any} nodeId
+         */
         select(pageId, nodeId) {
             this.selection.pageId = pageId;
             this.selection.nodeId = nodeId;
             this.revealInTree(pageId, nodeId);
             this.readProps();
             this.refreshOverlays();
+            this.markPagesStripSelection();
             this.renderTree();
             this.syncCode();
             if (this.refreshWires) this.$nextTick(() => this.refreshWires());
@@ -590,16 +643,29 @@ function printableEditor() {
             if (this.refreshWires) this.$nextTick(() => this.refreshWires());
         },
 
+        markPagesStripSelection() {
+            if (!ui.pagesStrip) return;
+            ui.pagesStrip.querySelectorAll('.pe-pages__card').forEach(card => {
+                card.classList.toggle('is-selected', card.getAttribute('data-page') === this.selection.pageId);
+            });
+            const sel = ui.pagesStrip.querySelector('.is-selected');
+            if (sel && sel.scrollIntoViewIfNeeded) sel.scrollIntoViewIfNeeded(false);
+            else if (sel && sel.scrollIntoView) sel.scrollIntoView({ block: 'nearest' });
+        },
+
         // Where a new element goes: inside the selected box, beside a selected
         // text or image, or at the end of the page.
         addElement(kind) {
             const page = this.currentPage;
             if (!page) return;
             const dpi = this.template.dpi;
-            const node = kind === 'text' ? PrintableCore.newText(dpi) : kind === 'image' ? PrintableCore.newImage(dpi) : PrintableCore.newBox(dpi);
+            const node = kind === 'text' ? PrintableCore.newText(dpi)
+                : kind === 'image' ? PrintableCore.newImage(dpi)
+                : kind === 'page-number' ? PrintableCore.newPageNumber(dpi)
+                : PrintableCore.newBox(dpi);
             const sel = this.selectedNode;
             let parentId = null, index = null;
-            if (sel) {
+            if (sel && kind !== 'page-number') {
                 if (PrintableCore.kindOf(sel) === 'box') { parentId = sel.id; }
                 else {
                     const at = PrintableCore.locate(page, sel.id);
@@ -751,9 +817,19 @@ function printableEditor() {
         patchDrawn(node) {
             if (!ui.world || !node) return;
             const els = ui.world.querySelectorAll('[data-pid="' + node.id + '"], [data-pid^="' + node.id + '~"]');
+            const numbering = PrintableCore.isPageNumber(node) ? this.sheetNumbering(node.id) : null;
+            const placed = numbering
+                ? PrintableCore.placePageNumber(node, {
+                    pageIndex: numbering.pageIndex,
+                    numberOrigin: numbering.numberOrigin,
+                    widthPx: this.template && this.template.widthPx,
+                    heightPx: this.template && this.template.heightPx,
+                })
+                : null;
             els.forEach(el => {
                 Array.from(el.style).slice().forEach(k => el.style.removeProperty(k));
-                PrintableDom.applyStyle(el, node.style);
+                PrintableDom.applyStyle(el, placed ? placed.style : node.style);
+                if (placed && el.getAttribute('data-pid') === node.id) el.textContent = placed.text;
                 if (node.tag === 'img') {
                     if (!node.bind || !node.bind.src) {
                         const src = (node.attrs && node.attrs.src) || '';
@@ -985,17 +1061,18 @@ function printableEditor() {
         // rows still do not fit). Without the data side loaded, stand-ins.
         entries() {
             if (this.computeLayout) return this.computeLayout();
-            return this.pages.map((page, i) => ({ key: page.id, page: page, nodes: page.nodes, generated: false, originId: page.id, pageIndex: i }));
+            return this.pages.map((/** @type {any} */ page, /** @type {any} */ i) => ({ key: page.id, page: page, nodes: page.nodes, generated: false, originId: page.id, pageIndex: i }));
         },
 
         renderAll() {
             if (!ui.world || !this.template) return;
             const entries = this.entries();
+            const numberOrigin = PrintableCore.numberOriginFromEntries(entries);
             ui.world.innerHTML = '';
             ui.pageEls = {};
             const t = this.template;
-            entries.forEach((entry, i) => {
-                ui.world.appendChild(this.buildPageEl(entry, i));
+            entries.forEach((/** @type {any} */ entry, /** @type {any} */ i) => {
+                ui.world.appendChild(this.buildPageEl(entry, i, numberOrigin));
             });
             // The "+" below the last page.
             const add = document.createElement('button');
@@ -1010,12 +1087,18 @@ function printableEditor() {
             ui.world.style.width = (PAD * 2 + t.widthPx) + 'px';
             ui.world.style.height = (this.pageTop(entries.length) + PAD) + 'px';
             this.applyView();
+            this.renderPagesStrip();
             this.renderTree();
             this.refreshOverlays();
             if (this.refreshWires) this.$nextTick(() => this.refreshWires());
         },
 
-        buildPageEl(entry, index) {
+        /**
+         * @param {any} entry
+         * @param {number} index
+         * @param {number} numberOrigin
+         */
+        buildPageEl(entry, index, numberOrigin) {
             const t = this.template;
             const page = entry.page;
             const holder = document.createElement('div');
@@ -1039,7 +1122,12 @@ function printableEditor() {
             label.style.top = (-Math.round(22 / Math.max(0.2, this.view.zoom))) + 'px';
             holder.appendChild(label);
 
-            const el = PrintableDom.renderPage(Object.assign({}, page, { nodes: entry.nodes }), t, { editing: true, scopeId: page.id });
+            const el = PrintableDom.renderPage(Object.assign({}, page, { nodes: entry.nodes }), t, {
+                editing: true,
+                scopeId: page.id,
+                pageIndex: entry.pageIndex == null ? index : entry.pageIndex,
+                numberOrigin: numberOrigin == null ? 0 : numberOrigin,
+            });
             if (entry.generated) el.setAttribute('data-generated', '1');
             holder.appendChild(el);
 
@@ -1063,9 +1151,13 @@ function printableEditor() {
             const old = ui.pageEls[pageId];
             const hasLists = this.pages.some(p => { let found = false; PrintableCore.walk(p.nodes, n => { if (n.repeat) { found = true; return false; } }); return found; });
             if (i < 0 || !old || hasLists || (this.data && this.data.loaded)) { this.renderAll(); return; }
-            const fresh = this.buildPageEl({ key: pageId, page: this.pages[i], nodes: this.pages[i].nodes, generated: false, originId: pageId, pageIndex: i }, i);
+            const numberOrigin = PrintableCore.numberOriginFromEntries(this.pages.map((/** @type {any} */ page, /** @type {any} */ idx) => ({
+                page: page, nodes: page.nodes, pageIndex: idx,
+            })));
+            const fresh = this.buildPageEl({ key: pageId, page: this.pages[i], nodes: this.pages[i].nodes, generated: false, originId: pageId, pageIndex: i }, i, numberOrigin);
             old.replaceWith(fresh);
             this.refreshOverlays();
+            this.renderPagesStrip();
             this.renderTree();
             if (this.refreshWires) this.$nextTick(() => this.refreshWires());
         },
@@ -1174,9 +1266,92 @@ function printableEditor() {
 
         tagLabel(node) {
             const kind = PrintableCore.kindOf(node);
+            if (kind === 'page-number') return 'Page number';
             if (kind === 'image') return 'Image';
             if (kind === 'text') return node.tag === 'p' || node.tag === 'span' ? 'Text' : node.tag.toUpperCase();
             return node.tag === 'div' ? 'Box' : node.tag;
+        },
+
+        pageIndexOf(nodeId) {
+            const entries = this.entries();
+            const hit = entries.find(e => e.page && PrintableCore.findNode(e.page, nodeId));
+            if (hit && hit.pageIndex != null) return hit.pageIndex;
+            const page = this.pageOfNode(nodeId);
+            const i = this.pages.findIndex(p => page && p.id === page.id);
+            return i < 0 ? 0 : i;
+        },
+
+        // Drawn-sheet index and where "1" starts, from one layout. A drag
+        // and a style patch both restamp the digit, so they have to agree
+        // with the canvas.
+        sheetNumbering(nodeId) {
+            const entries = this.entries();
+            const hit = entries.find(e => e.page && PrintableCore.findNode(e.page, nodeId));
+            let pageIndex;
+            if (hit && hit.pageIndex != null) pageIndex = hit.pageIndex;
+            else {
+                const page = this.pageOfNode(nodeId);
+                const i = this.pages.findIndex(p => page && p.id === page.id);
+                pageIndex = i < 0 ? 0 : i;
+            }
+            return {
+                pageIndex: pageIndex,
+                numberOrigin: PrintableCore.numberOriginFromEntries(entries),
+            };
+        },
+
+        setPageNumber(patch) {
+            const page = this.currentPage;
+            const node = this.selectedNode;
+            if (!page || !node || !node.pageNumber) return;
+            const next = PrintableCore.updateNode(page, node.id, {
+                pageNumber: Object.assign({}, node.pageNumber, patch),
+            });
+            this.replacePage(next);
+            this.commit();
+            // Restarting changes the digit on every sheet, not just this one.
+            if (patch && Object.prototype.hasOwnProperty.call(patch, 'startHere')) this.renderAll();
+            else this.renderPage(next.id);
+            this.readProps();
+        },
+
+        matchPageInset() {
+            const page = this.currentPage;
+            const node = this.selectedNode;
+            if (!page || !node || !node.pageNumber) return;
+            const m = page.margins || {};
+            const anchor = node.pageNumber.anchor || 'free';
+            let inset = m.left;
+            if (anchor.indexOf('bottom') === 0 || anchor === 'free' || anchor === 'center') inset = m.bottom;
+            else if (anchor.indexOf('top') === 0) inset = m.top;
+            else if (anchor === 'right') inset = m.right;
+            this.setPageNumber({ inset: Math.max(0, Math.round(Number(inset) || 0)) });
+        },
+
+        livePageNumber(nodeId, patch) {
+            const page = this.pageOfNode(nodeId);
+            if (!page) return;
+            const node = PrintableCore.findNode(page, nodeId);
+            if (!node || !node.pageNumber) return;
+            const next = PrintableCore.updateNode(page, nodeId, {
+                pageNumber: Object.assign({}, node.pageNumber, patch),
+            });
+            this.replacePage(next);
+            const fresh = PrintableCore.findNode(next, nodeId);
+            const numbering = this.sheetNumbering(nodeId);
+            const placed = PrintableCore.placePageNumber(fresh, {
+                pageIndex: numbering.pageIndex,
+                numberOrigin: numbering.numberOrigin,
+                widthPx: this.template && this.template.widthPx,
+                heightPx: this.template && this.template.heightPx,
+            });
+            const el = ui.world && ui.world.querySelector('[data-pid="' + nodeId + '"]');
+            if (el) {
+                ['left', 'right', 'top', 'bottom', 'transform', 'position', 'z-index', 'margin'].forEach(k => el.style.removeProperty(k));
+                PrintableDom.applyStyle(el, placed.style);
+                el.textContent = placed.text;
+            }
+            this.refreshOverlays();
         },
 
         // ── Canvas events ────────────────────────────────────────────────
@@ -1199,6 +1374,10 @@ function printableEditor() {
             }, { passive: false });
 
             vp.addEventListener('mousedown', (e) => {
+                // The menu is drawn in the viewport. Taking it down on this
+                // press hides the command before mouseup, the click falls
+                // through onto the canvas, and the element is only deselected.
+                if (e.target.closest('.pe-menu')) return;
                 if (this.menu.open) this.menu.open = false;
                 if (e.button === 1 || (e.button === 0 && (this.spaceHeld || !e.target.closest('.pr-page')))) {
                     if (ui.editingText) return;
@@ -1213,7 +1392,25 @@ function printableEditor() {
                         const nodeId = this.originalId(target.getAttribute('data-pid'));
                         const page = this.pageOfNode(nodeId);
                         const node = page && PrintableCore.findNode(page, nodeId);
-                        if (node && node.style.position === 'absolute') {
+                        if (node && PrintableCore.isPageNumber(node)) {
+                            const pageEl = target.closest('.pr-page');
+                            const pageRect = pageEl.getBoundingClientRect();
+                            const elRect = target.getBoundingClientRect();
+                            const zoom = this.view.zoom || 1;
+                            ui.drag = {
+                                kind: 'page-number',
+                                nodeId: nodeId,
+                                sx: e.clientX,
+                                sy: e.clientY,
+                                ox: (elRect.left - pageRect.left) / zoom,
+                                oy: (elRect.top - pageRect.top) / zoom,
+                                width: elRect.width / zoom,
+                                pageWidth: pageRect.width / zoom,
+                                mirrored: PrintableCore.pageNumberMirrored(node, this.pageIndexOf(nodeId)),
+                                moved: false,
+                            };
+                            e.preventDefault();
+                        } else if (node && node.style.position === 'absolute') {
                             ui.drag = { kind: 'move', nodeId: nodeId, sx: e.clientX, sy: e.clientY,
                                 ox: parseFloat(node.style.left) || 0, oy: parseFloat(node.style.top) || 0, moved: false };
                             e.preventDefault();
@@ -1235,6 +1432,17 @@ function printableEditor() {
                     if (Math.abs(dx) + Math.abs(dy) < 2 && !d.moved) return;
                     d.moved = true;
                     this.liveStyle(d.nodeId, { left: Math.round(d.ox + dx) + 'px', top: Math.round(d.oy + dy) + 'px' });
+                } else if (d.kind === 'page-number') {
+                    const dx = (e.clientX - d.sx) / this.view.zoom, dy = (e.clientY - d.sy) / this.view.zoom;
+                    if (Math.abs(dx) + Math.abs(dy) < 2 && !d.moved) return;
+                    d.moved = true;
+                    const visualLeft = d.ox + dx;
+                    const visualTop = d.oy + dy;
+                    this.livePageNumber(d.nodeId, {
+                        anchor: 'free',
+                        left: PrintableCore.pageNumberHomeLeft(visualLeft, d.width, d.pageWidth, d.mirrored),
+                        top: Math.round(visualTop),
+                    });
                 } else if (d.kind === 'resize') {
                     const dx = (e.clientX - d.sx) / this.view.zoom, dy = (e.clientY - d.sy) / this.view.zoom;
                     d.moved = true;
@@ -1247,7 +1455,7 @@ function printableEditor() {
                 if (!d) return;
                 ui.drag = null;
                 vp.classList.remove('pe-panning');
-                if ((d.kind === 'move' || d.kind === 'resize') && d.moved) {
+                if ((d.kind === 'move' || d.kind === 'resize' || d.kind === 'page-number') && d.moved) {
                     this.commit();
                     this.readProps();
                     this.renderPage(this.pageOfNode(d.nodeId).id);
@@ -1257,7 +1465,9 @@ function printableEditor() {
 
             vp.addEventListener('click', (e) => {
                 if (ui.drag && ui.drag.moved) return;
-                if (e.target.closest('.pe-add-page') || e.target.closest('.pe-overlay')) return;
+                // A command's click bubbles here after it has run. It is not
+                // a click on empty canvas, so it must not clear the selection.
+                if (e.target.closest('.pe-menu') || e.target.closest('.pe-add-page') || e.target.closest('.pe-overlay')) return;
                 const target = e.target.closest('[data-pid]');
                 if (target) {
                     const nodeId = this.originalId(target.getAttribute('data-pid'));
@@ -1463,67 +1673,257 @@ function printableEditor() {
             return pad;
         },
 
+        // The filmstrip of pages (MS-760). Overflow runs share a vertical
+        // rail; insert gaps between sheets of the same run stay shut.
+        renderPagesStrip() {
+            if (!ui.pagesStrip || !this.project || !this.template) return;
+            const frag = document.createDocumentFragment();
+            const t = this.template;
+            const numberOrigin = PrintableCore.numberOriginFromEntries(this.pages.map((/** @type {any} */ page, /** @type {any} */ idx) => ({
+                page: page, nodes: page.nodes, pageIndex: idx,
+            })));
+            const runs = [];
+            let i = 0;
+            while (i < this.pages.length) {
+                const run = PrintableCore.continuationRunBounds(this.pages, this.pages[i].id);
+                const end = run ? run.end : i;
+                runs.push({ start: i, end: end, originId: run ? run.originId : this.pages[i].id });
+                i = end + 1;
+            }
+
+            const insertBtn = (afterIndex, enabled) => {
+                const btn = document.createElement('button');
+                btn.type = 'button';
+                btn.className = 'pe-pages__insert';
+                btn.setAttribute('data-after', String(afterIndex));
+                btn.title = enabled ? 'Insert a page here' : 'This overflow run keeps these pages together';
+                btn.setAttribute('aria-label', enabled ? 'Insert a page here' : 'Cannot insert inside an overflow run');
+                if (!enabled) btn.disabled = true;
+                else {
+                    btn.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        const afterId = afterIndex < 0 ? null : this.pages[afterIndex].id;
+                        if (afterId) this.addPage(afterId);
+                        else {
+                            const page = PrintableCore.buildPage(this.template, {});
+                            this.project.pages.unshift(page);
+                            this.commit();
+                            this.renderAll();
+                            this.selectPage(page.id);
+                            this.scrollToPage(page.id);
+                        }
+                    });
+                }
+                return btn;
+            };
+
+            frag.appendChild(insertBtn(-1, true));
+
+            runs.forEach((run) => {
+                const wrap = document.createElement('div');
+                wrap.className = 'pe-pages__run';
+                wrap.setAttribute('data-run-len', String(run.end - run.start + 1));
+                if (run.end > run.start) {
+                    const link = document.createElement('div');
+                    link.className = 'pe-pages__link';
+                    link.textContent = 'Overflow run';
+                    wrap.appendChild(link);
+                }
+                for (let p = run.start; p <= run.end; p++) {
+                    const page = this.pages[p];
+                    const card = document.createElement('button');
+                    card.type = 'button';
+                    card.className = 'pe-pages__card'
+                        + (this.selection.pageId === page.id ? ' is-selected' : '')
+                        + (page.continues && page.continues.from ? ' is-cont' : '');
+                    card.setAttribute('draggable', 'true');
+                    card.setAttribute('data-page', page.id);
+
+                    const meta = document.createElement('div');
+                    meta.className = 'pe-pages__meta';
+                    const num = document.createElement('span');
+                    num.className = 'pe-pages__num';
+                    num.textContent = String(p + 1);
+                    meta.appendChild(num);
+                    const name = document.createElement('span');
+                    name.className = 'pe-pages__name';
+                    name.textContent = page.name || (page.continues && page.continues.from ? 'Continued' : 'Page');
+                    meta.appendChild(name);
+                    const acts = document.createElement('span');
+                    acts.className = 'pe-pages__acts';
+                    const canUp = run.start > 0;
+                    const canDown = run.end < this.pages.length - 1;
+                    acts.innerHTML = '<button type="button" title="Move earlier" data-act="up"' + (canUp ? '' : ' disabled') + '><span class="material-symbols-outlined">arrow_upward</span></button>'
+                        + '<button type="button" title="Move later" data-act="down"' + (canDown ? '' : ' disabled') + '><span class="material-symbols-outlined">arrow_downward</span></button>'
+                        + '<button type="button" title="Duplicate page" data-act="dup"><span class="material-symbols-outlined">content_copy</span></button>'
+                        + '<button type="button" title="Delete page" data-act="del"><span class="material-symbols-outlined">delete</span></button>';
+                    meta.appendChild(acts);
+                    card.appendChild(meta);
+
+                    const thumb = document.createElement('div');
+                    thumb.className = 'pe-pages__thumb';
+                    thumb.style.setProperty('--pe-page-w', String(t.widthPx));
+                    thumb.style.setProperty('--pe-page-h', String(t.heightPx));
+                    thumb.style.aspectRatio = t.widthPx + ' / ' + t.heightPx;
+                    const inner = document.createElement('div');
+                    inner.className = 'pe-pages__thumb-inner';
+                    inner.style.width = t.widthPx + 'px';
+                    inner.style.height = t.heightPx + 'px';
+                    try {
+                        const mini = PrintableDom.renderPage(page, t, { editing: false, scopeId: page.id, pageIndex: p, numberOrigin: numberOrigin });
+                        mini.style.width = t.widthPx + 'px';
+                        mini.style.height = t.heightPx + 'px';
+                        inner.appendChild(mini);
+                    } catch (err) { /* thumb is best-effort */ }
+                    thumb.appendChild(inner);
+                    card.appendChild(thumb);
+
+                    card.addEventListener('click', (e) => {
+                        const act = e.target.closest('[data-act]');
+                        if (act) {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            const a = act.getAttribute('data-act');
+                            if (a === 'up') this.movePage(page.id, -1);
+                            else if (a === 'down') this.movePage(page.id, 1);
+                            else if (a === 'dup') this.duplicatePage(page.id);
+                            else if (a === 'del') this.deletePage(page.id);
+                            return;
+                        }
+                        this.selectPage(page.id);
+                        this.scrollToPage(page.id);
+                    });
+                    card.addEventListener('dragstart', (e) => {
+                        ui.pageDrag = { pageId: page.id };
+                        e.dataTransfer.effectAllowed = 'move';
+                        try { e.dataTransfer.setData('text/plain', page.id); } catch (err) { /* IE */ }
+                    });
+                    card.addEventListener('dragend', () => { ui.pageDrag = null; this.clearPageDropMarks(); });
+                    card.addEventListener('dragover', (e) => {
+                        // A page drag lands in the gap, which the strip marks.
+                        // An element dragged out of the tree still lands on the page.
+                        if (ui.pageDrag) return;
+                        if (ui.treeDrag) {
+                            e.preventDefault();
+                            card.classList.add('is-drop');
+                        }
+                    });
+                    card.addEventListener('dragleave', () => card.classList.remove('is-drop'));
+                    card.addEventListener('drop', (e) => {
+                        if (ui.pageDrag) return;
+                        e.preventDefault();
+                        card.classList.remove('is-drop');
+                        if (ui.treeDrag) {
+                            this.dropOnPage(ui.treeDrag.nodeId, page.id);
+                            ui.treeDrag = null;
+                        }
+                    });
+                    wrap.appendChild(card);
+                }
+                frag.appendChild(wrap);
+                const after = run.end;
+                const canInsert = PrintableCore.canInsertAfter(this.pages, after)
+                    || after === this.pages.length - 1;
+                frag.appendChild(insertBtn(after, canInsert));
+            });
+
+            ui.pagesStrip.innerHTML = '';
+            ui.pagesStrip.appendChild(frag);
+            const sel = ui.pagesStrip.querySelector('.is-selected');
+            if (sel && sel.scrollIntoViewIfNeeded) sel.scrollIntoViewIfNeeded(false);
+            else if (sel && sel.scrollIntoView) sel.scrollIntoView({ block: 'nearest' });
+        },
+
+        clearPageDropMarks() {
+            if (!ui.pagesStrip) return;
+            ui.pagesStrip.querySelectorAll('.is-drop').forEach(el => el.classList.remove('is-drop'));
+        },
+
+        // Page reorder listens on the strip, which outlives each redraw.
+        // The line is the insert gap closest to the pointer. A gap the run
+        // already occupies draws nothing.
+        bindPageStripDrag() {
+            const strip = ui.pagesStrip;
+            if (!strip || strip.dataset.dragBound) return;
+            strip.dataset.dragBound = '1';
+            strip.addEventListener('dragover', (e) => {
+                if (!ui.pageDrag) return;
+                const slot = this.pageSlotAt(e.clientY);
+                if (!slot) {
+                    this.clearPageDropMarks();
+                    return;
+                }
+                e.preventDefault();
+                if (e.dataTransfer) e.dataTransfer.dropEffect = 'move';
+                this.markPageSlot(slot);
+            });
+            strip.addEventListener('drop', (e) => {
+                if (!ui.pageDrag) return;
+                e.preventDefault();
+                const slot = strip.querySelector('.pe-pages__insert.is-drop');
+                const dragId = ui.pageDrag.pageId;
+                ui.pageDrag = null;
+                this.clearPageDropMarks();
+                if (!slot) return;
+                const after = Number(slot.getAttribute('data-after'));
+                this.reorderPageBefore(dragId, PrintableCore.pageReorderTarget(this.pages, after));
+            });
+            strip.addEventListener('dragleave', (e) => {
+                if (e.currentTarget.contains(e.relatedTarget)) return;
+                this.clearPageDropMarks();
+            });
+        },
+
+        pageSlotAt(clientY) {
+            if (!ui.pageDrag || !ui.pagesStrip) return null;
+            const legal = {};
+            PrintableCore.pageReorderSlots(this.pages, ui.pageDrag.pageId).forEach(after => { legal[after] = true; });
+            const slots = [];
+            ui.pagesStrip.querySelectorAll('.pe-pages__insert').forEach(el => {
+                if (el.disabled) return;
+                const after = Number(el.getAttribute('data-after'));
+                const r = el.getBoundingClientRect();
+                slots.push({ after: after, top: r.top, bottom: r.bottom, legal: !!legal[after], el: el });
+            });
+            const after = PrintableCore.nearestPageReorderSlot(slots, clientY);
+            if (after == null) return null;
+            const hit = slots.find(s => s.after === after);
+            return hit ? hit.el : null;
+        },
+
+        markPageSlot(slot) {
+            if (!ui.pagesStrip) return;
+            ui.pagesStrip.querySelectorAll('.pe-pages__insert.is-drop').forEach(el => {
+                if (el !== slot) el.classList.remove('is-drop');
+            });
+            if (slot) slot.classList.add('is-drop');
+        },
+
+        // Elements of the selected page only (MS-760). Page management lives
+        // in the filmstrip.
         renderTree() {
             if (!ui.tree || !this.project) return;
             const frag = document.createDocumentFragment();
-            this.pages.forEach((page, i) => {
-                const folded = !!this.treeCollapsed[page.id];
-                const kidCount = (page.nodes || []).length;
-                const row = document.createElement('div');
-                row.className = 'pe-tree__page' + (this.selection.pageId === page.id && !this.selection.nodeId ? ' is-selected' : '')
-                    + (folded ? ' is-collapsed' : '');
-                row.appendChild(kidCount ? this.treeTwist(page.id, folded, kidCount) : this.treeTwistSpacer());
-                const icon = document.createElement('span');
-                icon.className = 'material-symbols-outlined';
-                icon.textContent = 'description';
-                row.appendChild(icon);
-                const label = document.createElement('span');
-                label.className = 'pe-tree__label';
-                label.textContent = 'Page ' + (i + 1) + (page.name ? ' · ' + page.name : '');
-                row.appendChild(label);
-                if (folded && kidCount) {
-                    const hint = document.createElement('span');
-                    hint.className = 'pe-tree__hint';
-                    hint.textContent = kidCount + (kidCount === 1 ? ' element' : ' elements');
-                    row.appendChild(hint);
-                }
-                const acts = document.createElement('span');
-                acts.className = 'pe-tree__acts';
-                acts.innerHTML = '<button type="button" title="Move up" data-act="up"><span class="material-symbols-outlined">arrow_upward</span></button>'
-                    + '<button type="button" title="Move down" data-act="down"><span class="material-symbols-outlined">arrow_downward</span></button>'
-                    + '<button type="button" title="Duplicate page" data-act="dup"><span class="material-symbols-outlined">content_copy</span></button>'
-                    + '<button type="button" title="Delete page" data-act="del"><span class="material-symbols-outlined">delete</span></button>';
-                row.appendChild(acts);
-                row.addEventListener('click', (e) => {
-                    const act = e.target.closest('[data-act]');
-                    if (act) {
-                        const a = act.getAttribute('data-act');
-                        if (a === 'up') this.movePage(page.id, -1);
-                        else if (a === 'down') this.movePage(page.id, 1);
-                        else if (a === 'dup') this.duplicatePage(page.id);
-                        else if (a === 'del') this.deletePage(page.id);
-                        return;
-                    }
-                    if (e.target.closest('.pe-tree__twist')) return;
-                    this.selectPage(page.id);
-                    this.scrollToPage(page.id);
+            const page = this.currentPage;
+            if (page) {
+                const list = document.createElement('div');
+                list.className = 'pe-tree__list';
+                list.addEventListener('dragover', (e) => {
+                    if (!ui.treeDrag) return;
+                    e.preventDefault();
+                    list.classList.add('is-drop');
                 });
-                row.addEventListener('dragover', (e) => { if (ui.treeDrag) { e.preventDefault(); row.classList.add('is-drop'); } });
-                row.addEventListener('dragleave', () => row.classList.remove('is-drop'));
-                row.addEventListener('drop', (e) => {
-                    e.preventDefault(); row.classList.remove('is-drop');
+                list.addEventListener('dragleave', () => list.classList.remove('is-drop'));
+                list.addEventListener('drop', (e) => {
+                    e.preventDefault();
+                    list.classList.remove('is-drop');
                     if (!ui.treeDrag) return;
                     this.dropOnPage(ui.treeDrag.nodeId, page.id);
                     ui.treeDrag = null;
                 });
-                frag.appendChild(row);
-                if (!folded) {
-                    const list = document.createElement('div');
-                    list.className = 'pe-tree__list';
-                    page.nodes.forEach(n => list.appendChild(this.treeRow(page, n, 1)));
-                    frag.appendChild(list);
-                }
-            });
+                (page.nodes || []).forEach(n => list.appendChild(this.treeRow(page, n, 0)));
+                frag.appendChild(list);
+            }
             ui.tree.innerHTML = '';
             ui.tree.appendChild(frag);
             const sel = ui.tree.querySelector('.is-selected');
@@ -1541,8 +1941,9 @@ function printableEditor() {
             row.style.paddingLeft = (8 + depth * 14) + 'px';
             row.setAttribute('draggable', 'true');
             row.setAttribute('data-node', node.id);
-            const icon = kind === 'image' ? 'image' : kind === 'text' ? 'title' : node.repeat ? 'repeat' : 'crop_square';
-            const preview = kind === 'text' ? (node.text || '').slice(0, 28) : '';
+            const icon = kind === 'page-number' ? 'numbers' : kind === 'image' ? 'image' : kind === 'text' ? 'title' : node.repeat ? 'repeat' : 'crop_square';
+            const pageAt = this.pages.findIndex(p => p.id === page.id);
+            const preview = kind === 'page-number' ? String(pageAt + 1) : kind === 'text' ? (node.text || '').slice(0, 28) : '';
             row.appendChild(kids.length ? this.treeTwist(node.id, folded, kids.length) : this.treeTwistSpacer());
             const ic = document.createElement('span');
             ic.className = 'material-symbols-outlined';
@@ -1749,24 +2150,167 @@ function printableEditor() {
                 + ' .pe-sheet { width: ' + t.widthIn + 'in; height: ' + t.heightIn + 'in; overflow: hidden; page-break-after: always; break-after: page; position: relative; }'
                 + ' .pe-sheet > .pr-page { transform: scale(' + scale + '); transform-origin: 0 0; }';
             layer.appendChild(style);
-            const pages = this.printPages ? this.printPages() : this.pages.map(p => ({ page: p }));
-            pages.forEach(entry => {
+            const pages = this.printPages ? this.printPages() : this.pages.map((p, i) => ({ page: p, pageIndex: i }));
+            const numberOrigin = PrintableCore.numberOriginFromEntries(pages.map((entry, i) => ({
+                page: entry.page,
+                nodes: (entry.page && entry.page.nodes) || [],
+                pageIndex: entry.pageIndex == null ? i : entry.pageIndex,
+            })));
+            pages.forEach((entry, i) => {
                 const sheet = document.createElement('div');
                 sheet.className = 'pe-sheet';
-                sheet.appendChild(PrintableDom.renderPage(entry.page, t, { values: entry.values || null }));
+                sheet.appendChild(PrintableDom.renderPage(entry.page, t, {
+                    values: entry.values || null,
+                    pageIndex: entry.pageIndex == null ? i : entry.pageIndex,
+                    numberOrigin: numberOrigin,
+                }));
                 layer.appendChild(sheet);
             });
             this.beginPrint(layer);
+        },
+
+        get folioPadNeedCount() {
+            const Ex = typeof PrintableExportCore !== 'undefined' ? PrintableExportCore : null;
+            return Ex ? Ex.folioPadNeed(this.folioPadEntries) : 0;
+        },
+        get folioPadTargetCount() {
+            return (this.folioPadEntries || []).length + this.folioPadNeedCount;
+        },
+        get folioPadReady() {
+            const Ex = typeof PrintableExportCore !== 'undefined' ? PrintableExportCore : null;
+            return !!(Ex && Ex.folioReadyToPrint(this.folioPadEntries));
+        },
+        get folioPadBrushLabel() {
+            const Ex = typeof PrintableExportCore !== 'undefined' ? PrintableExportCore : null;
+            const i = this.folioPadBrushIndex;
+            if (i == null || i < 0 || i >= (this.folioPadEntries || []).length) return '';
+            return Ex ? Ex.entryLabel(this.folioPadEntries[i], i) : ('Page ' + (i + 1));
         },
 
         printFolio() {
             this.fileMenu = false;
             if (!this.project || !this.template) return;
             this.finishTextEdit();
-            const layer = document.getElementById('pe-print');
-            if (!layer || typeof PrintableDom.mountFolioPrint !== 'function') return;
+            const Ex = typeof PrintableExportCore !== 'undefined' ? PrintableExportCore : null;
+            if (!Ex || typeof PrintableDom.mountFolioPrint !== 'function') return;
             const entries = this.computeLayout ? this.computeLayout({ persist: false }) : [];
             if (!entries.length) return;
+            // Always open the board so the operator can delete or stamp
+            // pages before printing — even when the count is already ×4.
+            this.openFolioPad(entries);
+        },
+
+        openFolioPad(entries) {
+            const Ex = typeof PrintableExportCore !== 'undefined' ? PrintableExportCore : null;
+            if (!Ex || !(entries || []).length) return;
+            this.folioPadEntries = Ex.cloneEntriesForFolio(entries);
+            this.folioPadBaseCount = entries.length;
+            this.folioPadError = '';
+            let brush = null;
+            for (let i = this.folioPadEntries.length - 1; i >= 0; i--) {
+                if (this.folioPadEntries[i] && !this.folioPadEntries[i].blank) { brush = i; break; }
+            }
+            this.folioPadBrushIndex = brush;
+            this.folioPadOpen = true;
+            this.$nextTick(() => this.paintFolioPadBoard());
+        },
+
+        closeFolioPad() {
+            this.folioPadOpen = false;
+            this.folioPadError = '';
+            this.folioPadEntries = [];
+            this.folioPadBrushIndex = null;
+            const host = document.getElementById('pe-folio-board');
+            if (host) host.innerHTML = '';
+        },
+
+        paintFolioPadBoard() {
+            const host = document.getElementById('pe-folio-board');
+            if (!host || !this.template || typeof PrintableDom.mountFolioPadBoard !== 'function') return;
+            const ed = this;
+            PrintableDom.mountFolioPadBoard(host, {
+                template: this.template,
+                entries: this.folioPadEntries,
+                brushIndex: this.folioPadBrushIndex,
+                needCount: this.folioPadNeedCount,
+                onBrush: (i) => ed.setFolioBrush(i),
+                onInsert: (after) => ed.insertFolioBrushAt(after),
+                onRemove: (i) => ed.removeFolioPadRow(i),
+            });
+        },
+
+        setFolioBrush(index) {
+            const i = Math.round(Number(index));
+            if (!Number.isFinite(i) || i < 0 || i >= (this.folioPadEntries || []).length) return;
+            const entry = this.folioPadEntries[i];
+            if (!entry || entry.blank) {
+                this.folioPadError = 'Pick a real page for the brush.';
+                return;
+            }
+            this.folioPadBrushIndex = i;
+            this.folioPadError = '';
+            this.paintFolioPadBoard();
+        },
+
+        insertFolioBrushAt(afterIndex) {
+            const Ex = typeof PrintableExportCore !== 'undefined' ? PrintableExportCore : null;
+            if (!Ex) return;
+            const brush = this.folioPadBrushIndex;
+            if (brush == null || brush < 0) {
+                this.folioPadError = 'Pick a page for the brush first.';
+                return;
+            }
+            if (this.folioPadNeedCount <= 0) {
+                this.folioPadError = 'The fold is already a multiple of 4.';
+                return;
+            }
+            const result = Ex.applyFolioPad(this.folioPadEntries, {
+                kind: 'duplicate',
+                sourceIndex: brush,
+                afterIndex: afterIndex,
+            });
+            if (!result.ok) {
+                this.folioPadError = result.why || 'Could not place that page.';
+                return;
+            }
+            this.folioPadEntries = result.entries;
+            this.folioPadError = '';
+            if (afterIndex < brush) this.folioPadBrushIndex = brush + 1;
+            this.$nextTick(() => this.paintFolioPadBoard());
+        },
+
+        removeFolioPadRow(index) {
+            const Ex = typeof PrintableExportCore !== 'undefined' ? PrintableExportCore : null;
+            if (!Ex) return;
+            const result = Ex.removeFolioPadAt(this.folioPadEntries, index);
+            if (!result.ok) {
+                this.folioPadError = result.why || 'Could not remove that page.';
+                return;
+            }
+            const brush = this.folioPadBrushIndex;
+            this.folioPadEntries = result.entries;
+            this.folioPadError = '';
+            if (brush == null) {
+                /* keep */
+            } else if (brush === index) {
+                this.folioPadBrushIndex = null;
+            } else if (brush > index) {
+                this.folioPadBrushIndex = brush - 1;
+            }
+            this.$nextTick(() => this.paintFolioPadBoard());
+        },
+
+        confirmFolioPadPrint() {
+            if (!this.folioPadReady) return;
+            const stack = this.folioPadEntries.slice();
+            this.closeFolioPad();
+            this.runFolioPrint(stack);
+        },
+
+        runFolioPrint(entries) {
+            const layer = document.getElementById('pe-print');
+            if (!layer || !this.template || !(entries || []).length) return;
+            if (typeof PrintableDom.mountFolioPrint !== 'function') return;
             PrintableDom.mountFolioPrint(layer, this.template, entries);
             this.beginPrint(layer);
         },

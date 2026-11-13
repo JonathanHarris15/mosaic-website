@@ -37,10 +37,12 @@ const {FirebaseOAuthProvider} = require("./mcp-auth");
  *     the sign-in page
  * @param {function(): string} deps.geminiKey reads the Gemini secret
  * @param {object} deps.fieldValues {serverTimestamp, deleteField} factories
+ * @param {object} [deps.bucket] the Cloud Storage bucket resource uploads
+ *     land in (MS-693)
  * @return {Promise<object>} the Express app
  */
 async function buildApp(
-    {db, auth, issuerUrl, webConfig, geminiKey, fieldValues}) {
+    {db, auth, issuerUrl, webConfig, geminiKey, fieldValues, bucket}) {
   const [{mcpAuthRouter, getOAuthProtectedResourceMetadataUrl},
     {requireBearerAuth}] = await Promise.all([
     import("@modelcontextprotocol/sdk/server/auth/router.js"),
@@ -138,16 +140,13 @@ async function buildApp(
     resourceMetadataUrl: getOAuthProtectedResourceMetadataUrl(resourceUrl),
   }), async (req, res) => {
     const info = req.auth || {};
-    const extra = info.extra || {};
+    const auth = callerFromExtra(info.extra || {});
     await mcpServer.handleMcpRequest(req, res, {
       db,
-      auth: {
-        uid: extra.uid,
-        permissionLevel: extra.permissionLevel,
-        pastoralAssistant: extra.pastoralAssistant === true,
-      },
+      auth,
       geminiKey,
       fieldValues,
+      bucket,
       // The server announces its seal at this origin. Threaded from the one
       // place that decides the origin rather than written down a second
       // time, so a move cannot leave a dead image behind.
@@ -206,4 +205,25 @@ function errorPage(message) {
 <h1>Could not connect</h1><p>${safe}</p></div></body></html>`;
 }
 
-module.exports = {buildApp, errorPage};
+/**
+ * The account the MCP tools see. A present permissions field is copied
+ * even when it is not a map (`null`, `false`, `""`), so accountLevelId
+ * cannot answer instead.
+ * @param {object} extra token extra from verifyAccessToken
+ * @return {object} the caller
+ */
+function callerFromExtra(extra) {
+  const info = /** @type {Record<string, *>} */ (extra || {});
+  const auth = {
+    uid: info.uid,
+    permissionLevel: info.permissionLevel,
+    pastoralAssistant: info.pastoralAssistant === true,
+    accountLevelId: info.accountLevelId || null,
+  };
+  if (info.permissionsPresent === true) {
+    return Object.assign({}, auth, {permissions: info.permissions});
+  }
+  return auth;
+}
+
+module.exports = {buildApp, errorPage, callerFromExtra};

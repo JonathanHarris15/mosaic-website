@@ -83,7 +83,7 @@ test('a text with nothing around it browses: pick a Sunday, set which one, and t
     assert.deepEqual(ed.querySpecs.map(s => s.key), ['when']);
     ed.setQueryParam('when', { mode: 'next' });
     assert.deepEqual(ed.browseParams('sunday').when, { mode: 'next' });
-    const theme = ed.querySundayGroups.service.find(f => f.key === 'theme');
+    const theme = ed.querySundayGroups.identity.find(f => f.key === 'theme');
     assert.ok(theme, 'next Sunday\'s theme is a chip');
     ed.onSundayChipDragStart(dragEvent(), 'sunday', theme);
     assert.deepEqual(ed.dragField.params, { when: { mode: 'next' } }, 'the wire reads next Sunday, not this one');
@@ -93,18 +93,19 @@ test('a text with nothing around it browses: pick a Sunday, set which one, and t
     assert.equal(ed.refreshed, 1, 'a new wire reads today\'s data');
 });
 
-test('scripture sits with the Sunday results, and both chips carry the Sunday the builder is on', () => {
+test('scripture sits on its liturgy placement, and both chips carry the Sunday the builder is on', () => {
     const { ed } = editor({ nodes: [text('verse')], select: 'verse' });
     ed.setQuerySource('sunday');
     ed.setQueryParam('when', { mode: 'date', date: '2026-10-18' });
     const groups = ed.querySundayGroups;
-    const sermon = groups.scripture.find(r => r.key === 'sermon');
-    assert.ok(sermon && groups.scripture.some(r => r.key === 'keyVerse'));
-    assert.ok(!groups.service.some(f => f.key === 'sermon'), 'a reading is not a service chip');
-    ed.onScriptureChipDragStart(dragEvent(), sermon, 'citation');
+    const sermon = groups.elements.find(e => e.id === 'sermon');
+    assert.ok(sermon && sermon.scripture, 'sermon is a scripture placement');
+    assert.ok(groups.keyVerse && groups.keyVerse.key === 'keyVerse');
+    assert.ok(!groups.identity.some(f => f.key === 'sermon'), 'a reading is not a service chip');
+    ed.onScriptureChipDragStart(dragEvent(), sermon.scripture, 'citation');
     assert.deepEqual(ed.dragField.params, { when: { mode: 'date', date: '2026-10-18' } });
     assert.ok(!ed.dragField.reading, 'Reference is the citation');
-    ed.onScriptureChipDragStart(dragEvent(), sermon, 'passage');
+    ed.onScriptureChipDragStart(dragEvent(), sermon.scripture, 'passage');
     assert.equal(ed.dragField.reading, 'passage', 'Words are the verses');
     ed.bindField('pg1', 'verse', ed.dragField);
     const bind = Core.findNode(ed.currentPage, 'verse').bind.text;
@@ -140,7 +141,7 @@ test('a directory: browse People, keep it to members, then iterate the selected 
     const card = Core.findNode(ed.currentPage, 'card');
     assert.equal(card.repeat.source, 'people');
     assert.equal(card.repeat.params.membership, 'members');
-    assert.deepEqual(Object.keys(card.repeat).sort(), ['continueWith', 'layout', 'omitWhenEmpty', 'overflow', 'params', 'source']);
+    assert.deepEqual(Object.keys(card.repeat).sort(), ['continueWith', 'from', 'layout', 'omitWhenEmpty', 'overflow', 'params', 'source', 'to']);
     assert.equal(ed.queryScope, 'own', 'the builder is now the box\'s own query');
     ed.setQueryParam('sort', 'first');
     assert.equal(Core.findNode(ed.currentPage, 'card').repeat.params.sort, 'first', 'a box\'s filter is saved on its Repeat');
@@ -209,6 +210,49 @@ test('hymn overflow and order rows: the Sunday lists a box can repeat over are a
     assert.equal(node.repeat.overflow, 'clip');
     ed.setRepeatOverflow('new-page');
     assert.equal(Core.findNode(ed.currentPage, 'sheet').repeat.overflow, 'new-page', 'a long hymn keeps real pages');
+    ed.setRepeatRange('from', 1);
+    ed.setRepeatRange('to', 3);
+    const ranged = Core.findNode(ed.currentPage, 'sheet').repeat;
+    assert.equal(ranged.from, 1);
+    assert.equal(ranged.to, 3);
+});
+
+test('start and stop in the query builder are the slice this page draws', () => {
+    const hymns = ['A Christian\'s Daily Prayer', 'Only a Holy God', 'Firm Foundation', 'He Leadeth Me', 'Take My Life'];
+    const { ed, ui } = editor({
+        nodes: [box('sheet', [text('title')], { repeat: repeat('sunday_hymns') })],
+        select: 'sheet',
+    });
+    ui.resolver = {
+        rowsFor(node) {
+            return Core.sliceRows(hymns.map(name => ({ name: name })), node.repeat.from, node.repeat.to);
+        },
+    };
+    assert.equal(ed.queryScope, 'own');
+    assert.equal(ed.showIterationRange, true);
+    assert.equal(ed.iterationSlice.active, false);
+    assert.equal(ed.iterationRangeValue('from'), '');
+    assert.equal(ed.iterationRangeValue('to'), '');
+    assert.equal(ed.queryCountLabel(), '5 rows today');
+    assert.equal(ed.queryRowIndex(0), 1);
+    assert.equal(ed.queryRowIndex(4), 5);
+    ed.setRepeatRange('from', 2);
+    ed.setRepeatRange('to', 2);
+    const slice = ed.iterationSlice;
+    assert.equal(slice.from, 2);
+    assert.equal(slice.to, 2);
+    assert.equal(slice.active, true);
+    assert.equal(ed.iterationRangeValue('from'), 2);
+    assert.equal(ed.iterationRangeValue('to'), 2);
+    assert.equal(ed.queryRowIndex(0), 2);
+    assert.equal(ed.queryCountLabel(), '1 row on this page (rows 2–2)');
+    assert.deepEqual(ed.queryResults.names, ['Only a Holy God']);
+    ed.selection.nodeId = 'title';
+    assert.equal(ed.queryScope, 'row', 'inside the card the builder still shows that card\'s rows');
+    assert.equal(ed.showIterationRange, true);
+    ed.setRepeatRange('to', '');
+    assert.equal(Core.findNode(ed.currentPage, 'sheet').repeat.to, 0, 'an empty stop runs through the end');
+    assert.equal(ed.queryCountLabel(), '4 rows on this page (rows 2–end)');
 });
 
 test('an editor-locked query still runs, and a member can neither change nor rebuild it', () => {
@@ -263,15 +307,22 @@ test('another church\'s liturgy order: the Sunday chips are that order\'s names'
         key: 'sunday|{}|' + TODAY,
         service: { liturgyOrderId: 'lessons' },
         liturgy: liturgy,
-        row: { openingCarol: 'O Come, All Ye Faithful', firstLesson: 'Genesis 3:8-15' },
+        row: {
+            openingCarol: 'O Come, All Ye Faithful',
+            firstLesson: 'Genesis 3:8-15',
+            'openingCarol.name': 'Opening Carol',
+            'bidding.name': 'Bidding Prayer',
+        },
     });
     const groups = ed.querySundayGroups;
-    assert.deepEqual(groups.hymns.map(f => f.label), ['Opening Carol']);
-    assert.equal(groups.hymns[0].value, 'O Come, All Ye Faithful', 'a chip says what it holds today');
-    assert.deepEqual(groups.scripture.map(r => r.label), ['Key verse', 'First Lesson']);
-    assert.equal(groups.scripture[1].citation, 'Genesis 3:8-15');
-    assert.ok(groups.service.some(f => f.label === 'Bidding Prayer'));
-    assert.ok(!groups.hymns.some(f => f.key === 'hymn1'), 'Standard\'s slots are not this order\'s');
+    assert.deepEqual(groups.elements.map(e => e.label), ['Opening Carol', 'First Lesson', 'Bidding Prayer']);
+    const carol = groups.elements.find(e => e.id === 'openingCarol');
+    const hymnChip = carol.chips.find(f => f.aspect === 'value' || f.key === 'openingCarol');
+    assert.equal(hymnChip.value, 'O Come, All Ye Faithful', 'a chip says what it holds today');
+    assert.equal(groups.elements.find(e => e.id === 'firstLesson').scripture.citation, 'Genesis 3:8-15');
+    assert.ok(groups.elements.find(e => e.id === 'bidding').chips.some(f => f.key === 'bidding.name'));
+    assert.ok(!groups.elements.some(e => e.id === 'hymn1'), 'Standard\'s slots are not this order\'s');
+    assert.ok(!groups.identity.some(f => f.key === 'prayerLabel'), 'Prayer heading stays off');
 });
 
 test('the builder reads its own preview: a browsed single fills its chips, a list counts its rows', async () => {
@@ -289,7 +340,7 @@ test('the builder reads its own preview: a browsed single fills its chips, a lis
         ed.setQuerySource('sunday');
         await ed.ensureQueryPreview();
         assert.equal(fetched.length, 1);
-        assert.equal(ed.querySundayGroups.service.find(f => f.key === 'theme').value, 'Grace upon grace');
+        assert.equal(ed.querySundayGroups.identity.find(f => f.key === 'theme').value, 'Grace upon grace');
         await ed.ensureQueryPreview();
         assert.equal(fetched.length, 1, 'the same pick is not read twice');
         ed.setQueryParam('when', { mode: 'next' });

@@ -99,12 +99,16 @@ suite('the shared Care List writes', () => {
         assert.deepStrictEqual(data.careListData, {[BOB]: {}, [SUE]: {}});
     });
 
-    test('an old-shaped list is normalised before a cell is written', async () => {
-        await ref.set({title: 'Old', docType: 'care-list', careListData: {[BOB]: body('Written years ago')}});
+    test('a normalised list saves a new cell without rewriting the whole map', async () => {
+        const shaped = CareList.normalise({
+            title: 'Old',
+            careListData: {[BOB]: body('Written years ago')},
+        });
+        await ref.set({title: 'Old', docType: 'care-list', ...shaped});
         const s = CareList.createSession((await ref.get()).data());
         s.edited(SUE, 'col_default');
         const save = s.takeSave(() => body('New'), () => '');
-        await CareList.saveEdits(db, fs, DOC, Object.assign(save, {oldShape: s.oldShape()}));
+        await CareList.saveEdits(db, fs, DOC, save);
 
         const data = (await ref.get()).data();
         assert.deepStrictEqual(data.careListColumns, [{id: 'col_default', name: 'Notes'}]);

@@ -1,10 +1,9 @@
 /* ============================================================
    tailwind.config.js — compiled build of the Mosaic theme.
 
-   This is the CLI/PostCSS equivalent of the runtime config that
-   used to live in public/mosaic-theme.js (window.tailwind.config,
-   consumed by the Tailwind Play CDN). The theme.extend block below
-   is a verbatim port so compiled output matches the CDN output.
+   Single source of truth for design tokens. `npm run build:tokens`
+   emits CSS variables; `npm run build:css` compiles utilities into
+   public/mosaic.css. The theme.extend block below is what pages render.
 
    content globs include the .js files because 8 page scripts build
    markup with Tailwind classes in template strings; those classes
@@ -103,6 +102,19 @@ module.exports = {
         "event-amber":  "#B8862E",  "event-amber-tint":  "#F0E2C6",
         "event-plum":   "#7A5578",  "event-plum-tint":   "#E7DAE6",
         "event-rose":   "#B0697C",  "event-rose-tint":   "#F0DBE0",
+
+        /* ---- Resource types (Resources library, MS-693) ----
+           What kind of thing a row on the church's shelf is, read at a
+           glance down a dense list: a PDF, a Word document, an image, a
+           link to a Google Doc. Outside the brand on purpose — these have
+           to be four colours a reader can tell apart at 20px in a column,
+           and four warm neighbours cannot do that. A folder is NOT here:
+           it is the one row that belongs to the app rather than to a file
+           format, and it takes --primary. */
+        "resource-pdf":   "#B45309",
+        "resource-doc":   "#1D4ED8",
+        "resource-image": "#047857",
+        "resource-link":  "#6D28D9",
 
         /* ---- Highlighter (Note Module) ----
            Pen colours for highlighting a Note Body. Deliberately outside the

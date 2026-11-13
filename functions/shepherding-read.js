@@ -367,6 +367,19 @@ function describeStatusChange(entry) {
 }
 
 /**
+ * @param {*} note stored note fields
+ * @param {number} maxLen preview cap
+ * @return {string}
+ */
+function notePreviewPlain(note, maxLen) {
+  const cap = maxLen == null ? 160 : maxLen;
+  const content = String((note && note.content) || "").trim();
+  if (content) return content.slice(0, cap);
+  return String(NoteMarkdownCore.toMarkdown(note && note.contentJson) || "")
+      .slice(0, cap);
+}
+
+/**
  * A Person's Shepherding Notes, without the rest of the record.
  * @param {object} db the Firestore handle
  * @param {object} args personId, limit
@@ -393,7 +406,7 @@ async function listNotes(db, {personId, limit}) {
       sourceDocumentId: note.sourceDocumentId || null,
       // The list is for choosing which note to open, so the body is a taste
       // rather than the whole thing.
-      preview: String(note.content || "").slice(0, 160),
+      preview: notePreviewPlain(note, 160),
     })),
   };
 }

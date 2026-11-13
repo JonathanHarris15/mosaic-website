@@ -133,12 +133,7 @@ function readBrowserProject(sourceOrPath) {
 
 function assertDeploy({root, projectId, iMeanProd}) {
     const errors = [];
-    let project;
-    try {
-        project = loadProject(root, projectId);
-    } catch (err) {
-        throw err;
-    }
+    const project = loadProject(root, projectId);
     if (projectId === PROD_PROJECT_ID && !iMeanProd) {
         errors.push(`Refusing to deploy ${PROD_PROJECT_ID} without --i-mean-prod.`);
     }

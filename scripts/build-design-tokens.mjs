@@ -19,12 +19,11 @@
 
 import { createRequire } from "node:module";
 import { readFileSync, writeFileSync } from "node:fs";
-import { dirname, join, relative, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const require = createRequire(import.meta.url);
 const repo = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-const tokensDir = join(repo, "build", "design-tokens");
 const check = process.argv.includes("--check");
 
 const theme = require(join(repo, "tailwind.config.js")).theme?.extend ?? {};

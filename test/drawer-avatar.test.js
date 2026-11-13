@@ -4,14 +4,12 @@ const test = require('node:test');
 const assert = require('node:assert');
 const fs = require('node:fs');
 const path = require('node:path');
-const vm = require('node:vm');
-
 const PUBLIC = path.join(__dirname, '..', 'public');
 const read = (f) => fs.readFileSync(path.join(PUBLIC, f), 'utf8');
 
 const Photo = require('../public/person-photo-core.js');
 const DrawerWho = require('../public/drawer-who.js');
-const Drawer = require('../public/desktop-drawer.js');
+require('../public/desktop-drawer.js');
 const DashboardNav = require('../public/dashboard-nav.js');
 
 function fakeEl(tag, className) {

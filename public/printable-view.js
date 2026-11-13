@@ -8,6 +8,7 @@
 
 function printableView() {
     const ui = { resolver: null, bundle: null };
+    const PrintableCore = /** @type {any} */ (/** @type {any} */ (globalThis).PrintableCore);
     return {
         id: '',
         viewDate: '',
@@ -21,7 +22,15 @@ function printableView() {
         warnings: [],
         zoom: 1,
         zoomPinned: false,
-        showWarnings: false,
+        exportMenu: '',
+        snapshotProgress: '',
+        snapshotError: '',
+        snapshotTitleOpen: false,
+        snapshotTitle: '',
+        snapshotTitleError: '',
+        pendingSnapshotMode: '',
+        pendingSnapshotEntries: null,
+        uid: '',
         fillTotal: 0,
         fillLeft: 0,
         fillNote: '',
@@ -34,10 +43,22 @@ function printableView() {
         fillSlots: [],
         fillById: {},
         fillCommitted: {},
+        extraSlots: [],
+        pendingFocus: null,
+        folioPadOpen: false,
+        folioPadEntries: [],
+        folioPadBrushIndex: null,
+        folioPadError: '',
+        folioPadBaseCount: 0,
 
         get template() { return this.project ? this.project.template : null; },
-        get canEdit() { return AccessCore.writesAsEditor(this.permissionLevel); },
+        get canEdit() { return AccessCore.writesAsEditor(this.account || this.permissionLevel); },
         get canFill() { return this.canEdit; },
+        // Linked from an event's Printables / Files row: Folio and Print can
+        // file the flat snapshot on that occurrence instead of printing.
+        get canSaveSnapshot() {
+            return !!(this.occurrenceId && this.canEdit && this.entries.length);
+        },
         get fillLeftText() {
             const Fill = window.PrintableFillCore;
             return Fill ? Fill.leftToGoText(this.fillLeft) : '';
@@ -68,7 +89,24 @@ function printableView() {
         get folioTitle() {
             const n = this.folioSheetCount;
             const sheets = n + ' landscape sheet' + (n === 1 ? '' : 's');
-            return 'Two pages on each sheet (' + sheets + '), in the same order as the service guide. Fold the stack and leave the copier booklet mode off.';
+            return 'Print folio: two pages on each landscape sheet (' + sheets + '). Fold the stack; leave the copier booklet mode off.';
+        },
+        get folioPadNeedCount() {
+            const Ex = typeof PrintableExportCore !== 'undefined' ? PrintableExportCore : null;
+            return Ex ? Ex.folioPadNeed(this.folioPadEntries) : 0;
+        },
+        get folioPadTargetCount() {
+            return (this.folioPadEntries || []).length + this.folioPadNeedCount;
+        },
+        get folioPadReady() {
+            const Ex = typeof PrintableExportCore !== 'undefined' ? PrintableExportCore : null;
+            return !!(Ex && Ex.folioReadyToPrint(this.folioPadEntries));
+        },
+        get folioPadBrushLabel() {
+            const Ex = typeof PrintableExportCore !== 'undefined' ? PrintableExportCore : null;
+            const i = this.folioPadBrushIndex;
+            if (i == null || i < 0 || i >= (this.folioPadEntries || []).length) return '';
+            return Ex ? Ex.entryLabel(this.folioPadEntries[i], i) : ('Page ' + (i + 1));
         },
 
         async init() {
@@ -82,9 +120,11 @@ function printableView() {
             auth.onAuthStateChanged(async (user) => {
                 if (!user) { window.location.href = 'index.html'; return; }
                 try {
+                    this.uid = user.uid || '';
                     const userData = await getUserData(user.uid);
                     this.currentUserData = userData || null;
-                    this.permissionLevel = (userData && (userData.permissionLevel || userData.role)) || 'viewer';
+                    this.account = userData || null;
+                    this.permissionLevel = (window.AccessCore ? AccessCore.permissionLevelOf(userData) : 'viewer');
                     if (!this.id) { this.problem = 'No printable was named.'; return; }
                     let record = null;
                     try {
@@ -175,13 +215,26 @@ function printableView() {
             return Data.resolveWhen(when || { mode: 'this' }, this.viewDate);
         },
 
+        bagFor(date) {
+            const byDate = ui.bundle && ui.bundle.bookletByDate;
+            if (byDate && Object.prototype.hasOwnProperty.call(byDate, date)) return byDate[date] || {};
+            if (date === this.viewDate) return this.eventBag || {};
+            return {};
+        },
+
+        occurrenceIdFor(date) {
+            if (this.occurrenceId && date === this.viewDate) return this.occurrenceId;
+            const Core = window.EventsOccurrenceCore;
+            if (Core && Core.occurrenceId && Core.SUNDAY_SERVICE_ID) {
+                return Core.occurrenceId(Core.SUNDAY_SERVICE_ID, date) || '';
+            }
+            return date ? 'sunday_service_' + date : '';
+        },
+
         sundayDraft(date) {
             if (!this.sundayDrafts[date]) {
-                const Typed = window.SundayTypedCore;
-                const service = ui.bundle && ui.bundle.services && ui.bundle.services[date];
-                this.sundayDrafts[date] = Typed
-                    ? Typed.toDraft(Typed.fromService(service))
-                    : {};
+                const Migrate = window.PrintableLegacyMigrate;
+                this.sundayDrafts[date] = Migrate ? Migrate.draftFromBag(this.bagFor(date)) : {};
             }
             return this.sundayDrafts[date];
         },
@@ -189,7 +242,8 @@ function printableView() {
         kidsLinesFor(date) {
             if (!this.kidsLines[date]) {
                 const Fill = window.PrintableFillCore;
-                this.kidsLines[date] = Fill.linesOf(this.sundayDraft(date).kidsQuestions);
+                const text = (this.bagFor(date) || {}).legacy_kidsQuestions || '';
+                this.kidsLines[date] = Fill.linesOf(text);
             }
             return this.kidsLines[date];
         },
@@ -238,17 +292,11 @@ function printableView() {
         },
 
         syncBundle() {
-            if (!ui.bundle) ui.bundle = { services: {} };
+            if (!ui.bundle) ui.bundle = {};
             ui.bundle.eventInputs = this.eventBag;
-            const Typed = window.SundayTypedCore;
-            if (!Typed) return;
-            Object.keys(this.sundayDrafts).forEach(date => {
-                const draft = Object.assign({}, this.sundayDrafts[date]);
-                if (this.kidsLines[date]) draft.kidsQuestions = this.kidsLines[date].join('\n');
-                const content = Typed.normalise(Typed.fromDraft(draft));
-                ui.bundle.services = ui.bundle.services || {};
-                ui.bundle.services[date] = Object.assign({}, ui.bundle.services[date], { typedContent: content });
-            });
+            const date = this.viewDate;
+            if (!date) return;
+            ui.bundle.bookletByDate = Object.assign({}, ui.bundle.bookletByDate, { [date]: this.eventBag });
         },
 
         relayout() {
@@ -265,6 +313,7 @@ function printableView() {
             this.entries = PrintableLive.layoutPages(this.project, ui.resolver, host);
             this.warnings = ui.resolver ? PrintableLive.warningsFor(this.entries, ui.resolver, this.project) : [];
             stage.innerHTML = '';
+            this.extraSlots = [];
             const t = this.template;
             const Fill = window.PrintableFillCore;
             const fillIndex = (this.canFill && Fill) ? Fill.indexProject(this.project) : null;
@@ -274,6 +323,7 @@ function printableView() {
                 const value = this.valueForSlot(slot);
                 return Object.assign({}, slot, { value: value == null ? '' : String(value) });
             }) : null;
+            const numberOrigin = PrintableCore.numberOriginFromEntries(this.entries);
             this.entries.forEach(entry => {
                 const sheet = document.createElement('div');
                 sheet.className = 'pv-sheet';
@@ -282,6 +332,8 @@ function printableView() {
                 const page = PrintableDom.renderPage(Object.assign({}, entry.page, { nodes: entry.nodes }), t, {
                     scopeId: entry.page.id,
                     fillFor: fillFor,
+                    pageIndex: entry.pageIndex,
+                    numberOrigin: numberOrigin,
                 });
                 page.style.transform = 'scale(' + this.zoom + ')';
                 page.style.transformOrigin = '0 0';
@@ -291,7 +343,28 @@ function printableView() {
             });
             this.recount();
             if (fillFor) this.wireFills(stage);
+            if (fillFor && PrintableDom.fitFlowingFill) {
+                stage.querySelectorAll('textarea.pv-fill--text').forEach(el => PrintableDom.fitFlowingFill(el));
+            }
+            this.focusPendingRow();
             this.fit();
+        },
+
+        focusPendingRow() {
+            const pending = this.pendingFocus;
+            this.pendingFocus = null;
+            if (!pending) return;
+            const nodes = document.querySelectorAll('[data-fill-id]');
+            let el = null;
+            nodes.forEach(node => {
+                if (el || node.tagName === 'BUTTON') return;
+                const id = node.getAttribute('data-fill-id') || '';
+                if (pending.id && id === pending.id) el = node;
+                else if (pending.prefix && id.indexOf(pending.prefix) === 0) el = node;
+            });
+            if (!el || typeof el.focus !== 'function') return;
+            try { el.focus({ preventScroll: true }); }
+            catch (e) { el.focus(); }
         },
 
         recount() {
@@ -303,7 +376,7 @@ function printableView() {
                 this.fillLeft = 0;
                 return;
             }
-            this.fillSlots = Fill.slotsOn(this.project, this.entries.map(e => e.nodes));
+            this.fillSlots = Fill.slotsOn(this.project, this.entries.map(e => e.nodes)).concat(this.extraSlots || []);
             this.fillById = {};
             this.fillSlots.forEach(slot => { this.fillById[slot.id] = slot; });
             const tally = Fill.tally(this.fillSlots, slot => this.valueForSlot(slot));
@@ -375,6 +448,11 @@ function printableView() {
             page.querySelectorAll('[data-list-of]').forEach(el => {
                 const spec = Fill.listSpec(this.project, el.getAttribute('data-list-of'));
                 if (!spec) return;
+                Array.from(el.children).forEach(copy => {
+                    const raw = copy.getAttribute('data-copy');
+                    const rowIndex = raw != null && /^\d+$/.test(raw) ? Number(raw) : 0;
+                    this.mountRowFill(copy, spec, rowIndex);
+                });
                 const btn = document.createElement('button');
                 btn.type = 'button';
                 btn.className = 'pv-fill-add';
@@ -384,6 +462,79 @@ function printableView() {
                 btn.addEventListener('click', () => this.addFillRow(spec));
                 el.appendChild(btn);
             });
+        },
+
+        // A new row has to be somewhere a person can type, and somewhere they
+        // can take back. Columns already placed on the row stay where the
+        // page put them. A column that was never placed still gets a blank,
+        // so the row is not just empty space.
+        mountRowFill(copy, spec, rowIndex) {
+            const Fill = window.PrintableFillCore;
+            const Dom = window.PrintableDom;
+            if (!Fill || !Dom || !copy || !spec) return;
+            const present = [];
+            const prefix = spec.list === 'event'
+                ? ('row:' + spec.inputId + ':' + rowIndex + ':')
+                : '';
+            copy.querySelectorAll('[data-fill-id]').forEach(el => {
+                const id = el.getAttribute('data-fill-id') || '';
+                if (prefix && id.indexOf(prefix) === 0) present.push(id.slice(prefix.length));
+            });
+            const extra = document.createElement('div');
+            extra.className = 'pv-fill-extra';
+            if (spec.list === 'event') {
+                const input = this.inputById(spec.inputId);
+                Fill.unplacedColumns(input, present).forEach(col => {
+                    const slot = {
+                        id: 'row:' + input.id + ':' + rowIndex + ':' + col.id,
+                        store: 'event-row',
+                        inputId: input.id,
+                        columnId: col.id,
+                        rowIndex: rowIndex,
+                        kind: col.kind === 'image' ? 'image' : col.kind,
+                        label: (input.label || 'List') + ', ' + (col.label || 'Column'),
+                        multiline: false,
+                    };
+                    const value = Fill.eventValue(this.eventBag, slot);
+                    this.extraSlots.push(slot);
+                    const node = { tag: 'div', style: { width: '100%', 'min-height': '4.5em' }, attrs: {} };
+                    extra.appendChild(slot.kind === 'image'
+                        ? Dom.renderFillImage(node, Object.assign({}, slot, { value: value }))
+                        : Dom.renderFillControl(Object.assign({}, slot, { value: value })));
+                });
+            } else if (spec.list === 'kids') {
+                const whenKey = Fill.whenKey(spec.when);
+                const id = 'kids:' + whenKey + ':' + rowIndex;
+                const has = copy.querySelector('[data-fill-id="' + id.replace(/"/g, '\\"') + '"]');
+                if (!has) {
+                    const slot = {
+                        id: id,
+                        store: 'kids',
+                        rowIndex: rowIndex,
+                        when: spec.when,
+                        kind: 'text',
+                        label: 'Question ' + (rowIndex + 1),
+                        multiline: false,
+                    };
+                    this.extraSlots.push(slot);
+                    extra.appendChild(Dom.renderFillControl(Object.assign({}, slot, {
+                        value: this.valueForSlot(slot),
+                    })));
+                }
+            }
+            const remove = document.createElement('button');
+            remove.type = 'button';
+            remove.className = 'pv-fill-remove';
+            remove.textContent = 'Remove row';
+            remove.setAttribute('aria-label', 'Remove row ' + (rowIndex + 1));
+            remove.addEventListener('click', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                this.removeFillRow(spec, rowIndex);
+            });
+            extra.appendChild(remove);
+            if (copy.style && copy.style.overflow === 'hidden') copy.style.overflow = 'visible';
+            copy.appendChild(extra);
         },
 
         wireFills(stage) {
@@ -399,7 +550,10 @@ function printableView() {
                     });
                     return;
                 }
-                el.addEventListener('input', () => this.onFillInput(id, el.value, el));
+                el.addEventListener('input', () => {
+                    if (el.tagName === 'TEXTAREA' && PrintableDom.fitFlowingFill) PrintableDom.fitFlowingFill(el);
+                    this.onFillInput(id, el.value, el);
+                });
                 el.addEventListener('change', () => this.onFillCommit(id));
                 el.addEventListener('blur', () => this.onFillCommit(id));
             });
@@ -430,7 +584,10 @@ function printableView() {
                 draft.kidsQuestions = this.kidsLines[date].join('\n');
             }
             document.querySelectorAll(this.fillSelector(id)).forEach(el => {
-                if (el !== source && el.type !== 'file' && el.value !== value) el.value = value;
+                if (el !== source && el.type !== 'file' && el.value !== value) {
+                    el.value = value;
+                    if (el.tagName === 'TEXTAREA' && PrintableDom.fitFlowingFill) PrintableDom.fitFlowingFill(el);
+                }
             });
             this.recount();
         },
@@ -441,7 +598,7 @@ function printableView() {
             const value = String(this.valueForSlot(slot) == null ? '' : this.valueForSlot(slot));
             if (this.fillCommitted[id] === value) return;
             this.fillCommitted[id] = value;
-            this.persistSlot(slot);
+            return this.persistSlot(slot);
         },
 
         async onFillFile(id, file, input) {
@@ -490,8 +647,11 @@ function printableView() {
 
         async persistSlot(slot) {
             if (slot.store === 'event' || slot.store === 'event-row') return this.persistEvent();
-            if (slot.store === 'sunday' || slot.store === 'kids') {
-                return this.persistSunday(this.sundayDate(slot.when));
+            if (slot.store === 'sunday') {
+                return this.persistSunday(this.sundayDate(slot.when), [slot.field]);
+            }
+            if (slot.store === 'kids') {
+                return this.persistSunday(this.sundayDate(slot.when), ['kidsQuestions']);
             }
         },
 
@@ -522,18 +682,67 @@ function printableView() {
             }
         },
 
-        async persistSunday(date) {
+        // The cached draft still holds every booklet key from the first time it
+        // was read. A kids save must not put those older words back over a later
+        // edit, so only the fields this edit changed are written.
+        /**
+         * @param {string} date
+         * @param {string[]} fields
+         */
+        async persistSunday(date, fields) {
             const Typed = window.SundayTypedCore;
-            if (!Typed || !date) return;
-            const draft = Object.assign({}, this.sundayDraft(date));
-            if (this.kidsLines[date]) draft.kidsQuestions = this.kidsLines[date].join('\n');
+            const Migrate = window.PrintableLegacyMigrate;
+            if (!Typed || !Migrate || !date || !this.id) return;
+            const occId = this.occurrenceIdFor(date);
+            if (!occId || (date === this.viewDate && !this.occurrenceId)) {
+                this.fillNote = 'Open this printable from its date to save.';
+                return;
+            }
+            /** @type {string[]} */
+            const keys = [];
+            const named = fields || [];
+            for (let i = 0; i < named.length; i++) {
+                if (named[i]) keys.push(named[i]);
+            }
+            if (!keys.length) return;
+            const full = this.sundayDraft(date);
+            /** @type {Record<string, any>} */
+            const draft = {};
+            for (let i = 0; i < keys.length; i++) {
+                const field = keys[i];
+                draft[field] = (field === 'kidsQuestions' && this.kidsLines[date])
+                    ? this.kidsLines[date].join('\n')
+                    : full[field];
+            }
             try {
                 Typed.assertCountryImageWritable(draft.prayerCountryImage);
                 const content = Typed.normalise(Typed.fromDraft(draft));
-                await db.collection('services').doc(date).set({ typedContent: content }, { merge: true });
-                if (!ui.bundle) ui.bundle = { services: {} };
-                ui.bundle.services = ui.bundle.services || {};
-                ui.bundle.services[date] = Object.assign({}, ui.bundle.services[date], { typedContent: content });
+                const Store = window.EventsStore;
+                if (Store && Store.loadOccurrence) {
+                    const occ = await Store.loadOccurrence(db, occId);
+                    if (occ && occ.stored === false && Store.ensureOccurrenceDocument) {
+                        await Store.ensureOccurrenceDocument(db, occ);
+                    }
+                }
+                const ref = db.collection('event_occurrences').doc(occId);
+                const snap = await ref.get();
+                const prev = (snap && snap.exists && snap.data() && snap.data().printableInputs) || {};
+                const stored = prev[this.id] || {};
+                const wide = Migrate.patchFromContent(content, stored);
+                /** @type {Record<string, any>} */
+                const patch = {};
+                for (let i = 0; i < keys.length; i++) {
+                    const id = Migrate.fillId(keys[i]);
+                    if (Object.prototype.hasOwnProperty.call(wide, id)) patch[id] = wide[id];
+                }
+                const bag = Object.assign({}, stored, patch);
+                const next = Object.assign({}, prev);
+                next[this.id] = bag;
+                await ref.set({ printableInputs: next }, { merge: true });
+                if (date === this.viewDate) this.eventBag = Object.assign({}, this.eventBag, patch);
+                if (!ui.bundle) ui.bundle = {};
+                ui.bundle.bookletByDate = Object.assign({}, ui.bundle.bookletByDate, { [date]: bag });
+                if (date === this.viewDate) ui.bundle.eventInputs = this.eventBag;
                 this.fillNote = '';
             } catch (e) {
                 console.error(e);
@@ -550,15 +759,40 @@ function printableView() {
                 const input = this.inputById(spec.inputId);
                 if (!input) return;
                 this.eventBag = Fill.addEventRow(this.eventBag, input);
+                const rows = this.eventBag[input.id];
+                const rowIndex = Array.isArray(rows) ? rows.length - 1 : 0;
+                this.pendingFocus = { prefix: 'row:' + input.id + ':' + rowIndex + ':' };
                 if (ui.bundle) ui.bundle.eventInputs = this.eventBag;
                 await this.persistEvent();
             } else if (spec.list === 'kids') {
                 const date = this.sundayDate(spec.when);
                 this.kidsLines[date] = Fill.addKidsLine(this.kidsLinesFor(date));
+                const rowIndex = this.kidsLines[date].length - 1;
+                this.pendingFocus = { id: 'kids:' + Fill.whenKey(spec.when) + ':' + rowIndex };
                 const draft = this.sundayDraft(date);
                 draft.kidsQuestions = this.kidsLines[date].join('\n');
-                await this.persistSunday(date);
+                await this.persistSunday(date, ['kidsQuestions']);
             }
+            this.relayout();
+        },
+
+        async removeFillRow(spec, rowIndex) {
+            const Fill = window.PrintableFillCore;
+            if (!Fill || !spec) return;
+            if (spec.list === 'event') {
+                const input = this.inputById(spec.inputId);
+                if (!input) return;
+                this.eventBag = Fill.removeEventRow(this.eventBag, input, rowIndex);
+                if (ui.bundle) ui.bundle.eventInputs = this.eventBag;
+                await this.persistEvent();
+            } else if (spec.list === 'kids') {
+                const date = this.sundayDate(spec.when);
+                this.kidsLines[date] = Fill.removeKidsLine(this.kidsLinesFor(date), rowIndex);
+                const draft = this.sundayDraft(date);
+                draft.kidsQuestions = this.kidsLines[date].join('\n');
+                await this.persistSunday(date, ['kidsQuestions']);
+            }
+            this.pendingFocus = null;
             this.relayout();
         },
 
@@ -612,6 +846,160 @@ function printableView() {
             setTimeout(() => window.print(), 150);
         },
 
+        onPrintClick() {
+            if (this.canSaveSnapshot) {
+                this.exportMenu = this.exportMenu === 'print' ? '' : 'print';
+                return;
+            }
+            this.printPrintable();
+        },
+
+        chooseFlatPrint() {
+            this.exportMenu = '';
+            this.printPrintable();
+        },
+
+        chooseFlatSaveSnapshot() {
+            this.exportMenu = '';
+            if (this.canFill) this.relayout();
+            this.openSnapshotTitle('flat', this.entries.slice());
+        },
+
+        // After the folio pad is ×4: title, then file a folio-imposed PDF.
+        confirmFolioPadSave() {
+            if (!this.folioPadReady || !this.canSaveSnapshot || this.snapshotProgress) return;
+            const stack = this.folioPadEntries.slice();
+            this.closeFolioPad();
+            this.openSnapshotTitle('folio', stack);
+        },
+
+        openSnapshotTitle(mode, entries) {
+            if (!this.canSaveSnapshot || !(entries || []).length) return;
+            this.pendingSnapshotMode = mode === 'folio' ? 'folio' : 'flat';
+            this.pendingSnapshotEntries = entries.slice();
+            const date = this.viewDate || new Date().toISOString().slice(0, 10);
+            this.snapshotTitle = typeof PrintablePdf !== 'undefined'
+                ? PrintablePdf.fileName(this.project, date).replace(/\.pdf$/i, '')
+                : ((this.project && this.project.name) || 'Printable') + ' — ' + date;
+            this.snapshotTitleError = '';
+            this.snapshotError = '';
+            this.snapshotTitleOpen = true;
+        },
+
+        closeSnapshotTitle() {
+            if (this.snapshotProgress) return;
+            this.snapshotTitleOpen = false;
+            this.snapshotTitle = '';
+            this.snapshotTitleError = '';
+            this.pendingSnapshotMode = '';
+            this.pendingSnapshotEntries = null;
+        },
+
+        confirmSnapshotTitle() {
+            const title = String(this.snapshotTitle || '').trim();
+            if (!title) {
+                this.snapshotTitleError = 'Give the PDF a name.';
+                return;
+            }
+            this.snapshotTitleError = '';
+            this.saveSnapshotToEvent(title);
+        },
+
+        // File on the linked occurrence. Folio mode uses the pad stack and
+        // imposed landscape sheets; flat matches the event Files tab snapshot.
+        async saveSnapshotToEvent(title) {
+            if (!this.canSaveSnapshot || this.snapshotProgress) return;
+            if (typeof PrintablePdf === 'undefined' || typeof EventAttachmentsCore === 'undefined') {
+                this.snapshotError = 'PDF filing is not available on this page.';
+                this.snapshotTitleOpen = false;
+                return;
+            }
+            const Store = window.EventsStore;
+            if (!Store) {
+                this.snapshotError = 'PDF filing is not available on this page.';
+                this.snapshotTitleOpen = false;
+                return;
+            }
+            const mode = this.pendingSnapshotMode === 'folio' ? 'folio' : 'flat';
+            const entries = (this.pendingSnapshotEntries && this.pendingSnapshotEntries.length)
+                ? this.pendingSnapshotEntries
+                : this.entries;
+            this.snapshotError = '';
+            this.snapshotProgress = 'Preparing…';
+            try {
+                if (!this.project || !(entries || []).length) throw new Error('not laid out');
+                const Ex = typeof PrintableExportCore !== 'undefined' ? PrintableExportCore : null;
+                let blob;
+                if (mode === 'folio') {
+                    if (!Ex || !Ex.folioReadyToPrint(entries)) {
+                        throw new Error('folio fold not ready');
+                    }
+                    const sheets = Ex.folioSpreads(entries).length;
+                    this.snapshotProgress = 'Drawing ' + sheets + ' folio sheet' + (sheets === 1 ? '' : 's') + '…';
+                    blob = await PrintablePdf.renderFolio(this.project, entries, {
+                        scale: 1,
+                        onProgress: (done, total) => {
+                            this.snapshotProgress = 'Drawing sheet ' + done + ' of ' + total + '…';
+                        },
+                    });
+                } else {
+                    const booklet = !!(Ex && Ex.isSundayBookletPath(this.project));
+                    const printCount = Ex ? Ex.exportPageCount(entries.length, this.project) : entries.length;
+                    this.snapshotProgress = booklet
+                        ? 'Drawing ' + printCount + ' page' + (printCount === 1 ? '' : 's') + ' (flat, padded ×4)…'
+                        : 'Drawing ' + printCount + ' page' + (printCount === 1 ? '' : 's') + '…';
+                    blob = await PrintablePdf.render(this.project, entries, {
+                        scale: 1,
+                        onProgress: (done, total) => {
+                            this.snapshotProgress = 'Drawing page ' + done + ' of ' + total + '…';
+                        },
+                    });
+                }
+                this.snapshotProgress = 'Filing…';
+                let occurrence = null;
+                if (Store.loadOccurrence) {
+                    occurrence = await Store.loadOccurrence(db, this.occurrenceId);
+                    if (occurrence && Store.ensureOccurrenceDocument) {
+                        await Store.ensureOccurrenceDocument(db, occurrence);
+                    }
+                }
+                const date = (occurrence && occurrence.date) || this.viewDate;
+                const name = PrintablePdf.fileName(this.project, date, title);
+                const attachmentId = Store.newAttachmentId(db, this.occurrenceId);
+                const path = EventAttachmentsCore.storagePath(this.occurrenceId, attachmentId, name);
+                await firebase.storage().ref().child(path).put(blob, { contentType: 'application/pdf' });
+                const personId = (this.currentUserData && this.currentUserData.personId) || null;
+                const attachment = EventAttachmentsCore.buildAttachmentRecord({
+                    name: name,
+                    contentType: 'application/pdf',
+                    size: blob.size,
+                    storagePath: path,
+                    uploadedBy: this.uid,
+                    uploadedByName: personId
+                        ? null
+                        : (this.currentUserData && (this.currentUserData.displayName || this.currentUserData.name)) || null,
+                    uploadedAt: new Date().toISOString(),
+                });
+                await Store.saveAttachment(db, this.occurrenceId, attachmentId, attachment);
+                this.snapshotProgress = '';
+                this.snapshotTitleOpen = false;
+                this.pendingSnapshotMode = '';
+                this.pendingSnapshotEntries = null;
+                this.snapshotTitle = '';
+                this.fillNote = 'Filed on the event · ' + name + '.';
+            } catch (e) {
+                console.error('Printable snapshot failed:', e);
+                this.snapshotProgress = '';
+                const msg = String(e && e.message || '');
+                this.snapshotTitleError = 'That snapshot could not be filed. '
+                    + (msg.includes('not laid out')
+                        ? 'The printable has no pages yet.'
+                        : msg.includes('folio fold')
+                            ? 'Finish filling the folio fold first.'
+                            : 'Try again.');
+            }
+        },
+
         printPrintable() {
             if (this.canFill) this.relayout();
             const layer = document.getElementById('pv-print');
@@ -624,10 +1012,16 @@ function printableView() {
                 + ' .pv-print-sheet { width: ' + t.widthIn + 'in; height: ' + t.heightIn + 'in; overflow: hidden; page-break-after: always; break-after: page; position: relative; }'
                 + ' .pv-print-sheet > .pr-page { transform: scale(' + scale + '); transform-origin: 0 0; }';
             layer.appendChild(style);
-            this.printEntries().forEach(entry => {
+            const printed = this.printEntries();
+            const numberOrigin = PrintableCore.numberOriginFromEntries(printed);
+            printed.forEach((entry, i) => {
                 const sheet = document.createElement('div');
                 sheet.className = 'pv-print-sheet';
-                sheet.appendChild(PrintableDom.renderPage(Object.assign({}, entry.page, { nodes: entry.nodes }), t, { scopeId: entry.page.id }));
+                sheet.appendChild(PrintableDom.renderPage(Object.assign({}, entry.page, { nodes: entry.nodes }), t, {
+                    scopeId: entry.page.id,
+                    pageIndex: entry.pageIndex == null ? i : entry.pageIndex,
+                    numberOrigin: numberOrigin,
+                }));
                 layer.appendChild(sheet);
             });
             this.beginPrint(layer);
@@ -635,10 +1029,126 @@ function printableView() {
 
         printFolio() {
             if (this.canFill) this.relayout();
+            if (!this.template || !this.entries.length) return;
+            const Ex = typeof PrintableExportCore !== 'undefined' ? PrintableExportCore : null;
+            if (!Ex) return;
+            // Always open the board so the operator can delete or stamp
+            // pages before printing — even when the count is already ×4.
+            this.openFolioPad();
+        },
+
+        openFolioPad() {
+            const Ex = typeof PrintableExportCore !== 'undefined' ? PrintableExportCore : null;
+            if (!Ex || !this.entries.length) return;
+            this.folioPadEntries = Ex.cloneEntriesForFolio(this.entries);
+            this.folioPadBaseCount = this.entries.length;
+            this.folioPadError = '';
+            let brush = null;
+            for (let i = this.folioPadEntries.length - 1; i >= 0; i--) {
+                if (this.folioPadEntries[i] && !this.folioPadEntries[i].blank) { brush = i; break; }
+            }
+            this.folioPadBrushIndex = brush;
+            this.folioPadOpen = true;
+            this.$nextTick(() => this.paintFolioPadBoard());
+        },
+
+        closeFolioPad() {
+            this.folioPadOpen = false;
+            this.folioPadError = '';
+            this.folioPadEntries = [];
+            this.folioPadBrushIndex = null;
+            const host = document.getElementById('pv-folio-board');
+            if (host) host.innerHTML = '';
+        },
+
+        paintFolioPadBoard() {
+            const host = document.getElementById('pv-folio-board');
+            if (!host || !this.template || typeof PrintableDom.mountFolioPadBoard !== 'function') return;
+            const view = this;
+            PrintableDom.mountFolioPadBoard(host, {
+                template: this.template,
+                entries: this.folioPadEntries,
+                brushIndex: this.folioPadBrushIndex,
+                needCount: this.folioPadNeedCount,
+                onBrush: (i) => view.setFolioBrush(i),
+                onInsert: (after) => view.insertFolioBrushAt(after),
+                onRemove: (i) => view.removeFolioPadRow(i),
+            });
+        },
+
+        setFolioBrush(index) {
+            const i = Math.round(Number(index));
+            if (!Number.isFinite(i) || i < 0 || i >= (this.folioPadEntries || []).length) return;
+            const entry = this.folioPadEntries[i];
+            if (!entry || entry.blank) {
+                this.folioPadError = 'Pick a real page for the brush.';
+                return;
+            }
+            this.folioPadBrushIndex = i;
+            this.folioPadError = '';
+            this.paintFolioPadBoard();
+        },
+
+        insertFolioBrushAt(afterIndex) {
+            const Ex = typeof PrintableExportCore !== 'undefined' ? PrintableExportCore : null;
+            if (!Ex) return;
+            const brush = this.folioPadBrushIndex;
+            if (brush == null || brush < 0) {
+                this.folioPadError = 'Pick a page for the brush first.';
+                return;
+            }
+            if (this.folioPadNeedCount <= 0) {
+                this.folioPadError = 'The fold is already a multiple of 4.';
+                return;
+            }
+            const result = Ex.applyFolioPad(this.folioPadEntries, {
+                kind: 'duplicate',
+                sourceIndex: brush,
+                afterIndex: afterIndex,
+            });
+            if (!result.ok) {
+                this.folioPadError = result.why || 'Could not place that page.';
+                return;
+            }
+            this.folioPadEntries = result.entries;
+            this.folioPadError = '';
+            if (afterIndex < brush) this.folioPadBrushIndex = brush + 1;
+            this.$nextTick(() => this.paintFolioPadBoard());
+        },
+
+        removeFolioPadRow(index) {
+            const Ex = typeof PrintableExportCore !== 'undefined' ? PrintableExportCore : null;
+            if (!Ex) return;
+            const result = Ex.removeFolioPadAt(this.folioPadEntries, index);
+            if (!result.ok) {
+                this.folioPadError = result.why || 'Could not remove that page.';
+                return;
+            }
+            const brush = this.folioPadBrushIndex;
+            this.folioPadEntries = result.entries;
+            this.folioPadError = '';
+            if (brush == null) {
+                /* keep */
+            } else if (brush === index) {
+                this.folioPadBrushIndex = null;
+            } else if (brush > index) {
+                this.folioPadBrushIndex = brush - 1;
+            }
+            this.$nextTick(() => this.paintFolioPadBoard());
+        },
+
+        confirmFolioPadPrint() {
+            if (!this.folioPadReady) return;
+            const stack = this.folioPadEntries.slice();
+            this.closeFolioPad();
+            this.runFolioPrint(stack);
+        },
+
+        runFolioPrint(entries) {
             const layer = document.getElementById('pv-print');
-            if (!layer || !this.template || !this.entries.length) return;
+            if (!layer || !this.template || !(entries || []).length) return;
             if (typeof PrintableDom.mountFolioPrint !== 'function') return;
-            PrintableDom.mountFolioPrint(layer, this.template, this.entries);
+            PrintableDom.mountFolioPrint(layer, this.template, entries);
             this.beginPrint(layer);
         },
     };

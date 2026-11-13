@@ -39,26 +39,13 @@ module.exports = { planPerson, committing, allowedProject };
 
 if (require.main === module) {
     const admin = require('firebase-admin');
-    const path = require('path');
-    const fs = require('fs');
+    const { serviceAccount } = require('./service-account.js');
 
     const projectId = allowedProject(process.argv);
     const COMMIT = committing(process.argv);
 
-    function resolveServiceAccount() {
-        const root = path.join(__dirname, '..');
-        const match = fs.readdirSync(root).find(
-            f => f.startsWith(projectId + '-firebase-adminsdk') && f.endsWith('.json')
-        );
-        if (!match) {
-            throw new Error(
-                'No ' + projectId + '-firebase-adminsdk-*.json found in project root.');
-        }
-        return require(path.join(root, match));
-    }
-
     admin.initializeApp({
-        credential: admin.credential.cert(resolveServiceAccount()),
+        credential: admin.credential.cert(serviceAccount()),
         projectId: projectId,
     });
     const db = admin.firestore();

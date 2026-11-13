@@ -10,13 +10,7 @@ const LEVELS = [
 
 test('built-in presets match AccessCore for every permission level', () => {
     LEVELS.forEach(level => {
-        const account = { permissionLevel: level };
-        const migrated = Levels.migrateLegacyUser(account);
-        const withPerms = {
-            permissionLevel: migrated.permissionLevel,
-            accountLevelId: migrated.accountLevelId,
-            permissions: migrated.permissions,
-        };
+        const withPerms = Levels.userWriteFromLevel(Levels.accountLevelIdForPreset(level));
         assert.equal(Access.isAnElder(withPerms), Access.isAnElder(level), level + ' isAnElder');
         assert.equal(Access.readsAsElder(withPerms), Access.readsAsElder(level), level + ' readsAsElder');
         assert.equal(Access.writesAsEditor(withPerms), Access.writesAsEditor(level), level + ' writesAsEditor');
@@ -41,16 +35,12 @@ test('Editor preset grants calendar.events.edit (MS-725, Helm option A)', () => 
     assert.equal(admin['calendar.events.edit'], true);
 });
 
-test('legacy pastoralAssistant grant migrates to PA-effective permissions', () => {
-    const migrated = Levels.migrateLegacyUser({ permissionLevel: 'member', pastoralAssistant: true });
-    const account = {
-        permissionLevel: migrated.permissionLevel,
-        pastoralAssistant: migrated.pastoralAssistant,
-        permissions: migrated.permissions,
-    };
-    assert.equal(Access.readsAsElder(account), true);
-    assert.equal(Access.isAnElder(account), false);
-    assert.equal(Access.canDecide(account), true);
+test('a stored pastoralAssistant flag does not become the Pastoral Assistant preset', () => {
+    const legacy = { permissionLevel: 'member', pastoralAssistant: true, role: 'member' };
+    assert.equal(Access.readsAsElder(legacy), false);
+    assert.equal(Access.isAnElder(legacy), false);
+    assert.equal(Access.canDecide(legacy), false);
+    assert.equal(Access.permissionLevelOf(legacy), 'viewer');
 });
 
 test('assigning Pastoral Assistant writes that rung and an elder\'s doors', () => {
@@ -60,9 +50,10 @@ test('assigning Pastoral Assistant writes that rung and an elder\'s doors', () =
         permissions: Levels.buildPresetPermissions('member'),
     };
     const write = Levels.userWriteFromLevel('level_pastoral_assistant', levelDoc);
-    assert.equal(write.permissionLevel, 'pastoral_assistant');
-    assert.equal(write.role, 'pastoral_assistant');
-    assert.equal(write.pastoralAssistant, false);
+    assert.equal(write.accountLevelId, 'level_pastoral_assistant');
+    assert.equal(write.permissionLevel, undefined);
+    assert.equal(write.role, undefined);
+    assert.equal(Object.prototype.hasOwnProperty.call(write, 'pastoralAssistant'), false);
     assert.equal(write.permissions['visibility.lift_hidden_tags'], true);
     assert.equal(write.permissions['shep.tags.manage'], true);
     assert.equal(write.permissions['shep.notes.write'], true);
@@ -82,12 +73,14 @@ test('a Member string with a Pastoral Assistant assignment is not a Member', () 
         permissions: Levels.buildPresetPermissions('member'),
         pastoralAssistant: false,
     };
-    assert.equal(Levels.canonicalPermissionLevel(stuck), 'pastoral_assistant');
-    assert.equal(Access.readsAsElder(stuck), true);
-    assert.equal(Access.canDecide(stuck), true);
-    assert.equal(Access.writesAsEditor(stuck), true);
+    // The saved map is the whole answer, so a member map stays a member
+    // even when accountLevelId still names Pastoral Assistant.
+    assert.equal(Levels.canonicalPermissionLevel(stuck), 'member');
+    assert.equal(Access.readsAsElder(stuck), false);
+    assert.equal(Access.canDecide(stuck), false);
+    assert.equal(Access.writesAsEditor(stuck), false);
     assert.equal(Access.isAnElder(stuck), false);
-    assert.equal(Access.permissionLevelOf(stuck), 'pastoral_assistant');
+    assert.equal(Access.permissionLevelOf(stuck), 'member');
 
     const mapOnly = {
         permissionLevel: 'member',
@@ -98,7 +91,7 @@ test('a Member string with a Pastoral Assistant assignment is not a Member', () 
     assert.equal(Access.readsAsElder(mapOnly), true);
     assert.equal(Access.isAnElder(mapOnly), false);
 
-    const rawId = { permissionLevel: 'level_pastoral_assistant' };
+    const rawId = { accountLevelId: 'level_pastoral_assistant' };
     assert.equal(Access.permissionLevelOf(rawId), 'pastoral_assistant');
     assert.equal(Access.readsAsElder(rawId), true);
     assert.equal(Access.isAnElder(rawId), false);

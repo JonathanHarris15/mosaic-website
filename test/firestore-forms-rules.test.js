@@ -35,9 +35,9 @@ const blockFor = pattern => {
     return m[1];
 };
 
-const formsBlock = () => blockFor(/match \/forms\/\{formId\}\s*\{([\s\S]*?)\n    \}/);
-const responsesBlock = () => blockFor(/match \/form_responses\/\{responseId\}\s*\{([\s\S]*?)\n    \}/);
-const ledgerBlock = () => blockFor(/match \/form_ledger\/\{entryId\}\s*\{([\s\S]*?)\n    \}/);
+const formsBlock = () => blockFor(/match \/forms\/\{formId\}\s*\{([\s\S]*?)\n {4}\}/);
+const responsesBlock = () => blockFor(/match \/form_responses\/\{responseId\}\s*\{([\s\S]*?)\n {4}\}/);
+const ledgerBlock = () => blockFor(/match \/form_ledger\/\{entryId\}\s*\{([\s\S]*?)\n {4}\}/);
 
 // Strip comments — a block explaining why it does NOT say `if true` would
 // otherwise fail a test looking for `if true`.
@@ -131,7 +131,7 @@ test('no forms rule grants anything to the public', () => {
 
 // ── Where a form is filed (MS-375) ───────────────────────────────────────────
 
-const foldersBlock = () => blockFor(/match \/form_folders\/\{folderId\}\s*\{([\s\S]*?)\n    \}/);
+const foldersBlock = () => blockFor(/match \/form_folders\/\{folderId\}\s*\{([\s\S]*?)\n {4}\}/);
 
 test('a Form Folder is editor-and-above, like the forms it holds', () => {
     const block = code(foldersBlock());
@@ -168,7 +168,7 @@ const src2 = (dir, name) => fs2.readFileSync(path2.join(__dirname, '..', dir, na
 
 test('the browser no longer tries to delete an answer it may not write', () => {
     const store = src2('public', 'forms-store.js');
-    const del = store.match(/async function deleteForm\([\s\S]*?\n    \}/);
+    const del = store.match(/async function deleteForm\([\s\S]*?\n {4}\}/);
     assert.ok(del, 'deleteForm has gone missing');
     assert.ok(!/batch\.delete/.test(del[0]),
         'deleteForm still batches deletes a client is refused');
@@ -180,18 +180,30 @@ test('the door checks the rank itself, and an elder-only form needs an elder', (
     const fn = src2('functions', 'index.js');
     const block = fn.match(/exports\.deleteFormTemplate = onCall\([\s\S]*?\n\);/);
     assert.ok(block, 'there is no deleteFormTemplate function');
-    assert.match(block[0], /EDITOR_RANKS\.includes\(rank\)/,
+    assert.match(block[0], /!Access\.readsAsEditor\(user\)/,
         'anybody signed in can delete a form');
-    assert.match(block[0], /isElderOnly\(form\) && !ELDER_RANKS\.includes\(rank\)/,
+    assert.match(block[0], /FormsCore\.isElderOnly\(form\) && !Access\.readsAsElder\(user\)/,
         'an ordinary editor can delete a form shut to elders');
+    assert.doesNotMatch(block[0], /ELDER_RANKS|EDITOR_RANKS/);
     assert.match(block[0], /form_ledger/,
         'the ballot ledger is left behind by the one door that could tidy it');
 });
 
 test('an admin is not an elder in the function either', () => {
     const fn = src2('functions', 'index.js');
-    assert.match(fn, /const ELDER_RANKS = \["elder", "super_admin"\];/,
-        'ELDER_RANKS no longer matches isElder()');
+    const block = fn.match(/exports\.deleteFormTemplate = onCall\([\s\S]*?\n\);/);
+    assert.ok(block, 'there is no deleteFormTemplate function');
+    assert.doesNotMatch(block[0], /ELDER_RANKS/);
+    assert.match(block[0], /!Access\.readsAsElder\(user\)/);
+    // readsAsElder is lift_hidden_tags or a pastoral assistant. An admin
+    // preset has neither; an elder, a super admin, and a pastoral assistant do.
+    const Access = require('../public/access-core.js');
+    assert.equal(Access.readsAsElder({ accountLevelId: 'level_admin' }), false);
+    assert.equal(Access.readsAsElder({ accountLevelId: 'level_editor' }), false);
+    assert.equal(Access.readsAsElder({ permissionLevel: 'elder' }), false);
+    assert.equal(Access.readsAsElder({ accountLevelId: 'level_elder' }), true);
+    assert.equal(Access.readsAsElder({ accountLevelId: 'level_super_admin' }), true);
+    assert.equal(Access.readsAsElder({ accountLevelId: 'level_pastoral_assistant' }), true);
 });
 
 test('every page that can delete a form loads the door it goes through', () => {

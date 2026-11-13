@@ -325,7 +325,7 @@ test('inactivity is the directory membership test', () => {
     const legacy = person({
         name: 'Fran',
         tags: ['choir'],
-        membership: { status: 'inactive' },
+        membership: { inactive: true, stage: 'member' },
     });
     assert.equal(
         Shepherding.isInactiveMembership(legacy.membership),

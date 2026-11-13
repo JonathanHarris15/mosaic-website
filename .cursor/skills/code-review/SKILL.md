@@ -1,6 +1,6 @@
 ---
 name: code-review
-description: "Review the changes since a fixed point (commit, branch, tag, or merge-base) along two axes: Standards (does the code follow this repo's documented coding standards?) and Spec (does the code match what the originating issue/spec asked for?). Runs both reviews in parallel sub-agents and reports them side by side. Use when the user wants to review a branch, a PR, work-in-progress changes, or asks to \"review since X\"."
+description: "Review the changes since a fixed point (commit, branch, tag, or merge-base) along two axes: Standards (does the code follow this repo's documented coding standards?) and Spec (does the code match what the originating issue/spec asked for?). Runs both reviews in parallel sub-agents and reports them side by side. Also the pre-merge adversarial review: a fresh subagent posts a pull request comment whose first line is `Adversarial review: PASS` or `Adversarial review: FAIL`. Use when the user wants to review a branch, a PR, work-in-progress changes, or asks to \"review since X\"."
 ---
 
 Two-axis review of the diff between `HEAD` and a fixed point the user supplies:
@@ -87,3 +87,39 @@ A change can pass one axis and fail the other:
 - Code that does exactly what the issue asked but breaks the project's conventions → **Spec pass, Standards fail.**
 
 Reporting them separately stops one axis from masking the other.
+
+The adversarial review below is a third result. It does not collapse these two into one score.
+
+## Adversarial review
+
+Blocking pass for every agent pull request, before merge on green CI. Also run it when someone asks for an adversarial review.
+
+A **new subagent** posts the verdict. Its context is this skill, `git diff <fixed-point>...HEAD`, and the spec. A new subagent is one that did not write the commits under review.
+
+Read the diff for each item. A hit fails the review. Quote the file and the hunk.
+
+- **Dead code** — a file, export, branch, or binding the change adds that nothing calls.
+- **Duplicate or overlapping data structures** — a second shape for a fact the codebase already stores, or a field that copies an existing one.
+- **Legacy fallbacks** — a read or a write that accepts both an old shape and the new one. A replacement ships as one shape: the old path is deleted in the same change.
+- **Missing behavior tests** — a behavior change with no test that fails when that behavior is removed. A change with no behavior (docs, config, wording) records that and passes this item.
+- **Unhandled errors** — a failure path the change adds (throw, rejection, failed I/O) that nothing handles or reports. An empty catch that discards the error is a hit.
+
+### Verdict
+
+When a pull request exists, post a comment on it. On Cursor Cloud that is `ManagePullRequest` `post_comment`. The first line is exactly one of:
+
+```
+Adversarial review: PASS
+```
+
+```
+Adversarial review: FAIL
+```
+
+The second line is the full `HEAD` sha that was reviewed. Under that, one line per checklist item: `clear`, or the file and the reason.
+
+PASS means every item is clear. FAIL means at least one hit. The author fixes the hits, then a new subagent reviews the new head. The PASS that authorizes merge is the comment whose sha is the pull request head.
+
+A review with no pull request uses the same verdict in the reply.
+
+Done when that comment (or the reply) is posted and its first line is the verdict for that sha.

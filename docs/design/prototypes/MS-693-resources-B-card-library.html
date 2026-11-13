@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#E8DDCD" />
+    <title>MS-693 — Resources · Variant B (card library)</title>
+    <link rel="stylesheet" href="../../../public/fonts.css" />
+    <link rel="stylesheet" href="../../../public/mosaic.css" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" />
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400..900&amp;family=EB+Garamond:ital,wght@0,400..800;1,400..800&amp;family=Libre+Franklin:ital,wght@0,100..900;1,100..900&amp;display=swap" />
+    <style>
+        @font-face { font-family: 'Proto EB Garamond'; font-style: normal; font-weight: 400 800; font-display: swap;
+            src: url(https://raw.githubusercontent.com/JonathanHarris15/mosaic-website/main/public/fonts/files/SlGUmQSNjdsmc35JDF1K5GR1SDk.woff2) format('woff2'); }
+        @font-face { font-family: 'Proto Libre Franklin'; font-style: normal; font-weight: 300 700; font-display: swap;
+            src: url(https://raw.githubusercontent.com/JonathanHarris15/mosaic-website/main/public/fonts/files/jizDREVItHgc8qDIbSTKq4XkRiUf2zc.woff2) format('woff2'); }
+        html:root { --font-serif: 'Proto EB Garamond', Georgia, serif; --font-sans: 'Proto Libre Franklin', system-ui, sans-serif; }
+        body { margin: 0; background: var(--surface-container-highest); font-family: var(--font-sans); font-size: 13px; color: var(--on-background); }
+        .proto-bar { padding: var(--space-sm) var(--space-md); background: var(--primary); color: var(--on-primary); }
+        .proto-bar h1 { margin: 0; font-family: var(--font-serif); font-size: 20px; }
+        .proto-bar p { margin: 4px 0 0; font-size: 12px; color: var(--primary-fixed-dim); }
+        .proto-main { max-width: 1280px; margin: 0 auto; padding: var(--space-md) var(--space-sm) var(--space-xl); }
+        .proto-section { margin-top: var(--space-lg); }
+        .proto-section > h2 { margin: 0 0 6px; font-family: var(--font-serif); font-size: 18px; color: var(--primary); }
+        .proto-note { margin: 0 0 var(--space-sm); font-size: 12px; color: var(--on-surface-variant); }
+        .proto-stage { background: var(--background); border: 1px solid var(--outline-variant); border-radius: var(--radius-lg); overflow: hidden; }
+        .proto-stage__tag { display: block; padding: 6px 10px; font-size: 10px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase;
+            background: var(--surface-container-low); border-bottom: 1px solid var(--outline-variant); color: var(--on-surface-variant); }
+        .proto-tiles { display: grid; gap: var(--space-sm); grid-template-columns: 1fr; padding: var(--space-sm); }
+        @media (min-width: 560px) { .proto-tiles { grid-template-columns: repeat(2, 1fr); } }
+        @media (min-width: 1024px) {
+            .proto-tiles .m-nav-card { flex-direction: row; align-items: center; gap: var(--space-sm); padding: var(--space-sm); text-align: left; }
+            .proto-tiles .m-medallion { margin: 0; }
+        }
+        .lib-filters { display: flex; flex-wrap: wrap; gap: 6px; padding: 8px 10px; border-bottom: 1px solid var(--outline-variant); align-items: center; }
+        .chip { padding: 4px 10px; border-radius: var(--radius-full); border: 1px solid var(--outline-variant); background: var(--surface); font-size: 11px; font-weight: 600; color: var(--on-surface-variant); }
+        .chip--on { background: var(--primary); color: var(--on-primary); border-color: var(--primary); }
+        .lib-group { padding: 10px; }
+        .lib-group h3 { margin: 0 0 8px; font-size: 11px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--on-surface-variant); display: flex; justify-content: space-between; }
+        .lib-grid { display: grid; gap: 8px; grid-template-columns: 1fr; }
+        @media (min-width: 480px) { .lib-grid { grid-template-columns: repeat(2, 1fr); } }
+        @media (min-width: 900px) { .lib-grid { grid-template-columns: repeat(3, 1fr); } }
+        .res-card { display: flex; flex-direction: column; padding: 10px; border-radius: var(--radius-md); border: 1px solid color-mix(in srgb, var(--outline-variant) 70%, transparent);
+            background: var(--surface-container-lowest); text-decoration: none; color: inherit; min-height: 108px; }
+        .res-card:hover { border-color: var(--primary); box-shadow: 0 1px 0 color-mix(in srgb, var(--primary) 20%, transparent); }
+        .res-card__top { display: flex; justify-content: space-between; align-items: flex-start; gap: 6px; }
+        .res-card__type { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--primary); }
+        .res-card__title { margin: 6px 0 4px; font-family: var(--font-serif); font-size: 15px; line-height: 1.25; font-weight: 500; }
+        .res-card__meta { font-size: 10px; color: var(--on-surface-variant); margin-top: auto; }
+        .state-box { padding: var(--space-md); text-align: center; font-size: 13px; color: var(--on-surface-variant); }
+        .adm-bar { display: flex; flex-wrap: wrap; gap: 6px; padding: 8px 10px; background: var(--surface-container-low); border-top: 1px solid var(--outline-variant); font-size: 11px; }
+    </style>
+</head>
+<body>
+    <header class="proto-bar">
+        <h1>MS-693 · Variant B — Card library + filters</h1>
+        <p>Grouped by series and file type; visual scan over hierarchy. Fictional “Northgate Fellowship.”</p>
+    </header>
+    <main class="proto-main">
+        <section class="proto-section" id="dashboard">
+            <h2>Dashboard entry</h2>
+            <div class="proto-stage">
+                <span class="proto-stage__tag">Home dashboard</span>
+                <div class="proto-tiles">
+                    <a class="m-nav-card" href="#library">
+                        <span class="m-medallion m-medallion--sm"><span class="material-symbols-outlined">perm_media</span></span>
+                        <span class="m-nav-card__body">
+                            <span class="m-nav-card__title">Resources</span>
+                            <span class="m-nav-card__desc">Studies, sermons, and shared files</span>
+                        </span>
+                    </a>
+                    <span class="m-nav-card" aria-hidden="true">
+                        <span class="m-medallion m-medallion--sm"><span class="material-symbols-outlined">event</span></span>
+                        <span class="m-nav-card__body"><span class="m-nav-card__title">Calendar</span><span class="m-nav-card__desc">Events and classes</span></span>
+                    </span>
+                </div>
+            </div>
+        </section>
+
+        <section class="proto-section" id="library">
+            <h2>Member library · many</h2>
+            <div class="proto-stage">
+                <span class="proto-stage__tag">Browse by series &amp; type</span>
+                <header class="m-header">
+                    <div class="m-header__inner">
+                        <div class="m-header__lead">
+                            <a class="m-back" href="#dashboard"><span class="material-symbols-outlined">chevron_left</span><span class="m-back__label">Home</span></a>
+                            <div class="m-header__titles"><p class="m-header__title">Resources</p></div>
+                        </div>
+                        <div class="m-header__actions">
+                            <button type="button" class="m-btn m-btn--text m-btn--sm"><span class="material-symbols-outlined">search</span></button>
+                        </div>
+                    </div>
+                </header>
+                <div class="lib-filters" role="group" aria-label="Filters">
+                    <span class="chip chip--on">All types</span>
+                    <span class="chip">PDF</span>
+                    <span class="chip">Word</span>
+                    <span class="chip">Images</span>
+                    <span class="chip">Links</span>
+                    <span style="width:1px;height:20px;background:var(--outline-variant);"></span>
+                    <span class="chip chip--on">2025</span>
+                    <span class="chip">Archive</span>
+                </div>
+                <div class="lib-group">
+                    <h3>Series · Ephesians <span>4 items</span></h3>
+                    <div class="lib-grid">
+                        <a class="res-card" href="#"><div class="res-card__top"><span class="res-card__type">PDF</span><span class="material-symbols-outlined" style="font-size:18px;color:var(--on-surface-variant);">picture_as_pdf</span></div><div class="res-card__title">Week 3 — Unity in the body</div><div class="res-card__meta">Study guide · 380 KB</div></a>
+                        <a class="res-card" href="#"><div class="res-card__top"><span class="res-card__type">Manuscript</span><span class="material-symbols-outlined" style="font-size:18px;">description</span></div><div class="res-card__title">Sermon draft — Gifts listed</div><div class="res-card__meta">Word · updated Mon</div></a>
+                        <a class="res-card" href="#"><div class="res-card__top"><span class="res-card__type">Link</span><span class="material-symbols-outlined" style="font-size:18px;">link</span></div><div class="res-card__title">Slide deck (Google)</div><div class="res-card__meta">View in browser</div></a>
+                    </div>
+                </div>
+                <div class="lib-group" style="border-top:1px solid var(--surface-container);">
+                    <h3>Type · Sermon outlines <span>12 items</span></h3>
+                    <div class="lib-grid">
+                        <a class="res-card" href="#"><div class="res-card__top"><span class="res-card__type">Outline</span><span class="material-symbols-outlined" style="font-size:18px;">article</span></div><div class="res-card__title">Advent 1 — Hope named</div><div class="res-card__meta">PDF · Nov 2024</div></a>
+                        <a class="res-card" href="#"><div class="res-card__top"><span class="res-card__type">Outline</span><span class="material-symbols-outlined" style="font-size:18px;">article</span></div><div class="res-card__title">Baptism Sunday</div><div class="res-card__meta">PDF · Oct 2024</div></a>
+                        <a class="res-card" href="#"><div class="res-card__top"><span class="res-card__type">Image</span><span class="material-symbols-outlined" style="font-size:18px;">image</span></div><div class="res-card__title">Service outline (photo scan)</div><div class="res-card__meta">PNG · 2.1 MB</div></a>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="proto-section">
+            <h2>States</h2>
+            <div class="proto-stage" style="margin-bottom:var(--space-md);"><span class="proto-stage__tag">Empty (no matches)</span>
+                <div class="state-box">No resources match <strong>Images</strong> in <strong>2025</strong>.<br /><button type="button" class="m-btn m-btn--text m-btn--sm">Clear filters</button></div>
+            </div>
+            <div class="proto-stage" style="margin-bottom:var(--space-md);"><span class="proto-stage__tag">One</span>
+                <div class="lib-grid" style="padding:10px;"><a class="res-card" href="#"><div class="res-card__type">PDF</div><div class="res-card__title">New member packet</div><div class="res-card__meta">Only file in Welcome</div></a></div>
+            </div>
+            <div class="proto-stage"><span class="proto-stage__tag">Error</span>
+                <div class="state-box" style="color:var(--error);">Library could not refresh. <button type="button" class="m-btn m-btn--tonal m-btn--sm">Retry</button></div>
+            </div>
+        </section>
+
+        <section class="proto-section">
+            <h2>Admin glimpse</h2>
+            <div class="proto-stage">
+                <span class="proto-stage__tag">Editor: assign series &amp; type on upload</span>
+                <div class="adm-bar">
+                    <button type="button" class="m-btn m-btn--primary m-btn--sm">Add resource</button>
+                    <label style="display:flex;align-items:center;gap:4px;">Series <select style="font-size:11px;padding:4px;"><option>Ephesians</option><option>New series…</option></select></label>
+                    <label style="display:flex;align-items:center;gap:4px;">Type <select style="font-size:11px;padding:4px;"><option>Study guide</option><option>Manuscript</option></select></label>
+                    <span style="margin-left:auto;color:var(--on-surface-variant);">Reorder groups · drag section headers</span>
+                </div>
+            </div>
+        </section>
+    </main>
+</body>
+</html>

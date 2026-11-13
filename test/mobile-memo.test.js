@@ -22,7 +22,6 @@ test('the memo holds nothing for long', () => {
     // the window lasts.
     const ttl = DATA.match(/var TTL_MS = ([^;]+);/);
     assert.ok(ttl, 'the memo no longer has a TTL');
-    // eslint-disable-next-line no-eval
     assert.ok(eval(ttl[1]) <= 5 * 60 * 1000, `the memo holds data for ${ttl[1]}, which is long enough to be wrong`);
 });
 

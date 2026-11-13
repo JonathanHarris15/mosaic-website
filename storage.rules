@@ -11,8 +11,8 @@ service firebase.storage {
     // enforcing: without it this path accepts an executable, or a 2GB file, from
     // any signed-in account.
     match /people_photos/{personId}/{fileId} {
-      allow read: if request.auth != null;
-      allow write: if request.auth != null
+      allow read: if isSignedIn();
+      allow write: if isSignedIn()
         && request.resource.size < 5 * 1024 * 1024
         && request.resource.contentType.matches('image/.*');
 
@@ -30,20 +30,219 @@ service firebase.storage {
     // arranged to spend exactly two — the asker's `users` document and the
     // occurrence — and never the same one twice.
     //
+    // Those reads are made by the Cloud Storage for Firebase service agent and
+    // succeed only while it holds roles/firebaserules.firestoreServiceAgent on
+    // the project. Without the role every one fails, and every rule built on
+    // one denies every caller. The --non-interactive deploy never grants it,
+    // so firebase-deploy.yml checks for it after shipping
+    // (scripts/check-storage-cross-service.js).
+    //
     // These restate `permissionLevel()`, `isSignedIn()` and `rankCanSee()` from
     // firestore.rules in a second engine that cannot import them. That
     // duplication is real and it is the price of the boundary being enforced
     // where the bytes are; test/storage-event-attachment-rules.test.js reads
     // both files and fails when they drift apart.
 
-    function myUserDoc() {
-      return firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data;
+    function usersDocExists() {
+      return isSignedIn()
+        && firestore.exists(/databases/(default)/documents/users/$(request.auth.uid));
     }
 
-    // `permissionLevel` with the legacy `role` fallback, exactly as
-    // firestore.rules reads it during the MS-119 migration.
-    function levelOf(u) {
-      return ('permissionLevel' in u) ? u.permissionLevel : u.role;
+    function myUserData() {
+      return usersDocExists()
+        ? firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data
+        : null;
+    }
+
+    // Legacy name used throughout this file.
+    function myUserDoc() {
+      return myUserData();
+    }
+
+    // MS-776: same resolver as firestore.rules. A saved map is the whole
+    // answer; otherwise a builtin accountLevelId. role, permissionLevel, and
+    // pastoralAssistant grant nothing. These lists restate
+    // account-levels-core buildPresetPermissions; the drift test fails when
+    // either rules file disagrees with that module or with the other file.
+
+    function mapGrants(perms, key) {
+      return perms is map && (
+        (('system.super_admin' in perms) && perms['system.super_admin'] == true)
+        || ((key in perms) && perms[key] == true)
+      );
+    }
+
+    function grantsElder(key) {
+      return key == 'core.sign_in' || key == 'visibility.rung.public'
+        || key == 'visibility.rung.member' || key == 'visibility.rung.participant'
+        || key == 'visibility.rung.editor' || key == 'visibility.rung.elder'
+        || key == 'visibility.lift_hidden_tags' || key == 'directory.view'
+        || key == 'directory.edit_identity' || key == 'directory.resolve_requests'
+        || key == 'shep.dashboard.view' || key == 'shep.profile.view'
+        || key == 'shep.notes.view' || key == 'shep.documents.view'
+        || key == 'shep.tasks.view' || key == 'shep.care_lists.view'
+        || key == 'shep.relationships.view' || key == 'shep.forms.view'
+        || key == 'shep.presence.view' || key == 'shep.notes.write'
+        || key == 'shep.documents.write' || key == 'shep.tasks.write'
+        || key == 'shep.care_lists.write' || key == 'shep.forms.write'
+        || key == 'shep.panels.write' || key == 'shep.tags.manage'
+        || key == 'shep.status.manage' || key == 'shep.views.manage'
+        || key == 'shep.relationships.manage'
+        || key == 'shep.elder_assignment.set'
+        || key == 'shep.membership_stage.set' || key == 'shep.explain_changes'
+        || key == 'shep.prayer.send' || key == 'shep.forms.lock_elder'
+        || key == 'shep.guidance.lock' || key == 'shep.count_as_elder'
+        || key == 'shep.elder_assignment.be_assignee' || key == 'calendar.view'
+        || key == 'calendar.events.edit' || key == 'calendar.away.view'
+        || key == 'calendar.away.edit' || key == 'services.builder.view'
+        || key == 'services.builder.edit' || key == 'services.week_shift'
+        || key == 'services.guidance.view' || key == 'hymns.view'
+        || key == 'hymns.edit' || key == 'printables.view'
+        || key == 'printables.edit' || key == 'roles.manager.view'
+        || key == 'roles.manager.edit' || key == 'resources.edit'
+        || key == 'analytics.view' || key == 'admin.mcp.view';
+    }
+
+    function grantsPastoralAssistant(key) {
+      return key == 'core.sign_in' || key == 'visibility.rung.public'
+        || key == 'visibility.rung.member' || key == 'visibility.rung.participant'
+        || key == 'visibility.rung.editor' || key == 'visibility.rung.elder'
+        || key == 'visibility.lift_hidden_tags' || key == 'directory.view'
+        || key == 'directory.edit_identity' || key == 'directory.resolve_requests'
+        || key == 'shep.dashboard.view' || key == 'shep.profile.view'
+        || key == 'shep.notes.view' || key == 'shep.documents.view'
+        || key == 'shep.tasks.view' || key == 'shep.care_lists.view'
+        || key == 'shep.relationships.view' || key == 'shep.forms.view'
+        || key == 'shep.presence.view' || key == 'shep.notes.write'
+        || key == 'shep.documents.write' || key == 'shep.tasks.write'
+        || key == 'shep.care_lists.write' || key == 'shep.forms.write'
+        || key == 'shep.panels.write' || key == 'shep.tags.manage'
+        || key == 'shep.status.manage' || key == 'shep.views.manage'
+        || key == 'shep.relationships.manage'
+        || key == 'shep.elder_assignment.set'
+        || key == 'shep.membership_stage.set' || key == 'shep.explain_changes'
+        || key == 'shep.prayer.send' || key == 'shep.forms.lock_elder'
+        || key == 'shep.guidance.lock' || key == 'calendar.view'
+        || key == 'calendar.events.edit' || key == 'calendar.away.view'
+        || key == 'calendar.away.edit' || key == 'services.builder.view'
+        || key == 'services.builder.edit' || key == 'services.week_shift'
+        || key == 'services.guidance.view' || key == 'hymns.view'
+        || key == 'hymns.edit' || key == 'printables.view'
+        || key == 'printables.edit' || key == 'roles.manager.view'
+        || key == 'roles.manager.edit' || key == 'resources.edit'
+        || key == 'analytics.view' || key == 'admin.mcp.view';
+    }
+
+    function grantsEditor(key) {
+      return key == 'core.sign_in' || key == 'visibility.rung.public'
+        || key == 'visibility.rung.member' || key == 'visibility.rung.participant'
+        || key == 'visibility.rung.editor' || key == 'directory.view'
+        || key == 'directory.edit_identity' || key == 'directory.resolve_requests'
+        || key == 'shep.forms.view' || key == 'calendar.view'
+        || key == 'calendar.events.edit' || key == 'calendar.away.view'
+        || key == 'calendar.away.edit' || key == 'services.builder.view'
+        || key == 'services.builder.edit' || key == 'services.guidance.view'
+        || key == 'hymns.view' || key == 'hymns.edit' || key == 'printables.view'
+        || key == 'printables.edit' || key == 'roles.manager.view'
+        || key == 'roles.manager.edit' || key == 'resources.edit'
+        || key == 'admin.mcp.view';
+    }
+
+    function grantsAdmin(key) {
+      return key == 'core.sign_in' || key == 'visibility.rung.public'
+        || key == 'visibility.rung.member' || key == 'visibility.rung.participant'
+        || key == 'visibility.rung.editor' || key == 'directory.view'
+        || key == 'directory.edit_identity' || key == 'directory.resolve_requests'
+        || key == 'shep.forms.view' || key == 'calendar.view'
+        || key == 'calendar.events.edit' || key == 'calendar.away.view'
+        || key == 'calendar.away.edit' || key == 'services.builder.view'
+        || key == 'services.builder.edit' || key == 'services.guidance.view'
+        || key == 'hymns.view' || key == 'hymns.edit' || key == 'printables.view'
+        || key == 'printables.edit' || key == 'roles.manager.view'
+        || key == 'roles.manager.edit' || key == 'resources.edit'
+        || key == 'admin.dashboard.access' || key == 'admin.sms.manage'
+        || key == 'admin.push.manage' || key == 'admin.accounts.view'
+        || key == 'admin.accounts.provision'
+        || key == 'admin.accounts.assign_level' || key == 'admin.levels.manage'
+        || key == 'admin.mcp.view';
+    }
+
+    function grantsMember(key) {
+      return key == 'core.sign_in' || key == 'visibility.rung.public'
+        || key == 'visibility.rung.member' || key == 'directory.view';
+    }
+
+    function grantsViewer(key) {
+      return key == 'core.sign_in' || key == 'visibility.rung.public';
+    }
+
+    function grantsKiosk(key) {
+      return key == 'core.sign_in' || key == 'visibility.rung.public'
+        || key == 'system.kiosk';
+    }
+
+    function presetGrants(id, key) {
+      return id == 'level_super_admin' ? true
+        : id == 'level_elder' ? grantsElder(key)
+        : id == 'level_pastoral_assistant' ? grantsPastoralAssistant(key)
+        : id == 'level_editor' ? grantsEditor(key)
+        : id == 'level_admin' ? grantsAdmin(key)
+        : id == 'level_member' ? grantsMember(key)
+        : id == 'level_viewer' ? grantsViewer(key)
+        : id == 'level_kiosk' ? grantsKiosk(key)
+        : false;
+    }
+
+    function keyOnAccount(key) {
+      let data = myUserData();
+      return data != null && (
+        ('permissions' in data)
+          ? mapGrants(data.permissions, key)
+          : (('accountLevelId' in data) && presetGrants(data.accountLevelId, key))
+      );
+    }
+
+    // Same split as firestore.rules. Inlining keyOnAccount() here inlines
+    // presetGrants (the whole builtin matrix) into every allow, and the Rules
+    // API compile then dies with HTTP 503 before deploy can upload. The matrix
+    // stays on keyOnAccount(), which editsWithAccount and isElderAccount call
+    // once. Map wins when the field is present; otherwise the builtin
+    // accountLevelId. role, permissionLevel, and pastoralAssistant grant nothing.
+
+    function mapHas(key) {
+      let data = myUserData();
+      return data != null && ('permissions' in data) && mapGrants(data.permissions, key);
+    }
+
+    function rankFromMap(perms) {
+      return mapGrants(perms, 'system.super_admin') ? 'super_admin'
+        : mapGrants(perms, 'system.kiosk') ? 'kiosk'
+        : mapGrants(perms, 'shep.count_as_elder') ? 'elder'
+        : mapGrants(perms, 'visibility.lift_hidden_tags') ? 'pastoral_assistant'
+        : mapGrants(perms, 'admin.dashboard.access') ? 'admin'
+        : (mapGrants(perms, 'directory.edit_identity')
+            || mapGrants(perms, 'services.builder.edit')
+            || mapGrants(perms, 'printables.edit')) ? 'editor'
+        : mapGrants(perms, 'directory.view') ? 'member'
+        : 'viewer';
+    }
+
+    function rankFromLevelId(id) {
+      return id == 'level_super_admin' ? 'super_admin'
+        : id == 'level_kiosk' ? 'kiosk'
+        : id == 'level_elder' ? 'elder'
+        : id == 'level_pastoral_assistant' ? 'pastoral_assistant'
+        : id == 'level_admin' ? 'admin'
+        : id == 'level_editor' ? 'editor'
+        : id == 'level_member' ? 'member'
+        : 'viewer';
+    }
+
+    function accessRankAccount() {
+      let data = myUserData();
+      return data == null ? ''
+        : !('permissions' in data) ? rankFromLevelId(('accountLevelId' in data) ? data.accountLevelId : '')
+        : (data.permissions is map) ? rankFromMap(data.permissions) : 'viewer';
     }
 
     // ⚠ Anonymous sign-in is enabled on this project, so `request.auth != null`
@@ -68,15 +267,13 @@ service firebase.storage {
     // is decided against the occurrence's own list of Person ids.
     function rankOrParticipantSees(occ, u) {
       return (stampedVisibility(occ) == 'member'
-              && (levelOf(u) in ['member', 'editor', 'admin', 'elder', 'super_admin', 'pastoral_assistant']
-                  || u.pastoralAssistant == true))
-        || (stampedVisibility(occ) in ['member', 'participant', 'editor']
-              && (levelOf(u) in ['editor', 'admin', 'elder', 'super_admin', 'pastoral_assistant']
-                  || u.pastoralAssistant == true))
+              && (isMemberAccount() || mapHas('visibility.rung.member')))
+        || (stampedVisibility(occ) == 'participant'
+              && (readsAsEditorAccount() || mapHas('visibility.rung.participant')))
+        || (stampedVisibility(occ) == 'editor'
+              && (readsAsEditorAccount() || mapHas('visibility.rung.editor')))
         || (stampedVisibility(occ) == 'elder'
-              && (levelOf(u) in ['elder', 'super_admin']
-                  || levelOf(u) == 'pastoral_assistant'
-                  || u.pastoralAssistant == true))
+              && (readsAsElderAccount() || mapHas('visibility.rung.elder')))
         || (stampedVisibility(occ) == 'participant'
               && ('personId' in u) && ('participantIds' in occ)
               && u.personId in occ.participantIds);
@@ -92,47 +289,71 @@ service firebase.storage {
 
     function canSee(occ) {
       return stampedVisibility(occ) == 'public'
-        || (isSignedIn() && rankOrParticipantSees(occ, myUserDoc()));
+        || (isSignedIn() && usersDocExists() && rankOrParticipantSees(occ, myUserData()));
     }
 
     function isEditorAccount() {
-      return isSignedIn() && (
-        levelOf(myUserDoc()) in ['editor', 'admin', 'elder', 'super_admin', 'pastoral_assistant']
-        || isPastoralAssistantAccount()
-      );
+      return accessRankAccount() in ['editor', 'admin', 'elder', 'super_admin', 'pastoral_assistant']
+        || mapHas('directory.edit_identity')
+        || mapHas('printables.edit')
+        || mapHas('services.builder.edit')
+        || mapHas('roles.manager.edit')
+        || mapHas('hymns.edit');
     }
 
-    // ⚠ AN ADMIN IS NOT AN ELDER. The tier list reads editor → elder → admin,
-    // which suggests an admin sees everything an elder does; isElder() in
-    // firestore.rules has never said so, and this restates that one rather than
-    // the tier list. Shepherding data is closed to admins on purpose.
+    // ⚠ AN ADMIN IS NOT AN ELDER. count_as_elder is the elder office.
+    // Shepherding data is closed to admins on purpose. A super admin's map
+    // includes the key; a pastoral assistant's does not.
     function isElderAccount() {
-      return isSignedIn() && levelOf(myUserDoc()) in ['elder', 'super_admin'];
+      return keyOnAccount('shep.count_as_elder');
     }
 
-    // Pastoral Assistant is the permission level, restated from AccessCore
-    // (ADR-0076). The old flag still counts. Fail closed: neither is a grant
-    // when the user doc is missing. Not an elder.
     function isPastoralAssistantAccount() {
-      return isSignedIn() && (
-        levelOf(myUserDoc()) == 'pastoral_assistant'
-        || myUserDoc().pastoralAssistant == true
-      );
+      return accessRankAccount() == 'pastoral_assistant';
     }
 
     function readsAsElderAccount() {
-      return isElderAccount() || isPastoralAssistantAccount();
+      let data = myUserData();
+      return data != null && (
+        ('permissions' in data)
+          ? (mapGrants(data.permissions, 'visibility.lift_hidden_tags') || isPastoralAssistantAccount())
+          : (('accountLevelId' in data) && (
+              data.accountLevelId == 'level_super_admin'
+              || data.accountLevelId == 'level_elder'
+              || data.accountLevelId == 'level_pastoral_assistant'))
+      );
     }
 
     function readsAsEditorAccount() {
       return isEditorAccount() || isPastoralAssistantAccount();
     }
 
-    // MS-594: restates AccessCore.canDecide. Storage has no elder-only
-    // shepherding write path today; the helper is here so the restatement
-    // cannot drift from Firestore / the core.
+    // The floor of the member rung, restating firestore.rules isMember().
+    function isMemberAccount() {
+      return accessRankAccount() in ['member', 'editor', 'admin', 'elder', 'super_admin', 'pastoral_assistant']
+        || mapHas('directory.view')
+        || mapHas('visibility.rung.member')
+        || isEditorAccount();
+    }
+
+    function hasPermissionAccount(key) {
+      return keyOnAccount(key);
+    }
+
+    function editsWithAccount(key) {
+      return keyOnAccount(key);
+    }
+
     function canDecideAccount() {
-      return isElderAccount() || isPastoralAssistantAccount();
+      let data = myUserData();
+      return data != null && (
+        ('permissions' in data)
+          ? (mapGrants(data.permissions, 'shep.tags.manage') || isPastoralAssistantAccount())
+          : (('accountLevelId' in data) && (
+              data.accountLevelId == 'level_super_admin'
+              || data.accountLevelId == 'level_elder'
+              || data.accountLevelId == 'level_pastoral_assistant'))
+      );
     }
 
     // Event Attachments (MS-287): a file attached to one Event occurrence — a
@@ -184,8 +405,8 @@ service firebase.storage {
     // ⚠ WRITE IS FALSE, FOR EVERYBODY, AND THAT IS THE DESIGN RATHER THAN AN
     // OVERSIGHT.
     //
-    // Somebody answering a public form has no account, and every rule in this
-    // file — down to the catch-all below — requires one. There is no rule that
+    // Somebody answering a public form has no account, and every client rule in
+    // this file requires one. There is no rule that
     // could let them upload without opening the bucket to the world. So the
     // bytes go through the same closed door as every other public write: the
     // `publicForm` Cloud Function, which runs past these rules with admin
@@ -229,16 +450,16 @@ service firebase.storage {
       allow delete: if false;
     }
 
-    // Pictures placed on a Printable (MS-394): a logo, a cover photo. Like a
-    // Directory Photo (ADR-0029) and unlike an Event Attachment, the editor
-    // keeps the getDownloadURL() token URL on the element, so the picture is
-    // readable by anyone holding that URL — it is decoration on a page, and a
-    // Printable holds nothing a Person record does not. Written by an editor,
-    // as an image, under 8MB. No client deletes; a picture an element no
-    // longer points at is inert.
+    // Pictures placed on a Printable (MS-394): a logo, a cover photo, or a
+    // fill-in image typed on a linked date. Like a Directory Photo (ADR-0029)
+    // the client keeps getDownloadURL() on the element. Write restates who may
+    // fill in printables in the app (AccessCore.writesAsEditor / Firestore
+    // printables.edit and services.builder.edit) — not isEditorAccount() alone,
+    // which MS-769 left behind when the catch-all went away.
     match /printable_assets/{printableId}/{fileId} {
-      allow read: if request.auth != null;
-      allow write: if isEditorAccount()
+      allow read: if isSignedIn();
+      allow write: if (editsWithAccount('printables.edit')
+          || editsWithAccount('services.builder.edit'))
         && request.resource.size < 8 * 1024 * 1024
         && request.resource.contentType.matches('image/.*');
       allow delete: if false;
@@ -246,19 +467,69 @@ service firebase.storage {
 
     // Country map on a Sunday's typed booklet text (MS-591). The Sunday
     // record keeps an https URL, not the bytes — Firestore cannot hold
-    // an unbounded data URL. Same door as printable_assets: an editor
-    // writes an image under 8MB; getDownloadURL() is the token the
-    // Printable binds. No client deletes. Nothing else is widened.
+    // an unbounded data URL. Write matches services/{date} (services.builder.edit).
     match /sunday_typed/{dateId}/country_map/{fileId} {
-      allow read: if request.auth != null;
-      allow write: if isEditorAccount()
+      allow read: if isSignedIn();
+      allow write: if (editsWithAccount('services.builder.edit')
+          || editsWithAccount('printables.edit'))
         && request.resource.size < 8 * 1024 * 1024
         && request.resource.contentType.matches('image/.*');
       allow delete: if false;
     }
 
-    match /{allPaths=**} {
-      allow read, write: if request.auth != null;
+    // The Resources library (MS-693, ADR-0083): the church's shelf of studies,
+    // manuscripts, outlines and packets. One resource record, one prefix named
+    // after its id, one file inside it.
+    //
+    // ⚠ READ IS isMemberAccount(), NOT `request.auth != null`, BECAUSE THE
+    // FIRESTORE RULE ON `resources` SAYS isMember() AND THE BYTES MUST NOT
+    // ANSWER A LOOSER QUESTION THAN THE RECORD POINTING AT THEM.
+    //
+    // ⚠ AND NOTHING MAY CALL getDownloadURL() ON THIS PATH (ADR-0046). That
+    // mints a token which serves the bytes past these rules, to anyone holding
+    // it, signed out, forever. The library downloads through an authenticated
+    // request instead (resources-store.js `openResource`), which IS checked
+    // here on every fetch — the same shape as an Event Attachment.
+    //
+    // No content-type restriction: Word, PDF, images, and whatever the church
+    // needs next. The size cap is the one guard, and it matches
+    // ResourcesCore.MAX_FILE_BYTES, which the browser refuses at first.
+    match /resources/{resourceId}/{fileName} {
+      allow read: if isMemberAccount();
+      allow write: if editsWithAccount('resources.edit')
+        && request.resource.size < 25 * 1024 * 1024;
+
+      // Unlike every other path in this file, a client MAY delete here, and
+      // the difference is that this one knows whose bytes these are. A
+      // Directory Photo's rule cannot tell an uploader from a stranger, and an
+      // Event Attachment is tidied by a trigger. A resource blob lives under
+      // the id of the record that owns it, and the only person allowed to
+      // delete it is the person already allowed to delete that record.
+      //
+      // The page deletes the record FIRST. A failure after that leaves bytes
+      // nothing points at — inert, unreachable through any screen — rather
+      // than a row whose file has gone.
+      allow delete: if editsWithAccount('resources.edit');
+    }
+
+    // Hymn sheet scans (MS-769). Firestore `hymns` is world-readable; the img
+    // tags on the page usually carry a getDownloadURL() token (ADR-0046), but
+    // direct Storage reads still answer the same question as the record.
+    match /hymn-sheets/{hymnFolder}/{fileName} {
+      allow read: if true;
+      allow write: if editsWithAccount('hymns.edit')
+        && request.resource.size < 25 * 1024 * 1024;
+      allow delete: if editsWithAccount('hymns.edit');
+    }
+
+    // Guide Asset Library bytes (guide-store.js). Firestore `guide_assets` is
+    // world-readable and pages embed the getDownloadURL() token in HTML.
+    match /guide-assets/{assetId}/{fileName} {
+      allow read: if true;
+      allow write: if editsWithAccount('services.builder.edit')
+        && request.resource.size < 8 * 1024 * 1024
+        && request.resource.contentType.matches('image/.*');
+      allow delete: if editsWithAccount('services.builder.edit');
     }
   }
 }

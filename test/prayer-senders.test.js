@@ -49,8 +49,21 @@ test('dispatchPrayerAsk mints an Answer link for scheduler and send-now', () => 
         'async function processPrayerSubject');
     assert.match(ask, /mintAnswerLink/);
     assert.match(ask, /purpose:\s*["']prayer_request["']/);
-    assert.match(ask, /url:\s*minted\.url/);
     assert.doesNotMatch(ask, /args\.url/);
+    assert.match(ask, /recordOutbound/);
+    assert.match(ask, /messageWithLink\(args\.message, includeLinkInSms\)/);
+    assert.match(ask, /includeLinkInSms \? minted\.url : null/);
+    assert.match(ask, /includeReplyWebhookInSms/);
+    assert.match(ask, /expectReply:\s*includeReplyWebhook/);
+});
+
+test('failed automatic sends stamp lastSendAttemptDate so the hour does not retry', () => {
+    const subject = sliceBetween(
+        index,
+        'async function processPrayerSubject',
+        'exports.sendPrayerRequestTexts');
+    assert.match(subject, /lastSendAttemptDate:\s*req\.lastSendAttemptDate/);
+    assert.match(subject, /lastSendAttemptDate:\s*today/);
 });
 
 test('answerLink is a v2 onCall door without App Check', () => {
@@ -58,7 +71,13 @@ test('answerLink is a v2 onCall door without App Check', () => {
     const door = sliceBetween(
         index, 'exports.answerLink = onCall', 'exports.publicForm');
     assert.match(door, /enforceAppCheck:\s*false/);
+    assert.match(door, /invoker:\s*["']public["']/);
     assert.match(door, /handleAnswerLink/);
+});
+
+test('publicForm is publicly invokable like the signed-out pages need', () => {
+    const door = sliceBetween(index, 'exports.publicForm = onCall', '/**');
+    assert.match(door, /invoker:\s*["']public["']/);
 });
 
 test('service builder does not hide Send Now for a missing phone', () => {

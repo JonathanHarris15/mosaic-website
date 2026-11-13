@@ -20,6 +20,7 @@ const read = (name) => fs.readFileSync(path.join(ROOT, 'public', name), 'utf8').
 
 const PAGE_SRC = read('shepherding-form-document.js');
 const MARKUP = read('shepherding-form-document.html');
+const FormsCore = require('../public/forms-core.js');
 
 function loadPage(doc) {
     const sandbox = {
@@ -82,6 +83,110 @@ test('it opens with the questions the document itself holds', async () => {
     assert.deepEqual(page.questions.map(q => q.id), ['h', 'when', 'why', 'nights']);
     assert.strictEqual(page.answers.when, '2026-01-11');
     assert.strictEqual(page.title, 'Elder Interview — Rebecca');
+});
+
+/**
+ * @param {any} page
+ * @param {any} question
+ * @return {string[]}
+ */
+function choiceIds(page, question) {
+    const rows = /** @type {Array<{id: string}>} */ (page.personChoices(question));
+    return rows.map((row) => row.id);
+}
+
+test('a member scope offers a stage-Member person and withholds them from non-members', () => {
+    const { page } = loadPage(aDocument());
+    page.directory = [FormsCore.directoryPerson('ada', {
+        name: 'Ada Lovelace',
+        membership: { stage: 'member', inactive: false },
+        tags: ['choir'],
+    })];
+    page.personQueries.who = 'ada';
+    const member = { id: 'who', type: 'person', people: { scope: 'member', tagId: null } };
+    const nonMember = { id: 'who', type: 'person', people: { scope: 'non_member', tagId: null } };
+    const choir = { id: 'who', type: 'person', people: { scope: 'tag', tagId: 'choir' } };
+    assert.deepEqual(choiceIds(page, member), ['ada']);
+    assert.deepEqual(choiceIds(page, nonMember), []);
+    assert.deepEqual(choiceIds(page, choir), ['ada']);
+});
+
+test('loadDirectory reads membership and tags and ignores the phantom fields', async () => {
+    const { page, sandbox } = loadPage(aDocument());
+    const box = /** @type {any} */ (sandbox);
+    box.db.collection = (/** @type {string} */ name) => {
+        assert.equal(name, 'people');
+        return {
+            orderBy: () => ({
+                get: () => Promise.resolve({
+                    docs: [{
+                        id: 'ada',
+                        data: () => ({
+                            name: 'Ada Lovelace',
+                            membership: { stage: 'member', inactive: false },
+                            tags: ['choir'],
+                            isMember: false,
+                            membershipStage: 'visitor',
+                            tagIds: ['not-a-tag'],
+                        }),
+                    }],
+                }),
+            }),
+        };
+    };
+    page.questions = [{ id: 'who', type: 'person', text: 'Who?' }];
+    page.loadDirectory();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    assert.equal(page.directory.length, 1);
+    const row = page.directory[0];
+    assert.equal(row.membership && row.membership.stage, 'member');
+    assert.deepEqual(row.tags, ['choir']);
+    assert.equal(page.directory[0].isMember, undefined);
+    assert.equal(page.directory[0].tagIds, undefined);
+    assert.equal(page.directory[0].membershipStage, undefined);
+    page.personQueries.who = 'ada';
+    const member = { id: 'who', type: 'person', people: { scope: 'member' } };
+    assert.deepEqual(choiceIds(page, member), ['ada']);
+});
+
+test('somebody added from the document is not a member and carries no tags', async () => {
+    const { page, sandbox } = loadPage(aDocument());
+    /** @type {any} */
+    let written = null;
+    const box = /** @type {any} */ (sandbox);
+    box.db.collection = (/** @type {string} */ name) => {
+        assert.equal(name, 'people');
+        return {
+            add: (/** @type {any} */ doc) => {
+                written = doc;
+                return Promise.resolve({ id: 'new1' });
+            },
+        };
+    };
+    const person = await page.createPerson({
+        name: 'Casey New', email: '', phone: '', address: '', birthday: null, sex: null,
+    });
+    assert.equal(person.id, 'new1');
+    assert.equal(written.tags.length, 0);
+    assert.equal(written.isMember, undefined);
+    assert.equal(written.tagIds, undefined);
+    assert.equal(Object.prototype.hasOwnProperty.call(person, 'isMember'), false);
+    assert.equal(Object.prototype.hasOwnProperty.call(person, 'tagIds'), false);
+    assert.deepEqual(person.tags, []);
+    assert.equal(person.membership, null);
+    page.personQueries.who = 'casey';
+    const member = { id: 'who', type: 'person', people: { scope: 'member' } };
+    const nonMember = { id: 'who', type: 'person', people: { scope: 'non_member' } };
+    assert.deepEqual(choiceIds(page, member), []);
+    assert.deepEqual(choiceIds(page, nonMember), ['new1']);
+});
+
+test('the document page does not read the phantom person fields', () => {
+    assert.doesNotMatch(PAGE_SRC, /isMember|membershipStage|tagIds/);
+    const coreAt = MARKUP.indexOf('shepherding-core.js');
+    const pageAt = MARKUP.indexOf('shepherding-form-document.js');
+    assert.ok(coreAt !== -1 && coreAt < pageAt,
+        'the member test is ShepherdingCore.carriesMemberTag, loaded before the page');
 });
 
 test('it never reads its template', () => {

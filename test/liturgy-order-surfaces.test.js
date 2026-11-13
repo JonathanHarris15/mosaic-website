@@ -23,15 +23,21 @@ test('the Order of Service header selects this Sunday\'s Liturgy Order', () => {
     assert.match(html, /href="'liturgy-orders\.html\?date=/, 'the manage control opens the management page');
 });
 
-test('no page routes a Sunday to the legacy generator', () => {
-    ['service-builder.html', 'service-builder.js', 'service-calendar.html', 'service-calendar.js',
-        'service-guide-editor.html', 'service-guide-editor.js', 'guide-store.js', 'mobile/app.js']
-        .forEach((f) => assert.doesNotMatch(read(f), /service-guide\.html/, f));
+test('no shipped page routes a Sunday to the retired guide editor or generator', () => {
+    ['service-builder.html', 'service-builder.js', 'service-calendar.html', 'service-calendar.js', 'mobile/app.js', 'mobile/screens-content.js']
+        .forEach((f) => {
+            assert.doesNotMatch(read(f), /service-guide-editor\.html/, f);
+            assert.doesNotMatch(read(f), /service-guide\.html/, f);
+            assert.doesNotMatch(read(f), /guide-store\.js/, f);
+        });
+    assert.throws(() => read('service-guide-editor.html'), (err) => err && err.code === 'ENOENT');
+    assert.throws(() => read('service-guide.html'), (err) => err && err.code === 'ENOENT');
 });
 
 test('the calendar\'s table mode toggles orders and links the management page', () => {
     const html = read('service-calendar.html');
     assert.match(html, /id="table-orders"/);
+    assert.match(html, /id="table-orders-filter"/);
     assert.match(html, /toggleTableOrder\(o\.id\)/);
     assert.match(html, /href="liturgy-orders\.html"/);
 });
@@ -56,18 +62,27 @@ test('the Order of Service fills a locked order and does not compose it', () => 
     assert.doesNotMatch(html, /takeFromOrder\(/);
     assert.doesNotMatch(js, /LiturgyOrderStore\.save/);
     assert.doesNotMatch(js, /function indexInList/);
-    assert.match(html, /showsPraise\(item\)/);
-    assert.match(html, /showsConfession\(item\)/);
-    assert.match(html, /showsPastoral\(item\)/);
-    assert.match(html, /Prayer Leader \(Praise\)/);
-    assert.match(html, /Male Being Prayed For/);
+    assert.doesNotMatch(html, /showsPraise\(item\)/);
+    assert.doesNotMatch(html, /showsConfession\(item\)/);
+    assert.doesNotMatch(html, /showsPastoral\(item\)/);
+    assert.doesNotMatch(html, /Male Being Prayed For/);
+    assert.doesNotMatch(html, /Prayer Type/);
+    assert.doesNotMatch(js, /showsPastoral/);
+    assert.doesNotMatch(html, /Prayer Leader \(Praise\)/);
     assert.match(html, /item\.type === 'prayer'/);
+    assert.match(html, /pastoralPrayerPicker\(slot/);
+    assert.doesNotMatch(html, /setPrayerPerson\(item\.key/,
+        'pastoral-prayer subjects are chosen through the person picker, not a <select>');
     assert.match(html, /Who prays /);
+    assert.match(html, /prayerScheduleLabel\(slot\.id\)/);
+    assert.match(js, /prayerScheduleLabel\(/);
+    assert.match(js, /prayerScheduledDates\(/);
+    assert.match(js, /Scheduled texts:/);
     assert.doesNotMatch(html, /Scripture Reading/);
     assert.match(html, /item\.type === 'person'/);
     assert.match(js, /type === 'other'/);
     assert.match(js, /LiturgyOrderStore\.load\(db\)/);
-    assert.match(js, /legacyPrayerHomes/);
+    assert.doesNotMatch(js, /hydrateCarriedByFromLegacy/);
     assert.match(js, /el\.prayedByOther/);
     assert.match(js, /rowOpens\(item\)/);
     assert.match(html, /rowOpens\(item\)/);
@@ -76,13 +91,14 @@ test('the Order of Service fills a locked order and does not compose it', () => 
     assert.match(html, /x-show="rowOpens\(item\) && !heldBy\(item\.key\)"/);
     const panel = html.indexOf("openKey === item.key || item.type === 'legacy'");
     assert.ok(panel !== -1, 'the row panel is the dropdown');
-    assert.ok(panel < html.indexOf('Prayer Leader (Confession)'), 'the confession leader is inside the dropdown');
-    assert.ok(panel < html.indexOf('Prayer Leader (Praise)'), 'the praise leader is inside the dropdown');
-    assert.ok(panel < html.indexOf('>Pastoral Prayer<'), 'the pastoral fields are inside the dropdown');
     assert.ok(panel < html.indexOf('Who prays '), 'a prayer leader is inside the dropdown');
-    const leaderGate = html.indexOf('x-if="item.prayedByOther && service.carriedBy[item.key]"');
+    const leaderBranch = html.indexOf('x-if="item.prayedByOther"');
     const who = html.indexOf("'Who prays '");
-    assert.ok(leaderGate !== -1 && leaderGate < who, 'the person picker is only on a prayer that can be prayed by someone else');
+    const addLeader = html.indexOf('addPrayerLeader(item.key)');
+    assert.ok(leaderBranch !== -1 && leaderBranch < who, 'the person picker is only on a prayer that can be prayed by someone else');
+    assert.ok(addLeader > who, 'the picker is the added slot; Add prayer leader sits with it');
+    assert.match(html, /prayerLeaderOpen\(item\.key\)/);
+    assert.match(html, /Add prayer leader/);
     assert.equal(html.indexOf("'Who prays '", who + 1), -1);
 });
 
@@ -110,6 +126,7 @@ test('the Liturgy Orders page uses tabs, a palette, a list, and an inspector', (
     assert.match(paletteRule[0], /padding: 16px 12px 20px 16px/);
     assert.doesNotMatch(paletteRule[0], /20px 0/);
     assert.match(html, /Send prayer requests/);
+    assert.match(html, /Send a digest to Elders when all requests are in/);
     assert.match(html, /Add a person/);
     assert.match(html, /Days before the Sunday/);
     assert.match(html, /id="prayer-message"/);

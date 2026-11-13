@@ -47,7 +47,7 @@ const used = new Map();
    make on its own, so they are excluded and the collision is recorded. */
 const skip = new RegExp([
   "vendor", "fonts/", "assets/", "\\.min\\.",
-  "guide-seed\\.js", "guide-components\\.js",
+  "guide-components\\.js",
   // Generated output, not markup. Scanning a stylesheet for "usage" finds
   // its own selectors and its keyframe names — m-spin is an animation, not
   // a class, and reading it as one reported a ghost for something real.

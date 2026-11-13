@@ -103,21 +103,124 @@ test('a prayer is scored only for what the order asked', () => {
 
     const marked = Liturgy.updateElement(plain.catalog, plain.element.id, { prayedByOther: true });
     const id = plain.element.id;
-    const blank = Home.checklist({}, marked).find(function (item) { return item.key === id; });
-    assert.equal(blank.state, 'blank');
+    assert.equal(
+        Home.checklist({}, marked).find(function (item) { return item.key === id; }),
+        undefined,
+        'allowing someone else to pray it does not add a slot'
+    );
+    const emptyLeaderItem = Home.checklist({ carriedBy: { [id]: { name: '', id: null } } }, marked)
+        .find(function (item) { return item.key === id && item.part === 'leader'; });
+    assert.equal(emptyLeaderItem.state, 'blank', 'an empty prayer leader is unset');
+
+    const el = Liturgy.elementById(marked, id);
+    assert.equal(Home.prayerLeaderTally({}, el), null);
+    assert.equal(
+        Home.prayerLeaderTally({ carriedBy: { [id]: { name: '', id: null } } }, el),
+        'blank'
+    );
+    assert.equal(
+        Home.prayerLeaderTally({ carriedBy: { [id]: { id: 'p1', name: 'Ada' } } }, el),
+        'set'
+    );
+
+    const added = Home.checklist({
+        carriedBy: { [id]: { name: '', id: null } },
+    }, marked).filter(function (item) { return item.key === id; });
+    assert.equal(added.length, 1);
+    assert.equal(added[0].part, 'leader');
+    assert.equal(added[0].state, 'blank');
+    assert.equal(added[0].label, 'Opening Prayer');
+
     const named = Home.checklist({ carriedBy: { [id]: { id: 'p1', name: 'Ada' } } }, marked)
-        .find(function (item) { return item.key === id; });
-    assert.equal(named.state, 'set');
+        .filter(function (item) { return item.key === id; });
+    assert.equal(named.length, 1);
+    assert.equal(named[0].state, 'set');
 
     const both = Liturgy.updateElement(marked, id, { requests: { count: 1, who: 'either' } });
-    const half = Home.checklist({ carriedBy: { [id]: { id: 'p1', name: 'Ada' } } }, both)
-        .find(function (item) { return item.key === id; });
-    assert.equal(half.state, 'blank');
+    const requestsOnly = Home.checklist({}, both).filter(function (item) { return item.key === id; });
+    assert.equal(requestsOnly.length, 1);
+    assert.equal(requestsOnly[0].state, 'blank');
+    assert.equal(requestsOnly[0].part, undefined);
+
+    const leaderNamed = Home.checklist({ carriedBy: { [id]: { id: 'p1', name: 'Ada' } } }, both)
+        .filter(function (item) { return item.key === id; });
+    assert.deepEqual(leaderNamed.map(function (item) { return item.state; }), ['blank', 'set']);
+    assert.equal(leaderNamed[1].part, 'leader');
+    assert.equal(leaderNamed[1].label, 'Opening Prayer leader');
+
     const full = Home.checklist({
         carriedBy: { [id]: { id: 'p1', name: 'Ada' } },
         liturgy: { [id]: [{ id: 'p2', name: 'Owen' }] },
-    }, both).find(function (item) { return item.key === id; });
-    assert.equal(full.state, 'set');
+    }, both).filter(function (item) { return item.key === id; });
+    assert.deepEqual(full.map(function (item) { return item.state; }), ['set', 'set']);
+
+    const emptyLeader = Home.checklist({
+        carriedBy: { [id]: { name: '', id: null } },
+        liturgy: { [id]: [{ id: 'p2', name: 'Owen' }] },
+    }, both).filter(function (item) { return item.key === id; });
+    assert.deepEqual(emptyLeader.map(function (item) { return item.state; }), ['set', 'blank']);
+});
+
+test('MS-808 — optional prayer leaders stay out of N of M until one is added', () => {
+    const praise = Liturgy.placeKind(Liturgy.standardCatalog(), 'standard', 'prayer', 0, {
+        name: 'Prayer of Praise',
+        prayedByOther: true,
+    });
+    const confession = Liturgy.placeKind(praise.catalog, 'standard', 'prayer', 1, {
+        name: 'Prayer of Confession',
+        prayedByOther: true,
+    });
+    const catalog = confession.catalog;
+    const praiseId = praise.element.id;
+    const confessionId = confession.element.id;
+    const finished = {
+        serviceLeader: 'Mark',
+        musicLeader: 'Hannah',
+        preacher: 'Daniel',
+        liturgy: fullLiturgy(),
+    };
+    const base = Home.readiness(finished);
+    assert.equal(base.notReady, false);
+
+    const open = Home.readiness(finished, catalog);
+    assert.equal(open.total, base.total, 'may-on and no alternate is excluded');
+    assert.equal(open.set, base.set);
+    assert.equal(open.fraction, open.set + ' of ' + open.total + ' set');
+
+    const oneEmpty = Home.readiness(Object.assign({}, finished, {
+        carriedBy: { [praiseId]: { name: '', id: null } },
+    }), catalog);
+    assert.equal(oneEmpty.total, base.total + 1);
+    assert.equal(oneEmpty.set, base.set);
+    assert.ok(oneEmpty.blanks.indexOf('Prayer of Praise') !== -1);
+    assert.equal(oneEmpty.fraction, oneEmpty.set + ' of ' + oneEmpty.total + ' set');
+
+    const oneFilled = Home.readiness(Object.assign({}, finished, {
+        carriedBy: { [praiseId]: { id: 'p1', name: 'Ada' } },
+    }), catalog);
+    assert.equal(oneFilled.total, base.total + 1);
+    assert.equal(oneFilled.set, base.set + 1);
+    assert.equal(oneFilled.blanks.indexOf('Prayer of Praise'), -1);
+
+    const twoEmpty = Home.readiness(Object.assign({}, finished, {
+        carriedBy: {
+            [praiseId]: { name: '', id: null },
+            [confessionId]: { name: '', id: null },
+        },
+    }), catalog);
+    assert.equal(twoEmpty.total, base.total + 2);
+    assert.equal(twoEmpty.set, base.set);
+
+    const twoFilled = Home.readiness(Object.assign({}, finished, {
+        carriedBy: {
+            [praiseId]: { id: 'p1', name: 'Ada' },
+            [confessionId]: { id: 'p2', name: 'Owen' },
+        },
+    }), catalog);
+    assert.equal(twoFilled.total, base.total + 2);
+    assert.equal(twoFilled.set, base.set + 2);
+    assert.equal(twoFilled.notReady, false);
+    assert.equal(twoFilled.fraction, twoFilled.set + ' of ' + twoFilled.total + ' set');
 });
 
 test('a person event is unfinished until the person is named', () => {
@@ -131,51 +234,52 @@ test('a person event is unfinished until the person is named', () => {
     assert.equal(named.label, 'Reader');
 });
 
-test('an old irregular Sunday is not scored until it is given an order', () => {
+test('MS-796 — irregular legacy fields are ignored; readiness uses the liturgy order', () => {
     const svc = {
         isIrregular: true,
         irregularElements: [{ key: 'Litany', type: 'text', value: 'x' }],
-        preacher: '',
-        theme: 'Hidden',
+        liturgyOrderId: 'standard',
+        preacher: 'Ada Example',
+        theme: 'Shown',
+        liturgy: { sermon: 'John 1' },
     };
     const ready = Home.readiness(svc);
-    assert.equal(ready.irregular, true);
-    assert.equal(ready.notReady, false);
-    assert.equal(ready.total, 0);
-    assert.equal(ready.fraction, '');
-    assert.deepEqual(Home.checklist(svc), []);
-    assert.deepEqual(Home.glance(svc), { theme: '', sermon: '', pairs: [], baptism: '' });
-
-    const chosen = Home.readiness(Object.assign({}, svc, { liturgyOrderId: 'standard', preacher: 'Ada' }));
-    assert.equal(chosen.irregular, false);
-    assert.ok(chosen.total > 0);
-    assert.equal(Home.glance(Object.assign({}, svc, { liturgyOrderId: 'standard', theme: 'Shown' })).theme, 'Shown');
+    assert.ok(ready.total > 0);
+    assert.ok(ready.fraction.includes(' of '));
+    assert.equal(Home.glance(svc).theme, 'Shown');
 });
 
-test('dotted liturgy keys fold into the nested liturgy', () => {
+test('dotted top-level keys are dropped on read', () => {
     const svc = Home.normalizeService({
         preacher: 'Daniel',
         'liturgy.sermon': 'Psalm 23',
         liturgy: { callToWorship: 'Come' },
     });
-    assert.equal(svc.liturgy.sermon, 'Psalm 23');
+    assert.equal(svc.liturgy.sermon, undefined);
     assert.equal(svc.liturgy.callToWorship, 'Come');
     assert.equal(svc.preacher, 'Daniel');
 });
 
 test('the glance lifts the theme out and keeps the other facts', () => {
+    const added = Liturgy.addElement(Liturgy.standardCatalog(), {
+        name: 'Pastoral Prayer',
+        kind: 'prayer',
+        requests: { people: [{ who: 'either' }] },
+    });
+    const catalog = Liturgy.addToOrder(added.catalog, 'standard', added.element.id);
+    const liturgy = {
+        sermon: 'Psalm 23',
+        baptism: [{ name: 'Ada' }],
+    };
+    liturgy[added.element.id] = [{ id: 'p-owen', name: 'Owen' }];
     const view = Home.glance({
         theme: 'The Lord Is My Shepherd',
         preacher: 'Daniel',
         serviceLeader: 'Mark',
         musicLeader: 'Hannah',
         hasBaptism: true,
-        liturgy: {
-            sermon: 'Psalm 23',
-            prayerMale: { name: 'Owen' },
-            baptism: [{ name: 'Ada' }],
-        },
-    });
+        liturgy: liturgy,
+    }, catalog);
     assert.equal(view.theme, 'The Lord Is My Shepherd');
     assert.equal(view.sermon, 'Psalm 23');
     assert.deepEqual(view.pairs.map(function (pair) { return pair.k; }),
@@ -226,6 +330,28 @@ test('commitments name two ahead, and a cover ask is said as one', () => {
     assert.equal(strip.length, 2);
     assert.deepEqual(strip[0], { label: 'Reader', text: 'on 11 Oct' });
     assert.deepEqual(strip[1], { label: 'Nursery', text: 'cover asked for 18 Oct' });
+});
+
+test('This Sunday keeps its height and Your Places is what scrolls (MS-807)', () => {
+    const html = fs.readFileSync(path.join(__dirname, '../public/index.html'), 'utf8');
+    const sundayRule = html.slice(html.indexOf('.dash-sunday {'), html.indexOf('.dash-sunday__when'));
+    assert.match(sundayRule, /flex:\s*0 0 auto/);
+    assert.match(sundayRule, /min-height:\s*min-content/);
+    assert.match(sundayRule, /overflow:\s*hidden/);
+    const restRule = html.slice(html.indexOf('.dash-rest {'), html.indexOf('.dash-places-head'));
+    assert.match(restRule, /flex:\s*1 1 auto/);
+    assert.match(restRule, /min-height:\s*0/);
+    assert.match(restRule, /overflow-y:\s*auto/);
+    const sunday = html.indexOf('id="sunday-glance"');
+    const sundayEnd = html.indexOf('</section>', sunday);
+    const rest = html.indexOf('class="dash-rest"');
+    const tiles = html.indexOf('id="nav-cards-grid"');
+    const strips = html.indexOf('id="dash-strips"');
+    const restEnd = html.indexOf('</main>');
+    assert.ok(sunday !== -1 && sundayEnd !== -1 && rest !== -1);
+    assert.ok(sundayEnd < rest, 'This Sunday sits above the places scroller');
+    assert.ok(rest < tiles && tiles < strips && strips < restEnd);
+    assert.ok(!html.slice(sunday, sundayEnd).includes('dash-rest'));
 });
 
 test('the home page is the Sunday-first door', () => {

@@ -1,61 +1,55 @@
 /**
  * @fileoverview Backfill: stamp `visibility` and `rosterShared` onto occurrence
- * documents that were written without them (ADR-0018 §5).
+ * documents that were written without them (ADR-0018 §5, MS-783).
  *
- * A security rule reads `resource.data.visibility` off the occurrence document
- * and cannot go and look at the series. `stampedVisibility()` in firestore.rules
- * answers 'none' when the field is absent, and `rankCanSee('none')` is false on
- * every branch — so a document written without the stamp is one NOBODY can read
- * back, including the editor who just wrote it.
+ * Dry-run by default. Prod requires --project mosaic-hymn-database --i-mean-prod.
  *
- * `acceptDraft` (accepting an auto-assign roster) created occurrence documents
- * for dates that had none and never stamped them. The seats landed in the roster
- * subcollection, which an editor may still read, but the document itself was
- * refused — so the Event detail page fell back to rebuilding the date from its
- * series and showed every place as needing people. The same dates also dropped
- * off the Calendar, whose list queries filter on `visibility`.
- *
- * The store no longer writes an unstamped occurrence. This repairs the ones
- * already written.
- *
- * The stamp is taken from the series, matching `stampFor` in events-store.js:
- * the series' own visibility, or 'public' for the Sunday Service (permanently
- * public, and its series document carries no stamp of its own), or 'member'.
- *
- * Idempotent: a document that already carries `visibility` is left completely
- * alone, so a second run reports "nothing to do" and writes nothing.
- *
- * Run:  node scripts/backfill-occurrence-visibility.js [--dry-run]
+ *   node scripts/backfill-occurrence-visibility.js \
+ *       --project mosaic-hymn-database --i-mean-prod
+ *   node scripts/backfill-occurrence-visibility.js \
+ *       --project mosaic-hymn-database --i-mean-prod --commit
  */
 
-const admin = require('firebase-admin');
-const Core = require('../public/events-occurrence-core.js');
-
-const FIREBASE_PROJECT_ID = 'mosaic-hymn-database';
-const BATCH_SIZE = 400;
-
-const DRY_RUN = process.argv.includes('--dry-run');
-
+const BackfillCore = require('../public/backfill-occurrence-visibility-core.js');
 const { serviceAccount } = require('./service-account.js');
 
-admin.initializeApp({
-    credential: admin.credential.cert(serviceAccount()),
-    projectId: FIREBASE_PROJECT_ID,
-});
+const BATCH_SIZE = 400;
 
-const db = admin.firestore();
-
-// The same resolution the store uses when it creates an occurrence.
-function stampFor(series, seriesId) {
-    return {
-        visibility: (series && series.visibility)
-            || (seriesId === Core.SUNDAY_SERVICE_ID ? 'public' : 'member'),
-        rosterShared: !!(series && series.rosterShared === true),
-    };
+/**
+ * @param {string[]} argv
+ * @return {boolean}
+ */
+function committing(argv) {
+    return argv.includes('--commit');
 }
 
-async function run() {
-    console.log(`Backfilling occurrence visibility${DRY_RUN ? ' (DRY RUN)' : ''}\n`);
+/**
+ * @param {string[]} argv
+ * @return {boolean}
+ */
+function willWrite(argv) {
+    return committing(argv) && argv.includes('--i-mean-prod');
+}
+
+async function main() {
+    const argv = process.argv;
+    const projectId = require('./firebase-project').requireProject(argv);
+    const COMMIT = willWrite(argv);
+    if (committing(argv) && !COMMIT) {
+        throw new Error('--commit against the church project also needs --i-mean-prod.');
+    }
+
+    const admin = require('firebase-admin');
+    if (!admin.apps.length) {
+        admin.initializeApp({
+            credential: admin.credential.cert(serviceAccount()),
+            projectId,
+        });
+    }
+
+    const db = admin.firestore();
+
+    console.log(`Backfilling occurrence visibility${COMMIT ? '' : ' (dry run)'}\n`);
 
     const [occurrences, seriesSnap] = await Promise.all([
         db.collection('event_occurrences').get(),
@@ -65,7 +59,8 @@ async function run() {
     const seriesById = {};
     seriesSnap.docs.forEach(d => { seriesById[d.id] = d.data() || {}; });
 
-    const needing = occurrences.docs.filter(d => !('visibility' in (d.data() || {})));
+    const needing = occurrences.docs.filter(d =>
+        BackfillCore.occurrenceNeedsVisibilityStamp(d.data()));
 
     console.log(`  ${occurrences.size} occurrence documents`);
     console.log(`  ${occurrences.size - needing.length} already stamped`);
@@ -76,12 +71,20 @@ async function run() {
         return;
     }
 
-    // A one-off Event has no series to inherit from. It also cannot be reached
-    // by this path — `acceptDraft` only ever writes for a series — so an
-    // unstamped one means something else is wrong, and guessing a visibility for
-    // it would be inventing a security answer. Reported, never written.
-    const orphans = needing.filter(d => !(d.data() || {}).seriesId);
-    const fixable = needing.filter(d => (d.data() || {}).seriesId);
+    const orphans = [];
+    const fixable = [];
+
+    needing.forEach(d => {
+        const data = d.data() || {};
+        const plan = BackfillCore.planStampForOccurrence(data, seriesById);
+        if (plan.kind === 'orphan') {
+            orphans.push(d);
+            return;
+        }
+        if (plan.kind === 'stamp') {
+            fixable.push({ doc: d, data, stamp: plan.stamp });
+        }
+    });
 
     if (orphans.length) {
         console.log(`  ⚠ ${orphans.length} have no seriesId and are being SKIPPED —`);
@@ -95,25 +98,23 @@ async function run() {
         const chunk = fixable.slice(i, i + BATCH_SIZE);
         const batch = db.batch();
 
-        chunk.forEach(doc => {
-            const data = doc.data() || {};
-            const stamp = stampFor(seriesById[data.seriesId], data.seriesId);
+        chunk.forEach(({ doc, data, stamp }) => {
             console.log(
                 `  ${doc.id}  ${data.date || '(no date)'}  ->  ` +
                 `visibility=${stamp.visibility} rosterShared=${stamp.rosterShared}`
             );
-            if (!DRY_RUN) batch.set(doc.ref, stamp, { merge: true });
+            if (COMMIT) batch.set(doc.ref, stamp, { merge: true });
             written++;
         });
 
-        if (!DRY_RUN) await batch.commit();
+        if (COMMIT) await batch.commit();
     }
 
-    console.log(`\n${DRY_RUN ? 'Would stamp' : 'Stamped'} ${written} occurrence document(s).`);
+    console.log(`\n${COMMIT ? 'Stamped' : 'Would stamp'} ${written} occurrence document(s).`);
     if (orphans.length) console.log(`Skipped ${orphans.length} with no series.`);
 }
 
-run().then(() => process.exit(0)).catch(e => {
+main().then(() => process.exit(0)).catch(e => {
     console.error('Backfill failed:', e);
     process.exit(1);
 });

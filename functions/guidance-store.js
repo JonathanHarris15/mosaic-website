@@ -32,14 +32,11 @@ const GUIDANCE = "mcp_guidance";
 
 /**
  * Whether this caller may read elder-only guidance.
- * @param {object} [options] {level, pastoralAssistant}
+ * @param {object} account The caller's user document.
  * @return {boolean} true for an elder, a super admin, or a Pastoral Assistant
  */
-function readsLocked(options) {
-  return Access.readsAsElder({
-    permissionLevel: options && options.level,
-    pastoralAssistant: options && options.pastoralAssistant,
-  });
+function readsLocked(account) {
+  return Access.readsAsElder(account);
 }
 
 /**

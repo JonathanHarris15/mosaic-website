@@ -13,6 +13,7 @@ const {
     GHOST_PASSWORD,
     assertGhostTarget,
     congregation,
+    userDoc,
 } = require('../scripts/seed-ghost');
 
 test('the ghost seed refuses the church project even with the loud flag', () => {
@@ -60,6 +61,25 @@ test('the invented congregation uses fake phones, fake emails, and a Household r
     assert.deepStrictEqual(cole.members.map(m => m.personId),
         ['ghost-ben-cole', 'ghost-ada-cole', 'ghost-cora-cole']);
     assert.strictEqual(cole.name, 'The Cole Household');
+});
+
+test('a ghost login is an account level, not the old ladder', () => {
+    const plan = congregation('2026-09-21T00:00:00.000Z');
+    const byId = Object.fromEntries(plan.people.map(p => [p.id, p]));
+    const ada = byId['ghost-ada-cole'].account;
+    assert.ok(ada);
+    const doc = userDoc(ada);
+    assert.strictEqual(doc.accountLevelId, 'level_elder');
+    const perms = /** @type {Record<string, boolean>} */ (doc.permissions);
+    assert.strictEqual(perms['shep.count_as_elder'], true);
+    assert.equal(Object.prototype.hasOwnProperty.call(doc, 'permissionLevel'), false);
+    assert.equal(Object.prototype.hasOwnProperty.call(doc, 'role'), false);
+    assert.equal(Object.prototype.hasOwnProperty.call(doc, 'pastoralAssistant'), false);
+    const ben = byId['ghost-ben-cole'].account;
+    assert.ok(ben);
+    const benDoc = userDoc(ben);
+    assert.strictEqual(benDoc.accountLevelId, 'level_member');
+    assert.equal(Object.prototype.hasOwnProperty.call(benDoc, 'permissionLevel'), false);
 });
 
 test('the seed script checks the project before it opens a credential', () => {

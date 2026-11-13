@@ -19,6 +19,7 @@
 
 const {PROD_PROJECT_ID} = require('./firebase-project');
 const Household = require('../public/household-core.js');
+const Levels = require('../public/account-levels-core.js');
 
 const GHOST_PROJECT_ID = 'mosaic-manager-ghost';
 const GHOST_PASSWORD = 'ghost-login-1';
@@ -98,6 +99,24 @@ function personDoc(row, now, userId) {
     return doc;
 }
 
+/**
+ * The user document a ghost login gets. The plan names the preset
+ * (`elder`, `member`); the document stores that account level and its map.
+ * @param {{email: string, permissionLevel: string, personId: string}} account
+ * @return {{email: string, accountLevelId: string, permissions: object, personId: string}}
+ */
+function userDoc(account) {
+    const ids = /** @type {Readonly<Record<string, string>>} */ (
+        Levels.BUILTIN_LEVEL_IDS);
+    const write = Levels.userWriteFromLevel(ids[account.permissionLevel]);
+    return {
+        email: account.email,
+        accountLevelId: write.accountLevelId,
+        permissions: write.permissions,
+        personId: account.personId,
+    };
+}
+
 function congregation(now, userIds) {
     const ids = userIds || {};
     const people = PEOPLE.map(row => ({
@@ -132,6 +151,7 @@ module.exports = {
     PEOPLE,
     assertGhostTarget,
     congregation,
+    userDoc,
 };
 
 if (require.main === module) {
@@ -183,12 +203,8 @@ if (require.main === module) {
                 console.log(`  created login ${account.email}`);
             }
             userIds[person.id] = user.uid;
-            await db.collection('users').doc(user.uid).set({
-                email: account.email,
-                permissionLevel: account.permissionLevel,
-                role: account.permissionLevel,
-                personId: account.personId,
-            }, {merge: true});
+            await db.collection('users').doc(user.uid).set(
+                userDoc(account), {merge: true});
         }
 
         const stamped = congregation(new Date().toISOString(), userIds);

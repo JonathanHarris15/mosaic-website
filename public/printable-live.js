@@ -24,10 +24,8 @@
     const Core = isNode ? require('./printable-core.js') : global.PrintableCore;
     const Data = isNode ? require('./printable-data-core.js') : global.PrintableDataCore;
     const Render = isNode ? require('./printable-render-core.js') : global.PrintableRenderCore;
-    const Migrate = isNode ? require('./printable-legacy-migrate-core.js') : global.PrintableLegacyMigrate;
     if (isNode) {
         require('./scripture-passage.js');
-        require('./sunday-typed-core.js');
     }
 
     function keyOf(source, params) {
@@ -38,24 +36,6 @@
     // still resolves catalog sources. Event fields need the module.
     function linkCore() {
         return (typeof global !== 'undefined' && global.PrintableLinkCore) || null;
-    }
-
-    // Migrated booklet fill: empty occurrence slot ← that Sunday's typedContent.
-    function legacyTypedFallback(fieldId, bundle, ctx) {
-        if (!Migrate || !Migrate.isLegacyFillId(fieldId)) return '';
-        const Typed = global.SundayTypedCore;
-        if (!Typed || !bundle || !bundle.services) return '';
-        const date = (ctx && ctx.viewDate) || (ctx && ctx.today) || '';
-        if (!date || !bundle.services[date]) {
-            // Fall back to this Sunday from the clock the resolver already has.
-            const whenDate = Data.resolveWhen({ mode: 'this' }, (ctx && ctx.today) || Data.toDateStr(new Date()));
-            const s = bundle.services[whenDate];
-            if (!s) return '';
-            const bag = Migrate.valuesFromTyped(Typed.fromService(s));
-            return bag[fieldId] || '';
-        }
-        const bag = Migrate.valuesFromTyped(Typed.fromService(bundle.services[date]));
-        return bag[fieldId] || '';
     }
 
     // Every source a project reads, as { source, params } pairs — one per
@@ -78,6 +58,7 @@
     function passageRequests(project) {
         const Passage = global.ScripturePassage;
         if (!Passage) return [];
+        /** @type {any[]} */
         const out = [];
         const seen = {};
         function walk(nodes, parentRepeat) {
@@ -117,13 +98,28 @@
                 occurrenceId: (opts && opts.occurrenceId) || '',
             };
         }
+        if (needs.bookletDates && needs.bookletDates.length && project && project.id) {
+            needs.bookletInputs = {
+                printableId: project.id,
+                dates: needs.bookletDates.slice(),
+                date: clock,
+                occurrenceId: (opts && opts.occurrenceId) || '',
+            };
+        }
         return needs;
     }
 
     function mergeNeeds(a, b) {
         const DS = global.PrintableDataStore;
         if (DS && DS.mergeNeeds) return DS.mergeNeeds(a, b);
-        return Object.assign({}, a, b);
+        const out = Object.assign({}, a);
+        Object.keys(b || {}).forEach(k => {
+            const v = b[k];
+            if (k === 'services' || k === 'printedAnnouncements' || k === 'bookletDates') {
+                out[k] = Array.from(new Set((out[k] || []).concat(v || [])));
+            } else out[k] = v;
+        });
+        return out;
     }
 
     // Rows and values for one project against one bundle. Everything is
@@ -162,20 +158,24 @@
 
         function rowsFor(node, parentRow) {
             if (!node.repeat || !node.repeat.source) return null;
+            let rows;
             if (node.repeat.source === 'event_list') {
                 const id = node.repeat.params && node.repeat.params.inputId;
                 const input = eventInput(id);
                 const raw = eventBag()[id];
-                const rows = Array.isArray(raw) ? raw : [];
-                return rows.map((row, i) => {
+                const list = Array.isArray(raw) ? raw : [];
+                rows = list.map((row, i) => {
                     const out = { _id: id + '~' + i, number: i + 1 };
                     (input && input.fields || []).forEach(col => {
                         out[col.id] = row && row[col.id] != null ? String(row[col.id]) : '';
                     });
                     return out;
                 });
+            } else {
+                rows = resolved(node.repeat.source, node.repeat.params, parentRow).rows;
             }
-            return resolved(node.repeat.source, node.repeat.params, parentRow).rows;
+            // Intentional range (MS-743) before max-per-page overflow.
+            return Core.sliceRows(rows, node.repeat.from, node.repeat.to);
         }
 
         function valueFor(bind, row, node, pageCtx) {
@@ -191,19 +191,6 @@
                 if (a.kind === 'font') return { ok: false, why: 'Drag this font onto text, not a picture.' };
                 return { ok: true, value: a.url || '' };
             }
-            if (bind.source === 'insert_page_number') {
-                const idx = pageCtx && pageCtx.pageIndex != null ? pageCtx.pageIndex : -1;
-                if (idx < 0) return { ok: false, why: 'No page.' };
-                // The designed booklet puts the number in the outer margin:
-                // an odd physical page (even index) sits on the right.
-                if (bind.field === 'edgeClass') {
-                    const edge = idx % 2 === 1 ? 'left' : 'right';
-                    return { ok: true, value: 'm-pagenum m-pagenum--' + edge };
-                }
-                const n = Data.insertPageNumberDisplay(idx, (bind.params || {}).startAt);
-                if (n == null) return { ok: false, why: 'This page is before numbering starts.' };
-                return { ok: true, value: String(n) };
-            }
             if (bind.scope === 'item') {
                 if (!row) return { ok: false, why: 'This element is wired to a row but is not inside an iterated element.' };
                 const v = row[bind.field];
@@ -214,12 +201,7 @@
             if (bind.source === 'event_field') {
                 const input = eventInput(bind.field);
                 const name = input ? input.label : 'this field';
-                let v = eventBag()[bind.field];
-                // Migrated booklet fills: if the occurrence has nothing yet,
-                // read through that Sunday's typedContent so old weeks print.
-                if ((v == null || v === '') && legacyTypedFallback) {
-                    v = legacyTypedFallback(bind.field, bundle, c);
-                }
+                const v = eventBag()[bind.field];
                 if (v == null || v === '') {
                     return { ok: false, why: 'Nothing has been entered for ' + name + ' yet. Fill it in on the event.' };
                 }
@@ -264,6 +246,7 @@
         // The source-level warnings — "nothing planned for that Sunday" — for
         // every source the project reads.
         function sourceWarnings() {
+            /** @type {any[]} */
             const out = [];
             usesOf(project).forEach(u => {
                 const r = resolved(u.source, u.params);
@@ -304,6 +287,120 @@
             else break;
         }
         return chain;
+    }
+
+    // The origin page of the overflow run that holds an iterated element.
+    /**
+     * @param {any} project
+     * @param {string} repeatNodeId
+     * @returns {any}
+     */
+    function originForRepeatNode(project, repeatNodeId) {
+        const pages = project.pages || [];
+        for (let i = 0; i < pages.length; i++) {
+            const page = pages[i];
+            if (!Core.findNode(page, repeatNodeId)) continue;
+            const bounds = Core.continuationRunBounds(pages, page.id);
+            if (!bounds) return null;
+            const origin = pages[bounds.start];
+            return origin || page;
+        }
+        return null;
+    }
+
+    // How many stored pages an overflowing list needs after its Repeat range
+    // and row count are applied. Matches layoutPages' pagination plan.
+    /**
+     * @param {any} project
+     * @param {any} origin
+     * @param {any} res
+     * @param {any} host
+     * @param {any} [options]
+     * @param {any} [repeatForRows]
+     * @returns {number}
+     */
+    function overflowContinuationNeed(project, origin, res, host, options, repeatForRows) {
+        const o = options || {};
+        const canPaginate = !!(res && (host || o.fitsOn));
+        const repeat = repeatForRows || overflowingRepeatOn(origin);
+        if (!repeat || repeat.repeat.overflow !== 'new-page' || !canPaginate) return 1;
+        const rows = res.rowsFor(repeat);
+        if (!rows || !rows.length) return 1;
+        const chain = continuationChain(project, origin);
+        const template = project.template;
+        const assets = project.assets || [];
+        const originCap = (repeat.repeat.layout && repeat.repeat.layout.maxPerPage) || 0;
+        /** @param {number} i */
+        function capAt(i) {
+            const bg = chain[i] || templateForNew(project, origin, repeat);
+            const r = overflowingRepeatOn(bg) || repeat;
+            return (r.repeat.layout && r.repeat.layout.maxPerPage) || originCap;
+        }
+        /** @param {number} i */
+        function pageAt(i) {
+            return chain[i] || templateForNew(project, origin, repeat);
+        }
+        /** @param {number} i */
+        function repeatAt(i) {
+            return overflowingRepeatOn(pageAt(i)) || repeat;
+        }
+        /** @param {number} i @param {number} start @param {number} n */
+        function fitsOn(i, start, n) {
+            const bg = pageAt(i);
+            const r = repeatAt(i);
+            if (o.fitsOn) return o.fitsOn(i, start, n, { page: bg, repeat: r });
+            const probe = Render.expandPage(bg, sliceFrom(res, repeat, r.id, start, start + n, 0, assets));
+            return fits(host, template, bg, probe.nodes, r.id);
+        }
+        return Render.planPages(rows, capAt, fitsOn).length;
+    }
+
+    // MS-810 — after the Repeat from/to range shrinks, drop stored continuation
+    // pages that no longer carry any row of the slice. Only removes pages in
+    // the contiguous overflow run; a page with custom content outside that run
+    // is untouched. Called from the editor when the range changes, not on every
+    // data refresh (so a shorter live list can still leave an edited tail page).
+    /**
+     * @param {any} project
+     * @param {any} res
+     * @param {any} host
+     * @param {any} [options]
+     * @returns {string[]}
+     */
+    function pruneExcessContinuationPages(project, res, host, options) {
+        const o = options || {};
+        if (!project || !project.pages || !res) return [];
+        if (!host && !o.fitsOn) return [];
+        /** @type {any[]} */
+        const origins = [];
+        if (o.repeatNodeId) {
+            const origin = originForRepeatNode(project, o.repeatNodeId);
+            if (origin) origins.push(origin);
+        } else {
+            (project.pages || []).forEach((/** @type {any} */ page) => {
+                if (page.continues && page.continues.from) return;
+                if (overflowingRepeatOn(page)) origins.push(page);
+            });
+        }
+        /** @type {string[]} */
+        const removeIds = [];
+        origins.forEach((/** @type {any} */ origin) => {
+            const chain = continuationChain(project, origin);
+            if (chain.length <= 1) return;
+            let repeatForRows = overflowingRepeatOn(origin);
+            if (o.repeatNodeId) {
+                (project.pages || []).some((/** @type {any} */ pg) => {
+                    const node = Core.findNode(pg, o.repeatNodeId);
+                    if (node) { repeatForRows = node; return true; }
+                    return false;
+                });
+            }
+            const needed = overflowContinuationNeed(project, origin, res, host, o, repeatForRows);
+            if (chain.length > needed) chain.slice(needed).forEach((/** @type {any} */ p) => removeIds.push(p.id));
+        });
+        if (!removeIds.length) return [];
+        project.pages = Core.pagesWithout(project.pages, removeIds);
+        return removeIds;
     }
 
     function templateForNew(project, origin, repeat) {
@@ -362,18 +459,27 @@
         const assets = project.assets || [];
         const canPaginate = !!(res && (host || o.fitsOn));
 
-        function emitEmptyContinuations(chain, originRepeat, pageIndex, data) {
+        // A drawn sheet is `out.length` at the moment it is emitted. Page
+        // numbers and mirroring follow that, not the stored page's index:
+        // an omitted hymn and a list that spills both close the count up.
+        function emit(page, data, expandOpts, extras) {
+            const sheet = out.length;
+            const expanded = Render.expandPage(page, data, Object.assign({}, expandOpts || {}, { pageIndex: sheet }));
+            out.push(entryOf(page, expanded, Object.assign({}, extras || {}, { pageIndex: sheet })));
+        }
+
+        function emitEmptyContinuations(chain, originRepeat) {
             chain.slice(1).forEach((pg, i) => {
                 claimed[pg.id] = true;
                 const r = overflowingRepeatOn(pg);
-                const expanded = Render.expandPage(pg, (res && originRepeat && r)
+                const data = (res && originRepeat && r)
                     ? emptySlice(res, originRepeat, r.id, out.length, assets)
-                    : dataForPage(res, out.length, assets));
-                out.push(entryOf(pg, expanded, { originId: chain[0].id, pageIndex: pageIndex, continuation: i + 1, rowsFrom: 0, rowsTo: 0 }));
+                    : dataForPage(res, out.length, assets);
+                emit(pg, data, null, { originId: chain[0].id, continuation: i + 1, rowsFrom: 0, rowsTo: 0 });
             });
         }
 
-        pages.forEach((page, pageIndex) => {
+        pages.forEach(page => {
             if (claimed[page.id]) return;
             // Page numbers follow the sheet about to be drawn, not the stored
             // page. A hymn that spills keeps the next sheet's own number.
@@ -389,8 +495,7 @@
                 const sliced = (res && mine)
                     ? emptySlice(res, originRepeat || mine, mine.id, out.length, assets)
                     : STAND_INS;
-                const expanded = Render.expandPage(page, sliced);
-                out.push(entryOf(page, expanded, { originId: page.continues.from, pageIndex: pageIndex }));
+                emit(page, sliced, null, { originId: page.continues.from });
                 return;
             }
 
@@ -409,9 +514,8 @@
             }
 
             if (!repeat || !rows || !rows.length || !canPaginate) {
-                const expanded = Render.expandPage(page, data);
-                out.push(entryOf(page, expanded, { originId: page.id, pageIndex: pageIndex }));
-                emitEmptyContinuations(chain, repeat || overflowingRepeatOn(page), pageIndex, data);
+                emit(page, data, null, { originId: page.id });
+                emitEmptyContinuations(chain, repeat || overflowingRepeatOn(page));
                 return;
             }
 
@@ -444,29 +548,32 @@
                     chain.push(bg);
                 }
                 const r = overflowingRepeatOn(bg) || repeat;
-                const expanded = Render.expandPage(bg, sliceFrom(res, repeat, r.id, slice.start, slice.end, out.length, assets), { warnEveryRow: false, copyStart: slice.start, pageIndex: pageIndex });
-                out.push(entryOf(bg, expanded, {
+                emit(bg, sliceFrom(res, repeat, r.id, slice.start, slice.end, out.length, assets), { warnEveryRow: false, copyStart: slice.start }, {
                     needsPersist: needsPersist,
                     originId: page.id,
-                    pageIndex: pageIndex,
                     continuation: i,
                     rowsFrom: slice.start,
                     rowsTo: slice.end,
-                }));
+                });
             });
 
             for (let i = plan.length; i < chain.length; i++) {
                 const bg = chain[i];
                 const r = overflowingRepeatOn(bg);
-                const expanded = Render.expandPage(bg, r ? emptySlice(res, repeat, r.id, out.length, assets) : dataForPage(res, out.length, assets), { warnEveryRow: false, pageIndex: pageIndex });
-                out.push(entryOf(bg, expanded, {
+                emit(bg, r ? emptySlice(res, repeat, r.id, out.length, assets) : dataForPage(res, out.length, assets), { warnEveryRow: false }, {
                     originId: page.id,
-                    pageIndex: pageIndex,
                     continuation: i,
                     rowsFrom: 0,
                     rowsTo: 0,
-                }));
+                });
             }
+        });
+        // "Start numbering from here" is a fact about the stack, not one
+        // sheet. Stamp the expanded trees only — `entry.page` is the stored
+        // printable, and writing its nodes would change the saved design.
+        const origin = Core.numberOriginFromEntries(out);
+        out.forEach(entry => {
+            if (entry && entry.nodes) Core.stampPageNumberNodes(entry.nodes, entry.pageIndex, origin);
         });
         return out;
     }
@@ -507,7 +614,17 @@
         return out;
     }
 
-    const PrintableLive = { keyOf, usesOf, collectNeeds, resolver, layoutPages, warningsFor, STAND_INS };
+    const PrintableLive = {
+        keyOf,
+        usesOf,
+        collectNeeds,
+        resolver,
+        layoutPages,
+        warningsFor,
+        pruneExcessContinuationPages,
+        overflowContinuationNeed,
+        STAND_INS,
+    };
 
     if (typeof module !== 'undefined' && module.exports) {
         module.exports = PrintableLive;

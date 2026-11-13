@@ -198,7 +198,7 @@ test('somebody no longer active is not offered at all', () => {
     const people = [
         { id: 'p1', name: 'Dave Rowe' },
         { id: 'p2', name: 'Gone Away', membership: { inactive: true } },
-        { id: 'p3', name: 'Also Gone', membership: { status: 'inactive' } },
+        { id: 'p3', name: 'Also Gone', membership: { inactive: true } },
     ];
     const offered = Roles.assignablePeople(people, { rank: 'editor' });
     assert.deepStrictEqual(offered.map(p => p.id), ['p1']);

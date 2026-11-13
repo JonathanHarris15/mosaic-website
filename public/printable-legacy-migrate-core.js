@@ -148,7 +148,8 @@
         };
     }
 
-    function valuesFromTyped(contentOrRow) {
+    /** @param {any} contentOrRow @return {Record<string, any>} */
+    function rowOf(contentOrRow) {
         const Typed = typedCore();
         let row = contentOrRow || {};
         if (Typed && row.pastoralPrayer) {
@@ -156,23 +157,65 @@
         } else if (Typed && row.prayerNation === undefined && (row.mosaicKids || row.announcements)) {
             row = Typed.toRow(Typed.normalise(row), '');
         }
+        return row;
+    }
+
+    /**
+     * @param {any} contentOrRow
+     * @param {boolean} includeBlank
+     * @return {Record<string, any>}
+     */
+    function bagFromContent(contentOrRow, includeBlank) {
+        const row = rowOf(contentOrRow);
+        /** @type {Record<string, any>} */
         const bag = {};
         FILL_KEYS.forEach(key => {
             const v = row[key];
-            if (v == null || v === '') return;
-            bag[fillId(key)] = String(v);
+            if (!includeBlank && (v == null || v === '')) return;
+            bag[fillId(key)] = v == null ? '' : String(v);
         });
         return bag;
     }
 
-    function mergeEventWithTyped(eventBag, typedContent) {
-        const base = eventBag && typeof eventBag === 'object' ? Object.assign({}, eventBag) : {};
-        const fromTyped = valuesFromTyped(typedContent);
-        Object.keys(fromTyped).forEach(id => {
-            const cur = base[id];
-            if (cur == null || cur === '') base[id] = fromTyped[id];
+    /** @param {any} contentOrRow @return {Record<string, any>} */
+    function valuesFromTyped(contentOrRow) {
+        return bagFromContent(contentOrRow, false);
+    }
+
+    // An editor save writes a blank only when that key is already on the
+    // occurrence, so a clear sticks and a field nobody has opened yet can
+    // still be copied.
+    /**
+     * @param {any} content
+     * @param {any} existingBag
+     * @return {Record<string, any>}
+     */
+    function patchFromContent(content, existingBag) {
+        const full = bagFromContent(content, true);
+        const bag = existingBag && typeof existingBag === 'object' ? existingBag : {};
+        /** @type {Record<string, any>} */
+        const patch = {};
+        Object.keys(full).forEach(id => {
+            if (full[id] !== '' || Object.prototype.hasOwnProperty.call(bag, id)) patch[id] = full[id];
         });
-        return base;
+        return patch;
+    }
+
+    /** @param {any} bag */
+    function draftFromBag(bag) {
+        const Typed = typedCore();
+        if (!Typed) return {};
+        const box = bag && typeof bag === 'object' ? bag : {};
+        /** @type {Record<string, any>} */
+        const row = {};
+        FILL_KEYS.forEach(key => {
+            const id = fillId(key);
+            if (Object.prototype.hasOwnProperty.call(box, id)) row[key] = box[id];
+        });
+        if (Object.prototype.hasOwnProperty.call(box, fillId('announcements'))) {
+            row.announcements = Typed.asAnnouncements(box[fillId('announcements')]);
+        }
+        return Typed.toDraft(Typed.fromDraft(row));
     }
 
     const PrintableLegacyMigrate = {
@@ -184,7 +227,8 @@
         inputDefsNeeded,
         migrateProject,
         valuesFromTyped,
-        mergeEventWithTyped,
+        patchFromContent,
+        draftFromBag,
     };
 
     if (typeof module !== 'undefined' && module.exports) {

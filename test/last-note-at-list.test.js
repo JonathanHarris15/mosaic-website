@@ -12,7 +12,8 @@ test('web People list no longer collection-groups shepherding_notes', () => {
     const html = read('public/shepherding-people.html');
     assert.doesNotMatch(js, /collectionGroup\(['"]shepherding_notes['"]\)/);
     assert.doesNotMatch(js, /lastNoteDates/);
-    assert.match(js, /a\.lastNoteAt/);
+    assert.match(js, /comparePeopleList/);
+    assert.match(html, /sortBy = 'attention'/);
     assert.match(js, /formatLastNote\(person\)/);
     assert.match(html, /formatLastNote\(person\)/);
     assert.match(html, /person\.lastNoteAt/);

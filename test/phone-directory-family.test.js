@@ -8,20 +8,27 @@ const path = require('node:path');
 // same Family create and update Shepherding already uses.
 
 require('../public/access-core.js');
+const Levels = require('../public/account-levels-core.js');
 require('../public/phone-directory-edit.js');
 const Family = require('../public/family-core.js');
 global.FamilyCore = Family;
 const Fam = require('../public/phone-directory-family.js');
 
+function account(preset, extra) {
+    const id = Levels.BUILTIN_LEVEL_IDS[preset];
+    if (!id) return Object.assign({ accountLevelId: null, permissions: {} }, extra || {});
+    return Object.assign({}, Levels.userWriteFromLevel(id), extra || {});
+}
+
 const SEX_UNSET = "Set this person's sex in Edit Details to build their family.";
 const SPOUSE_REMOVAL = 'End the marriage record for these two? Each keeps their own record.';
 
-const editor = { permissionLevel: 'editor' };
-const admin = { permissionLevel: 'admin' };
-const elder = { permissionLevel: 'elder' };
-const superAdmin = { permissionLevel: 'super_admin' };
-const member = { permissionLevel: 'member' };
-const assistant = { permissionLevel: 'member', pastoralAssistant: true };
+const editor = account('editor');
+const admin = account('admin');
+const elder = account('elder');
+const superAdmin = account('super_admin');
+const member = account('member');
+const assistant = account('pastoral_assistant');
 
 function person(id, name, sex) {
     return { id: id, name: name, sex: sex };
@@ -246,10 +253,12 @@ test('removing a child does not ask, and the other children stay', () => {
 test('a member is not offered the controls; a Pastoral Assistant is, and Edit Mode off offers none', () => {
     assert.equal(Fam.offerControls(member, true), false);
     assert.equal(Fam.offerControls(assistant, true), true);
-    assert.equal(Fam.offerControls({ permissionLevel: 'pastoral_assistant' }, true), true);
+    assert.equal(Fam.offerControls('pastoral_assistant', true), true);
+    assert.equal(Fam.offerControls({ permissionLevel: 'pastoral_assistant' }, true), false);
+    assert.equal(Fam.offerControls({ permissionLevel: 'member', pastoralAssistant: true }, true), false);
     assert.equal(Fam.offerControls(editor, false), false);
     for (const user of [editor, admin, elder, superAdmin]) {
-        assert.equal(Fam.offerControls(user, true), true, user.permissionLevel);
+        assert.equal(Fam.offerControls(user, true), true, user.accountLevelId);
     }
 });
 

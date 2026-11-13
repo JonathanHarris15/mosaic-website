@@ -51,12 +51,14 @@ export const COMPONENTS = [
       "46px tall, not 40. The phone shipped 46 and it is above the 44px touch floor; one height that works on both beats two that each work on one.",
       "A button lifts 1px on hover and settles on press. That motion is the sign that it can be pressed. It is not optional, and it is not a bounce. prefers-reduced-motion keeps the colour change and drops the lift.",
       "Wrap the word in `.m-btn__label` when the button sits somewhere that collapses to icons — a PageHeader's tool or compact mode. Elsewhere the text can go straight in.",
+      "When two header actions would collapse to the same glyph (or to twin icon squares that only a title can tell apart), add `.m-btn--named` so the short label stays visible in compact and phone headers. Prefer distinct icons first; named labels are the escape for ambiguous twins.",
     ],
     examples: [
       '<button class="m-btn m-btn--primary">Save the service</button>',
       '<button class="m-btn m-btn--secondary m-btn--sm">Cancel</button>',
       '<button class="m-btn m-btn--ghost">Show past dates</button>',
       '<button class="m-btn m-btn--quiet m-btn--sm"><span class="material-symbols-outlined">print</span><span class="m-btn__label">Print PDF</span></button>',
+      '<button class="m-btn m-btn--secondary m-btn--sm m-btn--named"><span class="material-symbols-outlined">menu_book</span><span class="m-btn__label">Folio</span></button>',
     ],
     css: `
 .m-btn {
@@ -1516,6 +1518,12 @@ textarea.m-input { height: auto; min-height: 96px; padding: 12px 14px; line-heig
   width: 44px; height: 44px; padding: 0;
   background: transparent; border-color: transparent; color: var(--primary); box-shadow: none;
 }
+.m-header--compact .m-header__actions .m-btn--named {
+  width: auto; min-width: 44px; padding: 0 10px; gap: 4px;
+}
+.m-header--compact .m-header__actions .m-btn--named .m-btn__label {
+  display: inline; font-size: 12.5px;
+}
 
 /* ⚠ EVERY SELECTOR BELOW IS SCOPED TO .m-header, AND TWO OF THEM ONCE WERE
    NOT. .m-back__label and .m-btn__label are slots, not header parts — a
@@ -1540,6 +1548,12 @@ textarea.m-input { height: auto; min-height: 96px; padding: 12px 14px; line-heig
   .m-header__actions .m-btn {
     width: 44px; height: 44px; padding: 0;
     background: transparent; border-color: transparent; color: var(--primary); box-shadow: none;
+  }
+  .m-header__actions .m-btn--named {
+    width: auto; min-width: 44px; padding: 0 10px; gap: 4px;
+  }
+  .m-header__actions .m-btn--named .m-btn__label {
+    display: inline; font-size: 12.5px;
   }
 }
 `,

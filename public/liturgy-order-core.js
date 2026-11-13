@@ -55,19 +55,9 @@
     const NOTICE_REMINDER_GAP = 2;
     const PROSE_MAX = 1000;
 
-    // The older Sunday fields are not elements. They are drawn under the
-    // elements the seed already uses for those moments. A leader stays under
-    // its row when that element is renamed, because the id does not change.
-    // The people being prayed for follow the Sunday's prayer label, which the
-    // seed names Pastoral Prayer.
-    const LEGACY_PRAISE_ID = 'callToWorship';
-    const LEGACY_CONFESSION_ID = 'callToConfession';
-    const LEGACY_PRAYER_NAME = 'Pastoral Prayer';
-
     const STANDARD_ORDER_ID = 'standard';
 
     const COLLECTIONS = Object.freeze({
-        elements: 'liturgy_elements',
         orders: 'liturgy_orders',
     });
 
@@ -234,6 +224,9 @@
             hasNote: src.hasNote !== false,
             requests: requests,
             noticeDays: requests ? normaliseNoticeDays(src.noticeDays) : null,
+            // Absent on an older requesting prayer means on — that is how
+            // Pastoral Prayer behaved before the checkbox existed.
+            elderDigest: requests ? src.elderDigest !== false : false,
             prayedByOther: prayedByOtherOf(kind, src),
             hasRole: false,
         };
@@ -249,14 +242,22 @@
         return decorate(el);
     }
 
+    function printableIdOf(raw) {
+        const id = cleanName(raw && raw.printableId != null ? raw.printableId : '');
+        return id || '';
+    }
+
     function copyOrder(order) {
         const elements = (order.elements || []).map(copyElement);
-        return {
+        const out = {
             id: order.id,
             name: order.name,
             elements: elements,
             elementIds: elements.map(function (el) { return el.id; }),
         };
+        const printableId = printableIdOf(order);
+        if (printableId) out.printableId = printableId;
+        return out;
     }
 
     function kindOf(raw) {
@@ -280,13 +281,14 @@
             hasNote: src.hasNote,
             requests: src.requests,
             noticeDays: src.noticeDays,
+            elderDigest: src.elderDigest,
             prayedByOther: src.prayedByOther,
             message: src.message,
             response: src.response,
         });
     }
 
-    function normaliseOrder(raw, fallbackId, looseById) {
+    function normaliseOrder(raw, fallbackId) {
         const src = raw || {};
         const id = cleanName(src.id != null ? src.id : fallbackId);
         if (!id) return null;
@@ -299,13 +301,28 @@
         };
         if (Array.isArray(src.elements)) {
             src.elements.forEach(function (rawEl) { push(normaliseElement(rawEl)); });
-        } else {
-            (Array.isArray(src.elementIds) ? src.elementIds : []).forEach(function (value) {
-                const elId = cleanName(value);
-                push(elId && looseById ? looseById.get(elId) : null);
-            });
         }
-        return { id: id, name: cleanName(src.name) || id, elements: elements, elementIds: elements.map(function (el) { return el.id; }) };
+        const out = {
+            id: id,
+            name: cleanName(src.name) || id,
+            elements: elements,
+            elementIds: elements.map(function (el) { return el.id; }),
+        };
+        const printableId = printableIdOf(src);
+        if (printableId) out.printableId = printableId;
+        if (src.ops === true) out.ops = true;
+        if (src.hidden === true) out.hidden = true;
+        return out;
+    }
+
+    // Ops and test fixtures stay in Firestore but drop out of ordinary pickers
+    // and filters (MS-770). Either flag means the same thing on read.
+    function orderIsHidden(order) {
+        return !!(order && (order.ops === true || order.hidden === true));
+    }
+
+    function visibleOrders(catalog) {
+        return ((catalog && catalog.orders) || []).filter(function (o) { return !orderIsHidden(o); });
     }
 
     function poolFrom(orders, loose) {
@@ -326,41 +343,27 @@
         return { elements: order.elements.map(copyElement), orders: [order] };
     }
 
-    // What the pages read. An order carries its elements. An older document
-    // that stored elements apart from the order is joined back on read.
+    // What the pages read. Each order carries its elements on the document.
     // Empty reads as the Standard seed. Standard is always present.
     function catalogFrom(input) {
         const src = input || {};
-        const rawElements = Array.isArray(src.elements) ? src.elements : [];
         const rawOrders = Array.isArray(src.orders) ? src.orders : [];
-        if (!rawElements.length && !rawOrders.length) return standardCatalog();
-
-        const loose = [];
-        const looseById = new Map();
-        rawElements.forEach(function (raw) {
-            const el = normaliseElement(raw);
-            if (!el || looseById.has(el.id)) return;
-            looseById.set(el.id, el);
-            loose.push(el);
-        });
+        if (!rawOrders.length) return standardCatalog();
 
         const orders = [];
         const seenOrder = new Set();
         rawOrders.forEach(function (raw) {
-            const order = normaliseOrder(raw, null, looseById);
+            const order = normaliseOrder(raw, null);
             if (!order || seenOrder.has(order.id)) return;
             seenOrder.add(order.id);
             orders.push(order);
         });
 
-        if (!orders.length) {
-            const seed = copyOrder(STANDARD_ORDER);
-            return { elements: loose.length ? loose.map(copyElement) : seed.elements.map(copyElement), orders: [seed] };
-        }
+        if (!orders.length) return standardCatalog();
         if (!orders.some(function (o) { return o.id === STANDARD_ORDER_ID; })) {
             orders.unshift(copyOrder(STANDARD_ORDER));
         }
-        return { elements: poolFrom(orders, loose), orders: orders };
+        return { elements: poolFrom(orders, []), orders: orders };
     }
 
     function elementById(catalog, id) {
@@ -634,7 +637,7 @@
 
     function readToggles(stored, catalog) {
         if (!Array.isArray(stored)) return defaultToggles();
-        const ids = new Set(((catalog && catalog.orders) || []).map(function (o) { return o.id; }));
+        const ids = new Set(visibleOrders(catalog).map(function (o) { return o.id; }));
         const kept = stored.filter(function (id) { return typeof id === 'string' && ids.has(id); });
         return kept.length || !stored.length ? kept : defaultToggles();
     }
@@ -750,6 +753,7 @@
             hasNote: src.hasNote !== false,
             requests: kind === 'prayer' ? src.requests : null,
             noticeDays: src.noticeDays,
+            elderDigest: src.elderDigest,
             prayedByOther: src.prayedByOther,
             message: src.message,
             response: src.response,
@@ -779,6 +783,7 @@
             hasNote: src.hasNote !== false,
             requests: kind === 'prayer' ? src.requests : null,
             noticeDays: src.noticeDays,
+            elderDigest: src.elderDigest,
             prayedByOther: src.prayedByOther,
             message: src.message,
             response: src.response,
@@ -803,11 +808,19 @@
             if (src.hasNote !== undefined) el.hasNote = src.hasNote === true;
             if (el.kind === 'prayer' && src.requests !== undefined) {
                 el.requests = src.requests ? normaliseRequests('prayer', src.requests) : null;
-                if (!el.requests) el.noticeDays = null;
-                else if (el.noticeDays == null) el.noticeDays = DEFAULT_NOTICE_LIST.slice();
+                if (!el.requests) {
+                    el.noticeDays = null;
+                    el.elderDigest = false;
+                } else {
+                    if (el.noticeDays == null) el.noticeDays = DEFAULT_NOTICE_LIST.slice();
+                    if (src.elderDigest === undefined) el.elderDigest = true;
+                }
             }
             if (el.kind === 'prayer' && src.noticeDays !== undefined) {
                 el.noticeDays = el.requests ? normaliseNoticeDays(src.noticeDays) : null;
+            }
+            if (el.kind === 'prayer' && src.elderDigest !== undefined) {
+                el.elderDigest = !!(el.requests && src.elderDigest === true);
             }
             if (el.kind === 'prayer' && src.prayedByOther !== undefined) {
                 el.prayedByOther = src.prayedByOther === true;
@@ -850,9 +863,13 @@
         if (!name) throw new Error('An order needs a name.');
         const taken = new Set(next.orders.map(function (o) { return o.id; }));
         let elements = [];
+        let printableId = '';
         if (src.copyFrom) {
             const from = next.orders.find(function (o) { return o.id === src.copyFrom; });
-            if (from) elements = (from.elements || []).map(copyElement);
+            if (from) {
+                elements = (from.elements || []).map(copyElement);
+                printableId = printableIdOf(from);
+            }
         }
         const order = {
             id: freshId(slugFor(name), taken),
@@ -860,9 +877,53 @@
             elements: elements,
             elementIds: elements.map(function (el) { return el.id; }),
         };
+        if (printableId) order.printableId = printableId;
         next.orders.push(order);
         syncPool(next);
         return { catalog: next, order: copyOrder(order) };
+    }
+
+    // The optional Printable this Liturgy Order uses as its Service Guide
+    // (MS-762). Empty clears the link. Lives on the order draft until Save.
+    function setOrderPrintable(catalog, orderId, printableId) {
+        const next = cloneCatalog(catalog);
+        const order = next.orders.find(function (o) { return o.id === orderId; });
+        if (!order) throw new Error('That order is gone.');
+        const id = cleanName(printableId);
+        if (id) order.printableId = id;
+        else delete order.printableId;
+        return next;
+    }
+
+    // Where the Service Guide button goes for a Sunday: the fill-in view of
+    // the Printable linked on that Sunday's Liturgy Order, or disabled when
+    // none is linked / the Printable is gone / a member may not view it.
+    function serviceGuideHref(printableId, date, occurrenceId) {
+        let href = 'printable-view.html?id=' + encodeURIComponent(printableId);
+        if (date) href += '&asOf=' + encodeURIComponent(date);
+        if (occurrenceId) href += '&occurrence=' + encodeURIComponent(occurrenceId);
+        return href;
+    }
+
+    function serviceGuideTarget(service, catalog, opts) {
+        const options = opts || {};
+        const order = orderFor(service || {}, catalog);
+        const printableId = printableIdOf(order);
+        const disabled = { enabled: false, href: null, printableId: printableId || null };
+        if (!printableId) return disabled;
+
+        const printables = options.printables;
+        if (printables && typeof printables === 'object') {
+            const meta = printables[printableId];
+            if (!meta) return disabled;
+            if (!options.viewerCanEdit && !meta.memberVisible) return disabled;
+        }
+
+        return {
+            enabled: true,
+            href: serviceGuideHref(printableId, options.date || '', options.occurrenceId || ''),
+            printableId: printableId,
+        };
     }
 
     function renameOrder(catalog, id, name) {
@@ -960,23 +1021,6 @@
         return problems;
     }
 
-    // Where the older prayer fields are drawn on a locked order. A missing
-    // id means the page draws that field once, after the list.
-    function legacyPrayerHomes(order, prayerLabel) {
-        const elements = (order && order.elements) || [];
-        const label = (cleanName(prayerLabel) || LEGACY_PRAYER_NAME).toLowerCase();
-        const named = elements.find(function (el) {
-            return cleanName(el.name).toLowerCase() === label;
-        });
-        const praise = elements.find(function (el) { return el.id === LEGACY_PRAISE_ID; });
-        const confession = elements.find(function (el) { return el.id === LEGACY_CONFESSION_ID; });
-        return {
-            pastoralId: named ? named.id : null,
-            praiseId: praise ? praise.id : null,
-            confessionId: confession ? confession.id : null,
-        };
-    }
-
     const LiturgyOrderCore = {
         KINDS: KINDS,
         KIND_LABELS: KIND_LABELS,
@@ -985,9 +1029,6 @@
         DEFAULT_NOTICE_DAYS: DEFAULT_NOTICE_DAYS,
         DEFAULT_NOTICE_LIST: DEFAULT_NOTICE_LIST,
         NOTICE_DAYS_MAX: NOTICE_DAYS_MAX,
-        LEGACY_PRAISE_ID: LEGACY_PRAISE_ID,
-        LEGACY_CONFESSION_ID: LEGACY_CONFESSION_ID,
-        LEGACY_PRAYER_NAME: LEGACY_PRAYER_NAME,
         PRIMITIVES: Object.freeze(['song', 'scripture', 'text', 'people']),
         PRIMITIVE_LABELS: Object.freeze({
             song: 'Hymn',
@@ -1017,6 +1058,8 @@
         songIdsOf: songIdsOf,
         allSongIds: allSongIds,
         toggledOrders: toggledOrders,
+        orderIsHidden: orderIsHidden,
+        visibleOrders: visibleOrders,
         tableColumns: tableColumns,
         elementForColumn: elementForColumn,
         columnCarriesOrder: columnCarriesOrder,
@@ -1034,11 +1077,13 @@
         addOrder: addOrder,
         renameOrder: renameOrder,
         deleteOrder: deleteOrder,
+        setOrderPrintable: setOrderPrintable,
+        serviceGuideHref: serviceGuideHref,
+        serviceGuideTarget: serviceGuideTarget,
         addToOrder: addToOrder,
         removeFromOrder: removeFromOrder,
         moveInOrder: moveInOrder,
         validateCatalog: validateCatalog,
-        legacyPrayerHomes: legacyPrayerHomes,
     };
 
     if (typeof module !== 'undefined' && module.exports) {

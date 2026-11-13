@@ -86,7 +86,7 @@ test('the query builder menu is every source this viewer may read, single or lis
     ['sunday', 'role_holder', 'people', 'households', 'sundays', 'event_dates', 'form_answers'].forEach(k => {
         assert.ok(keys.includes(k), k + ' is offered');
     });
-    ['sunday_typed', 'insert_date', 'insert_page_number', 'household_children'].forEach(k => {
+    ['sunday_typed', 'insert_date', 'household_children'].forEach(k => {
         assert.ok(!keys.includes(k), k + ' is not a top-level query');
     });
     assert.ok(!regions.some(r => r.related), 'no "Of this" group outside a card');
@@ -172,20 +172,33 @@ test('the builder reads today\'s rows for what it is browsing, so chips say what
     assert.match(drawer, /queryResults\.warnings/, 'what the pick cannot read is said under it');
 });
 
-test('a selection wire lands on the query builder box, never a land chip', () => {
+test('a selection wire lands on its data pill, with a ghost when the pill is off-screen (MS-760)', () => {
     require('../public/scripture-passage.js');
     const Wires = require('../public/printable-editor-data.js').PrintableEditorWires;
     assert.equal(Wires.wireKey({ source: 'sunday', field: 'keyVerse', reading: 'passage' }), 'global|sunday|keyVerse#passage');
     assert.equal(Wires.drawerScrollDelta(
         { top: 100, bottom: 400 },
         { top: 20, bottom: 48 }
-    ) < 0, true, 'a builder above the drawer scrolls up');
-    assert.equal(typeof Wires.firstLaidOutChip, 'undefined', 'land-chip lookup is gone');
+    ) < 0, true, 'a chip above the drawer scrolls up');
+    assert.equal(typeof Wires.firstLaidOutChip, 'undefined', 'the old land-chip strip stays gone');
     assert.doesNotMatch(drawer, /Wired to this element/, 'no land-chip strip above the builder');
     assert.doesNotMatch(drawer, /pe-chip--land/);
     assert.doesNotMatch(js, /connectedChips/);
     assert.match(js, /wireLandsOnQuery/);
-    assert.match(js, /querySelector\('\.pe-query'\)/, 'the wire lands on the query builder');
+    assert.match(js, /findChipEl/, 'the wire looks up the pill by data-chip');
+    assert.match(js, /syncGhostChips/, 'a scrolled-away pill gets a ghost');
+    assert.match(html, /pe-wire-ghosts/, 'ghost chips sit in the canvas margin');
+    assert.ok(typeof Wires.chipInDrawer === 'function');
+    assert.ok(typeof Wires.ghostChipPoint === 'function');
+    const anchor = Wires.ghostChipPoint(
+        { left: 0, top: 0 },
+        { left: 100, right: 700, top: 0, bottom: 600 },
+        200
+    );
+    assert.equal(anchor.x, 692, 'ghost sits just inside the stage\'s right edge');
+    assert.equal(anchor.y, 200);
+    const label = Wires.ghostChipLabel(null, 'global|sunday|sermon#passage');
+    assert.match(label.name, /Words/);
 });
 
 test('a wire hides when its element leaves the canvas and redraws as the drawer scrolls', () => {
@@ -202,32 +215,32 @@ test('a wire hides when its element leaves the canvas and redraws as the drawer 
     assert.doesNotMatch(js, /svg\.innerHTML\s*=\s*''/, 'wiping the svg kills the draw-on');
 });
 
-test('selection wires land on the query builder for query sources only', () => {
+test('selection wires land on the data pill for query sources only', () => {
     assert.match(js, /wireLandsOnQuery/);
-    assert.match(js, /scrollQueryIntoDrawer/);
+    assert.match(js, /scrollChipIntoDrawer/, 'pin scrolls the pill, not only the builder');
     assert.match(js, /syncQueryToSelection/);
     assert.match(js, /_wirePinnedFor/, 'pinning is remembered per selection');
     assert.match(js, /addEventListener\('scroll',\s*\(\)\s*=>\s*this\.refreshWires\(\)/,
         'scroll redraws the wire without asking to pin');
-    assert.doesNotMatch(js, /scrollChipIntoDrawer/);
-    assert.match(js, /source === 'event_field'/, 'fill-ins do not draw a line to the builder');
+    assert.match(js, /source === 'event_field'/, 'fill-ins do not draw a line to a pill');
 });
 
-test('a Sunday in the query builder shows Service, Hymns and Scripture; fill-ins are a list of blanks', () => {
+test('a Sunday in the query builder walks Service then the liturgy order; fill-ins are a list of blanks', () => {
     const Data = require('../public/printable-data-core.js');
     const Typed = require('../public/sunday-typed-core.js');
     require('../public/scripture-passage.js');
     const Wires = require('../public/printable-editor-data.js').PrintableEditorWires;
     const fields = Wires.sundayDrawerFields(Data, global.ScripturePassage, Typed.FIELDS);
-    assert.ok(fields.hymns.some(f => f.key === 'hymn2'), 'a hymn name is a Sunday chip');
-    assert.equal(fields.service.find(f => f.key === 'longDate').label, 'Date');
-    assert.ok(fields.service.some(f => f.key === 'theme'));
-    assert.ok(fields.service.some(f => f.key === 'preacher'));
-    assert.ok(!fields.service.some(f => f.key === 'keyVerse'), 'scripture stays in its own group');
-    assert.ok(!fields.service.some(f => f.key === 'sermon'));
-    assert.ok(!fields.hymns.some(f => f.key === 'date'));
-    assert.ok(fields.scripture.some(f => f.key === 'keyVerse'), 'key verse is a scripture chip');
-    assert.ok(fields.scripture.some(f => f.key === 'sermon'), 'Standard\'s sermon is a scripture chip');
+    assert.ok(fields.elements.some(e => e.id === 'hymn2'), 'a hymn placement is a Sunday group');
+    assert.equal(fields.identity.find(f => f.key === 'longDate').label, 'Date');
+    assert.ok(fields.identity.some(f => f.key === 'theme'));
+    assert.ok(fields.identity.some(f => f.key === 'preacher'));
+    assert.ok(fields.identity.some(f => f.key === 'oosWriter'), 'who wrote the order of service is a Service chip');
+    assert.ok(!fields.identity.some(f => f.key === 'keyVerse'), 'key verse is its own scripture row');
+    assert.ok(!fields.identity.some(f => f.key === 'prayerLabel'), 'Prayer heading is not a chip');
+    assert.ok(!fields.identity.some(f => f.key === 'sermon'));
+    assert.equal(fields.keyVerse.key, 'keyVerse');
+    assert.ok(fields.elements.some(e => e.id === 'sermon' && e.scripture), 'Standard\'s sermon is a scripture placement');
     assert.equal(Wires.chipPreview('text', 'How Rich a Treasure We Possess'), 'How Rich a Treasure We Possess');
     assert.equal(Wires.chipPreview('image', 'https://example.test/map.png'), 'Picture set');
 
@@ -235,12 +248,12 @@ test('a Sunday in the query builder shows Service, Hymns and Scripture; fill-ins
     const fill = between(drawer, '<span>Fill-in library</span>', '<span>General live data</span>');
     const general = between(drawer, '<span>General live data</span>', 'pe-drawer__section--warn');
     assert.match(query, /<template x-if="queryIsSunday">/, 'the Sunday groups belong to the builder');
-    assert.match(query, /querySundayGroups\.service/);
-    assert.match(query, /querySundayGroups\.hymns/);
+    assert.match(query, /querySundayGroups\.identity/);
+    assert.match(query, /querySundayGroups\.elements/);
     assert.match(query, /onSundayChipDragStart\(\$event, 'sunday', f\)/);
-    assert.match(query, /<p class="pe-sun__label">Scripture<\/p>/, 'scripture is a sub-area of the Sunday results');
-    assert.match(query, /onScriptureChipDragStart\(\$event, ref, 'citation'\)[\s\S]*Reference/);
-    assert.match(query, /onScriptureChipDragStart\(\$event, ref, 'passage'\)[\s\S]*Words/);
+    assert.match(query, /querySundayGroups\.keyVerse/, 'key verse is its own row');
+    assert.match(query, /onScriptureChipDragStart\(\$event,[\s\S]*'citation'\)[\s\S]*Reference/);
+    assert.match(query, /onScriptureChipDragStart\(\$event,[\s\S]*'passage'\)[\s\S]*Words/);
     assert.doesNotMatch(fill, /onScriptureChipDragStart/, 'scripture is not a blank');
     assert.doesNotMatch(general, /onScriptureChipDragStart/, 'scripture is not a page insert');
     assert.doesNotMatch(fill, /Sunday booklet|sundayTypedChips|pe-booklet/, 'no pamphlet-specific fill-in card');
@@ -248,7 +261,11 @@ test('a Sunday in the query builder shows Service, Hymns and Scripture; fill-ins
     assert.match(fill, /addEventInput\('list'\)/);
     assert.doesNotMatch(query, /sundayTypedChips/);
     assert.match(general, /onScalarChipDragStart\(\$event, 'insert_date', 'value'\)/);
-    assert.match(general, /onScalarChipDragStart\(\$event, 'insert_page_number', 'number'\)/);
+    assert.doesNotMatch(general, /insert_page_number/, 'the page number is not a data chip');
+    assert.match(html, /addElement\('page-number'\)/, 'a page number is added like a box or text');
+    assert.match(html, /Mirror on the facing page/);
+    assert.match(html, /Start numbering from here/);
+    assert.match(html, /class="pe-place"/);
     assert.match(general, /onAssetChipDragStart/);
     assert.match(js, /sundayDrawerFields\(Data,[\s\S]*\{[\s\S]*liturgy/,
         'the Sunday groups read the loaded liturgy, not only the seed fields');
@@ -272,22 +289,38 @@ test('This Sunday chips follow the order the Sunday uses, not the seed names', (
                 { id: 'prayerOfPraise', name: 'Prayer of Praise', kind: 'prayer', hasNote: true },
                 { id: 'sermon', name: 'Sermon', kind: 'scripture', hasNote: true },
                 { id: 'pastoralPrayer', name: 'Pastoral Prayer', kind: 'prayer', hasNote: true,
-                    requests: { people: [{ who: 'either' }, { who: 'either' }], noticeDays: [5, 3, 1] } },
+                    requests: { people: [{ who: 'either' }, { who: 'either' }], noticeDays: [5, 3, 1] },
+                    message: 'Please pray for', response: 'Amen' },
                 { id: 'hymnEnd1', name: 'Hymn 5', kind: 'hymn', hasNote: true },
             ],
         }],
     });
     const fields = Wires.sundayDrawerFields(Data, global.ScripturePassage, Typed.FIELDS, { liturgy: liturgy });
-    assert.equal(fields.hymns.find(f => f.key === 'hymn1').label, 'Hymn 1');
-    assert.equal(fields.hymns.find(f => f.key === 'hymnEnd1').label, 'Hymn 5');
-    assert.ok(fields.service.some(f => f.key === 'prayerOfPraise' && f.label === 'Prayer of Praise'));
-    assert.ok(fields.service.some(f => f.key === 'pastoralPrayer'));
-    assert.ok(!fields.service.some(f => f.key === 'baptism'), 'Baptism is not on this order');
-    assert.ok(!fields.hymns.some(f => f.label === 'Hymn of Praise'), 'seed hymn names stay off');
-    assert.ok(!fields.scripture.some(f => f.key === 'benediction'), 'scripture off the order stays off');
-    assert.equal(fields.scripture.find(f => f.key === 'callToWorship').label, 'Call to Worship');
+    assert.deepEqual(fields.elements.map(e => e.id), [
+        'preparatoryHymn', 'callToWorship', 'hymn1', 'hymn2', 'prayerOfPraise', 'sermon', 'pastoralPrayer', 'hymnEnd1',
+    ]);
+    assert.equal(fields.elements.find(e => e.id === 'hymn1').label, 'Hymn 1');
+    assert.equal(fields.elements.find(e => e.id === 'hymnEnd1').label, 'Hymn 5');
+    const pastoral = fields.elements.find(e => e.id === 'pastoralPrayer');
+    assert.ok(pastoral, 'Pastoral Prayer is a placement group');
+    assert.ok(pastoral.chips.some(f => f.key === 'pastoralPrayer.name' && f.label === 'Name'));
+    assert.ok(pastoral.chips.some(f => f.key === 'pastoralPrayer.person.0' && f.label === 'Person 1'));
+    assert.ok(pastoral.chips.some(f => f.key === 'pastoralPrayer.person.1' && f.label === 'Person 2'));
+    assert.ok(pastoral.chips.some(f => f.key === 'pastoralPrayer.message.0'));
+    assert.ok(pastoral.chips.some(f => f.key === 'pastoralPrayer.response.1'));
+    assert.ok(!pastoral.chips.some(f => f.key === 'pastoralPrayer' && f.label === 'People'),
+        'two subjects are never one People pill');
+    const praise = fields.elements.find(e => e.id === 'prayerOfPraise');
+    assert.ok(praise.chips.some(f => f.key === 'prayerOfPraise' && f.label === 'People'),
+        'a prayer with no request lines keeps one People chip');
+    assert.ok(!fields.elements.some(e => e.id === 'baptism'), 'Baptism is not on this order');
+    assert.ok(!fields.elements.some(e => e.label === 'Hymn of Praise'), 'seed hymn names stay off');
+    assert.ok(!fields.elements.some(e => e.id === 'benediction'), 'scripture off the order stays off');
+    assert.equal(fields.elements.find(e => e.id === 'callToWorship').label, 'Call to Worship');
+    assert.ok(fields.elements.find(e => e.id === 'callToWorship').scripture);
     assert.ok(Data.isScriptureField('sermon', liturgy));
     assert.ok(Data.isScriptureField('callToWorship', liturgy));
+    assert.ok(!Data.isScriptureField('callToWorship.name', liturgy), 'a name aspect is not a citation');
     assert.ok(!Data.isScriptureField('prayerOfPraise', liturgy));
 });
 
@@ -300,9 +333,9 @@ test('every catalog source is query, general live data, or off the drawer', () =
         assert.ok(['query', 'general', ''].includes(part), s.key + ' has a drawer part (or none)');
         homes[s.key] = part;
     });
-    assert.equal(homes.sunday_typed, '', 'legacy typed Sunday fields are not a drawer card');
+    assert.equal(homes.sunday_typed, undefined, 'booklet text is not a catalog source');
     assert.equal(homes.insert_date, 'general');
-    assert.equal(homes.insert_page_number, 'general');
+    assert.equal(homes.insert_page_number, undefined);
     ['people', 'households', 'household_children', 'sunday', 'sunday_rows', 'sunday_hymns', 'sunday_announcements',
         'sunday_kids_questions', 'sunday_prayer_requests', 'sundays', 'event_dates', 'role_holder', 'form_answers'].forEach(k => {
         assert.equal(homes[k], 'query', k + ' is queried');

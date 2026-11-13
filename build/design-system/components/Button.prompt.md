@@ -5,6 +5,7 @@
 <button class="m-btn m-btn--secondary m-btn--sm">Cancel</button>
 <button class="m-btn m-btn--ghost">Show past dates</button>
 <button class="m-btn m-btn--quiet m-btn--sm"><span class="material-symbols-outlined">print</span><span class="m-btn__label">Print PDF</span></button>
+<button class="m-btn m-btn--secondary m-btn--sm m-btn--named"><span class="material-symbols-outlined">menu_book</span><span class="m-btn__label">Folio</span></button>
 ```
 
 **variant:** `primary` · `secondary` · `ghost` · `quiet` · `danger` · `danger-outline`
@@ -17,6 +18,7 @@ Base class `.m-btn`, modifiers `.m-btn--<variant>`.
 - 46px tall, not 40. The phone shipped 46 and it is above the 44px touch floor; one height that works on both beats two that each work on one.
 - A button lifts 1px on hover and settles on press. That motion is the sign that it can be pressed. It is not optional, and it is not a bounce. prefers-reduced-motion keeps the colour change and drops the lift.
 - Wrap the word in `.m-btn__label` when the button sits somewhere that collapses to icons — a PageHeader's tool or compact mode. Elsewhere the text can go straight in.
+- When two header actions would collapse to the same glyph (or to twin icon squares that only a title can tell apart), add `.m-btn--named` so the short label stays visible in compact and phone headers. Prefer distinct icons first; named labels are the escape for ambiguous twins.
 
 Built from the Mosaic tokens only — no raw colours, no second icon set.
 Icons are Material Symbols Outlined.

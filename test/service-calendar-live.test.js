@@ -88,6 +88,7 @@ function load(overrides) {
     sandbox.PresenceStore = presence.PresenceStore;
     sandbox.LiturgyOrderCore = require('../public/liturgy-order-core.js');
     sandbox.LiturgyOrderStore = require('../public/liturgy-order-store.js');
+    sandbox.ServiceDottedKeysCore = require('../public/service-dotted-keys-core.js');
     Object.assign(sandbox, overrides || {});
 
     vm.createContext(sandbox);
@@ -262,22 +263,23 @@ test('a cell rebuilt wholesale is left whole while any part of it is edited', ()
     assert.strictEqual(sb.hasEditorOpen(null), false);
 });
 
-// ── Legacy dotted keys still fold back ────────────────────────────────────
+// ── Dotted top-level keys are not read (MS-781) ─────────────────────────────
 
-test('a legacy dotted key is still folded into its nested shape', () => {
+test('normalizeServiceDoc keeps nested fields and ignores dotted top-level keys', () => {
     const sb = load({ db: fakeDb() });
-    const out = sb.normalizeServiceDoc({ 'liturgy.sermon': 'Romans 8', theme: 'Grace' });
+    const out = sb.normalizeServiceDoc({ 'liturgy.sermon': 'Romans 8', theme: 'Grace', liturgy: { hymn1: 'A' } });
 
-    assert.strictEqual(out.liturgy.sermon, 'Romans 8');
+    assert.strictEqual(out.liturgy.hymn1, 'A');
+    assert.strictEqual(out.liturgy.sermon, undefined);
     assert.strictEqual(out.theme, 'Grace');
     assert.ok(!('liturgy.sermon' in out));
 });
 
-test('a properly nested value wins over the legacy dotted one', () => {
+test('nested liturgy is not replaced by a dotted key', () => {
     const sb = load({ db: fakeDb() });
     const out = sb.normalizeServiceDoc({
         liturgy: { sermon: 'John 1' },
-        'liturgy.sermon': 'Romans 8'
+        'liturgy.sermon': 'Romans 8',
     });
     assert.strictEqual(out.liturgy.sermon, 'John 1');
 });

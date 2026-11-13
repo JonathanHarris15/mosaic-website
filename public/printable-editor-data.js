@@ -1,3 +1,4 @@
+// @ts-nocheck
 // The Printable editor's data side (MS-396, MS-397): the drawer, the wires,
 // iterated elements and the real pages an overflowing list keeps.
 //
@@ -10,10 +11,12 @@
 //         fields; a list meeting a selected box iterates that box;
 //       – the FILL-IN LIBRARY: blanks this printable defines; values are
 //         typed where it is linked (any event, any printable);
-//       – GENERAL LIVE DATA: the date, the page number, brand assets;
+//       – GENERAL LIVE DATA: the date and brand assets;
 //   • WIRING — drag a chip onto an element to bind it, with a wire drawn from
 //     the chip to the cursor and, once bound, from the selected element to
-//     the query builder (no line when the bind is a fill-in or page insert);
+//     that chip's pill (MS-760). When the pill is scrolled out of the drawer,
+//     a ghost chip sits in the canvas margin and the wire lands on it. Fill-ins
+//     and page inserts draw no line;
 //   • ITERATION — "Make this element iterated": the element stands for one
 //     row of a list, its filters and layout live on the element panel, and a
     //     list that overflows keeps real pages, each editable, with live rows;
@@ -153,6 +156,7 @@
 
     // What the query preview calls a row: a name, a slot, a date in words —
     // never an id like "2026-09-20".
+    /** @param {any} row */
     function previewName(row) {
         const r = row || {};
         return r.name || r.personName || r.label || r.date || r._id || 'A row';
@@ -162,7 +166,7 @@
     // Rebuilding the svg from scratch would cancel this, so syncWirePaths
     // keeps the path node while the line is still showing.
     function drawWireIn(path) {
-        let len = 0;
+        let len;
         try { len = path.getTotalLength(); } catch (e) { return; }
         if (!len) return;
         path.style.strokeDasharray = String(len);
@@ -224,8 +228,8 @@
         return 'global|' + (b.source || '') + '|' + field;
     }
 
-    // How far to move the drawer so the query builder sits inside it.
-    // Positive scrolls down. Zero when the builder is already in view.
+    // How far to move the drawer so a chip (or the query builder) sits inside
+    // it. Positive scrolls down. Zero when the target is already in view.
     function drawerScrollDelta(bodyRect, chipRect) {
         if (!bodyRect || !chipRect) return 0;
         const pad = 8;
@@ -234,71 +238,222 @@
         return 0;
     }
 
-    // The chips the query builder shows for A Sunday, grouped Service,
-    // Hymns and Scripture. Extra date formats stay off — longDate is the
-    // one the guide prints. `fillFields` is the typed-on-the-Sunday set
-    // (prayer, Mosaic Kids), which the Fill-in library offers. Chips follow
-    // the Liturgy Order that Sunday uses (ADR 0080): identity fields, then
-    // that order's placements under their order names. Without a catalog,
-    // Standard is the order.
+    // The pill a wire key names, if it is in the drawer right now.
+    function findChipEl(root, key) {
+        if (!root || !key) return null;
+        try {
+            return root.querySelector('[data-chip="' + String(key).replace(/"/g, '\\"') + '"]');
+        } catch (e) {
+            return null;
+        }
+    }
+
+    // Where a ghost pill sits: in the stage's right margin, level with the
+    // selected element, just left of the data drawer.
+    function ghostChipPoint(mainRect, stageRect, elementMidY) {
+        const main = mainRect || { left: 0, top: 0 };
+        const stage = stageRect || main;
+        const x = Math.max(8, (stage.right - main.left) - 8);
+        const y = elementMidY;
+        return { x: x, y: y };
+    }
+
+    // Copy the visible words off a chip (or invent them from the wire key)
+    // so a ghost can stand in when the real pill is scrolled away.
+    function ghostChipLabel(chipEl, key) {
+        if (chipEl) {
+            const name = chipEl.querySelector('.pe-chip__name');
+            const val = chipEl.querySelector('.pe-chip__val');
+            const icon = chipEl.querySelector('.material-symbols-outlined');
+            const text = (chipEl.textContent || '').replace(/\s+/g, ' ').trim();
+            return {
+                icon: icon ? icon.textContent : 'cable',
+                name: name ? name.textContent : text,
+                value: val ? val.textContent : '',
+            };
+        }
+        const parts = String(key || '').split('|');
+        const field = parts[2] || parts[parts.length - 1] || 'Field';
+        const label = field.replace(/#passage$/, ' · Words').replace(/#citation$/, ' · Reference');
+        return { icon: 'cable', name: label, value: '' };
+    }
+
+    function syncGhostChips(host, ghosts) {
+        if (!host) return;
+        const keep = {};
+        (ghosts || []).forEach(g => {
+            keep[g.key] = true;
+            let el = host.querySelector('[data-ghost-chip="' + g.key.replace(/"/g, '\\"') + '"]');
+            if (!el) {
+                el = document.createElement('div');
+                el.className = 'pe-wire-ghost';
+                el.setAttribute('data-ghost-chip', g.key);
+                host.appendChild(el);
+            }
+            el.style.left = g.x + 'px';
+            el.style.top = g.y + 'px';
+            el.style.transform = 'translate(-100%, -50%)';
+            const icon = g.icon || 'cable';
+            const name = g.name || '';
+            const value = g.value || '';
+            el.innerHTML = '<span class="material-symbols-outlined" aria-hidden="true">' + icon + '</span>'
+                + '<span class="pe-wire-ghost__name"></span>'
+                + (value ? '<span class="pe-wire-ghost__val"></span>' : '');
+            const nameEl = el.querySelector('.pe-wire-ghost__name');
+            if (nameEl) nameEl.textContent = name;
+            const valEl = el.querySelector('.pe-wire-ghost__val');
+            if (valEl) valEl.textContent = value;
+        });
+        Array.from(host.querySelectorAll('[data-ghost-chip]')).forEach(el => {
+            if (!keep[el.getAttribute('data-ghost-chip')]) el.remove();
+        });
+    }
+
+    // The chips the query builder shows for A Sunday. Extra date formats stay
+    // off — longDate is the one the guide prints. `fillFields` is the typed-
+    // on-the-Sunday set (prayer, Mosaic Kids), which the Fill-in library
+    // offers. Layout follows the Liturgy Order that Sunday uses (ADR 0080):
+    // the Sunday's own facts first, then each placement in that order with
+    // every field the Liturgy Orders page and the Order of Service set on it.
+    // Without a catalog, Standard is the order. Prayer heading is gone —
+    // bind a prayer element's Name from the order instead.
     function sundayDrawerFields(Data, Passage, fillFields, options) {
-        const Liturgy = global.LiturgyOrderCore;
+        const Liturgy = global.LiturgyOrderCore || (typeof require !== 'undefined'
+            ? require('./liturgy-order-core.js')
+            : null);
         const liturgy = options && options.liturgy;
         const cat = liturgy || (Liturgy && Liturgy.standardCatalog ? Liturgy.standardCatalog() : null);
-        const order = Liturgy && Liturgy.orderFor
-            ? Liturgy.orderFor((options && options.service) || {}, cat)
-            : null;
-        const orderEls = order && Liturgy.elementsOf ? Liturgy.elementsOf(order) : [];
-        const orderById = new Map(orderEls.map(el => [el.id, el]));
+        const serviceDoc = (options && options.service) || {};
+        let orderEls = Liturgy && Liturgy.elementsFor
+            ? Liturgy.elementsFor(serviceDoc, cat)
+            : [];
+        // Plain catalog walk when the liturgy module is not on global (Node tests).
+        if (!orderEls.length && cat && Array.isArray(cat.orders)) {
+            const orderId = (serviceDoc && serviceDoc.liturgyOrderId) || 'standard';
+            const order = cat.orders.find(o => o && o.id === orderId)
+                || cat.orders.find(o => o && o.id === 'standard')
+                || cat.orders[0];
+            orderEls = (order && Array.isArray(order.elements)) ? order.elements : [];
+        }
+        const skip = { date: true, shortDate: true, dateShort: true, keyVerse: true };
+        const shortLabel = { longDate: 'Date' };
+        const identity = [];
+        const identityKeys = {
+            longDate: true, preacher: true, theme: true,
+            serviceLeader: true, musicLeader: true,
+            prayerMale: true, prayerFemale: true,
+            oosWriter: true,
+        };
         const fields = Data && Data.fieldsFor
             ? Data.fieldsFor('sunday', {}, { liturgy: cat })
             : ((Data && Data.sourceByKey && Data.sourceByKey('sunday') || {}).fields || []);
-        const skip = { date: true, shortDate: true, dateShort: true };
-        const shortLabel = { longDate: 'Date' };
-        const service = [];
-        const hymns = [];
-        const scripture = [];
-        if (!orderById.size && Passage && Passage.FIELDS) {
-            // No liturgy module — keep the old seed split so the drawer still paints.
-            const hymnSlots = (Data && Data.HYMN_SLOTS) || [];
-            const scriptureKeys = Passage.FIELDS;
-            fields.forEach(f => {
-                if (!f || skip[f.key]) return;
-                if (f.key === 'keyVerse' || scriptureKeys.indexOf(f.key) !== -1) {
-                    scripture.push(f.key === 'keyVerse'
-                        ? Object.assign({}, f, { label: 'Key verse' })
-                        : f);
+        fields.forEach(f => {
+            if (!f || skip[f.key] || !identityKeys[f.key]) return;
+            identity.push(shortLabel[f.key] ? Object.assign({}, f, { label: shortLabel[f.key] }) : f);
+        });
+
+        const keyVerse = { key: 'keyVerse', label: 'Key verse', kind: 'text', scripture: true };
+        const elements = [];
+
+        function pushElement(el) {
+            if (!el || !el.id) return;
+            const kind = el.kind || el.primitive || '';
+            const label = Liturgy && Liturgy.elementDisplayName
+                ? Liturgy.elementDisplayName(el)
+                : (el.name || el.id);
+            const aspectFields = Data && Data.fieldsForElement
+                ? Data.fieldsForElement(el)
+                : [];
+            const chips = [];
+            let scripture = null;
+            aspectFields.forEach(f => {
+                if (!f) return;
+                // Scripture's citation is Reference + Words, not a plain value chip.
+                if ((kind === 'scripture') && (f.aspect === 'value' || f.key === el.id)) {
+                    scripture = { key: el.id, label: label, kind: 'text' };
                     return;
                 }
-                const chip = shortLabel[f.key] ? Object.assign({}, f, { label: shortLabel[f.key] }) : f;
-                if (hymnSlots.indexOf(f.key) !== -1) hymns.push(chip);
-                else service.push(chip);
+                chips.push(Object.assign({}, f, {
+                    label: f.label,
+                    element: kind,
+                }));
             });
-        } else {
-            fields.forEach(f => {
-                if (!f || skip[f.key]) return;
-                if (f.key === 'keyVerse') {
-                    scripture.push(Object.assign({}, f, { label: 'Key verse' }));
-                    return;
+            // Fallback when Data.fieldsForElement is missing (older bundle).
+            if (!aspectFields.length) {
+                if (kind === 'scripture') {
+                    scripture = { key: el.id, label: label, kind: 'text' };
+                } else if (kind !== 'other') {
+                    chips.push({
+                        key: el.id,
+                        label: label,
+                        kind: 'text',
+                        element: kind,
+                        aspect: 'value',
+                        elementId: el.id,
+                    });
                 }
-                const el = orderById.get(f.key);
-                if (el) {
-                    const label = Liturgy.elementDisplayName
-                        ? Liturgy.elementDisplayName(el)
-                        : (el.name || f.label);
-                    const chip = Object.assign({}, f, { label: label, element: el.kind || el.primitive });
-                    if (el.kind === 'hymn' || el.primitive === 'song') hymns.push(chip);
-                    else if (el.kind === 'scripture' || el.primitive === 'scripture') scripture.push(chip);
-                    else service.push(chip);
-                    return;
-                }
-                if (f.element || f.element === '') return;
-                // Identity fields of the Sunday (preacher, theme, …) — not placements.
-                const chip = shortLabel[f.key] ? Object.assign({}, f, { label: shortLabel[f.key] }) : f;
-                service.push(chip);
+            }
+            elements.push({
+                id: el.id,
+                label: label,
+                kind: kind,
+                chips: chips,
+                scripture: scripture,
             });
         }
-        return { service: service, hymns: hymns, typed: typedChipFields(fillFields), scripture: scripture };
+
+        if (orderEls.length) {
+            orderEls.forEach(pushElement);
+        } else if (Passage && Passage.FIELDS) {
+            // No liturgy module — still paint Standard-shaped groups from the seed fields.
+            const hymnSlots = (Data && Data.HYMN_SLOTS) || [];
+            const byKey = new Map(fields.map(f => [f.key, f]));
+            hymnSlots.forEach(id => {
+                const f = byKey.get(id);
+                if (f) {
+                    elements.push({
+                        id: id,
+                        label: f.label || id,
+                        kind: 'hymn',
+                        chips: [Object.assign({}, f, { aspect: 'value', elementId: id })],
+                        scripture: null,
+                    });
+                }
+            });
+            Passage.FIELDS.forEach(id => {
+                const f = byKey.get(id);
+                if (!f) return;
+                elements.push({
+                    id: id,
+                    label: f.label || id,
+                    kind: 'scripture',
+                    chips: [{
+                        key: (Data && Data.sundayAspectKey)
+                            ? Data.sundayAspectKey(id, 'name')
+                            : (id + '.name'),
+                        label: 'Name',
+                        kind: 'text',
+                        aspect: 'name',
+                        elementId: id,
+                    }],
+                    scripture: { key: id, label: f.label || id, kind: 'text' },
+                });
+            });
+        }
+
+        return {
+            identity: identity,
+            keyVerse: keyVerse,
+            elements: elements,
+            typed: typedChipFields(fillFields),
+            // Compat for older callers/tests that still read the kind buckets.
+            service: identity.slice(),
+            hymns: elements.filter(e => e.kind === 'hymn' || e.kind === 'song')
+                .map(e => (e.chips.find(c => c.aspect === 'value') || { key: e.id, label: e.label })),
+            scripture: [keyVerse].concat(
+                elements.filter(e => e.scripture).map(e => e.scripture)
+            ),
+        };
     }
 
     // The Sunday booklet fields offered as chips. Announcements are a list
@@ -320,8 +475,13 @@
 
     const PrintableEditorWires = {
         elementOnCanvas: rectsOverlap,
+        chipInDrawer: rectsOverlap,
         wireKey: wireKey,
         drawerScrollDelta: drawerScrollDelta,
+        findChipEl: findChipEl,
+        ghostChipPoint: ghostChipPoint,
+        ghostChipLabel: ghostChipLabel,
+        syncGhostChips: syncGhostChips,
         drawerPartOf: drawerPartOf,
         groupQuerySources: groupQuerySources,
         querySubject: querySubject,
@@ -435,7 +595,7 @@
             async initData() {
                 if (!this.project) return;
                 if (!Array.isArray(this.project.assets)) this.project.assets = [];
-                ['insert_date', 'insert_page_number'].forEach(key => {
+                ['insert_date'].forEach(key => {
                     const src = Data.sourceByKey(key);
                     if (src && !this.data.params[key]) this.data.params[key] = Data.defaultParams(src);
                 });
@@ -561,7 +721,11 @@
                 const entries = this.computeLayout({ persist: false });
                 const Ex = global.PrintableExportCore;
                 const printed = Ex ? Ex.exportEntries(entries, this.project) : entries;
-                return printed.map(e => ({ page: Object.assign({}, e.page, { nodes: e.nodes }), blank: !!e.blank }));
+                return printed.map((e, i) => ({
+                    page: Object.assign({}, e.page, { nodes: e.nodes }),
+                    blank: !!e.blank,
+                    pageIndex: e.pageIndex == null ? i : e.pageIndex,
+                }));
             },
 
             // ── The drawer ───────────────────────────────────────────────
@@ -809,24 +973,33 @@
                         : f);
             },
 
-            // A Sunday's fields, grouped by the order that Sunday follows.
+            // A Sunday's fields: identity, then each liturgy-order placement.
             get queryIsSunday() {
                 return this.queryChipScope === 'global' && this.querySourceKey === 'sunday';
             },
 
             get querySundayGroups() {
-                if (!this.queryIsSunday) return { service: [], hymns: [], scripture: [] };
+                const empty = { identity: [], keyVerse: null, elements: [], service: [], hymns: [], scripture: [] };
+                if (!this.queryIsSunday) return empty;
                 const groups = this.sundayDrawer();
                 const row = this.data.query.preview.row || {};
-                const chips = list => list.map(f => Object.assign({}, f, { value: chipPreview(f.kind, row[f.key]) }));
+                const chips = list => (list || []).map(f => Object.assign({}, f, { value: chipPreview(f.kind, row[f.key]) }));
+                const scriptureOf = f => f ? {
+                    key: f.key,
+                    label: f.label || SCRIPTURE_LABELS[f.key] || f.key,
+                    citation: row[f.key] ? String(row[f.key]) : '',
+                } : null;
                 return {
-                    service: chips(groups.service),
-                    hymns: chips(groups.hymns),
-                    scripture: groups.scripture.map(f => ({
-                        key: f.key,
-                        label: f.label || SCRIPTURE_LABELS[f.key] || f.key,
-                        citation: row[f.key] ? String(row[f.key]) : '',
+                    identity: chips(groups.identity || groups.service),
+                    keyVerse: scriptureOf(groups.keyVerse),
+                    elements: (groups.elements || []).map(el => Object.assign({}, el, {
+                        chips: chips(el.chips),
+                        scripture: scriptureOf(el.scripture),
                     })),
+                    // Compat mirrors for older tests.
+                    service: chips(groups.identity || groups.service),
+                    hymns: chips(groups.hymns),
+                    scripture: (groups.scripture || []).map(scriptureOf).filter(Boolean),
                 };
             },
 
@@ -836,7 +1009,7 @@
             get queryResults() {
                 if (this.queryRepeatNode) {
                     const p = this.repeatPreview;
-                    return { count: p.count, names: p.names, warnings: [], loading: false, error: '' };
+                    return { count: p.count, names: p.names, indexes: p.indexes || [], warnings: [], loading: false, error: '' };
                 }
                 const pv = this.data.query.preview;
                 const src = this.querySource;
@@ -940,12 +1113,6 @@
                 }
             },
 
-            get currentPageIndex() {
-                const page = this.currentPage;
-                if (!page) return -1;
-                return this.pages.findIndex(p => p.id === page.id);
-            },
-
             get brandAssets() {
                 return (this.project && this.project.assets) || [];
             },
@@ -1000,19 +1167,6 @@
             scalarDatePreview() {
                 const row = Data.resolve('insert_date', this.scalarParams('insert_date'), {}, { today: Data.toDateStr(new Date()) }).rows[0];
                 return row ? row.value : '';
-            },
-
-            setScalarPageStart(n) {
-                const p = this.scalarParams('insert_page_number');
-                p.startAt = Math.max(1, Math.round(Number(n) || 1));
-                this.renderAll();
-            },
-
-            scalarPagePreview() {
-                const idx = this.currentPageIndex;
-                if (idx < 0) return '—';
-                const n = Data.insertPageNumberDisplay(idx, this.scalarParams('insert_page_number').startAt);
-                return n == null ? 'Before numbering' : ('This page → ' + n);
             },
 
             assetChipKey(assetId) {
@@ -1178,6 +1332,7 @@
                 return {
                     count: rows.length,
                     names: rows.slice(0, 8).map(previewName),
+                    indexes: rows.slice(0, 8).map(row => (row && row.number != null && row.number !== '') ? row.number : null),
                 };
             },
 
@@ -1266,6 +1421,7 @@
             // An item chip may only land inside its own list; a global chip
             // may land anywhere its kind fits.
             mayBind(node, field) {
+                if (Core.isPageNumber(node)) return false;
                 if (field.scope === 'asset') {
                     if (field.apply === 'font') return Core.kindOf(node) === 'text';
                     return Core.kindOf(node) === 'image';
@@ -1318,7 +1474,7 @@
                 }
                 this.commit();
                 if (field.scope === 'item' || field.scope === 'asset') { this.rebindData(); this.renderAll(); }
-                else if (field.source === 'insert_date' || field.source === 'insert_page_number') {
+                else if (field.source === 'insert_date') {
                     this.rebindData();
                     this.renderAll();
                 }
@@ -1523,9 +1679,9 @@
                 return { x: r.left - m.left, y: r.top - m.top + r.height / 2, w: r.width, h: r.height };
             },
 
-            // A selection wire lands on the query builder when the bind is a
-            // catalog query source. Fill-ins, page inserts, and assets draw
-            // no line — there is no query-builder home for them.
+            // A selection wire is drawn when the bind is a catalog query
+            // source (it lands on that source's pill). Fill-ins, page
+            // inserts, and assets draw no line.
             wireLandsOnQuery(bind) {
                 if (!bind || bind.scope === 'asset') return false;
                 const source = bind.source || (this.repeatContext && this.repeatContext.repeat && this.repeatContext.repeat.source) || '';
@@ -1555,6 +1711,17 @@
                 }
             },
 
+            scrollChipIntoDrawer(chipEl) {
+                const body = document.querySelector('.pe-drawer__body');
+                if (!body || !chipEl) return;
+                const delta = PrintableEditorWires.drawerScrollDelta(
+                    body.getBoundingClientRect(), chipEl.getBoundingClientRect()
+                );
+                if (delta) body.scrollTop += delta;
+            },
+
+            // Prefer the pill; fall back to the query builder so a pin still
+            // reveals the right source when the chip is not mounted yet.
             scrollQueryIntoDrawer() {
                 const body = document.querySelector('.pe-drawer__body');
                 const query = document.querySelector('.pe-query');
@@ -1565,13 +1732,18 @@
                 if (delta) body.scrollTop += delta;
             },
 
-            // The line runs from the selected element to the query builder.
-            // Pin (scroll the builder into view) only when the selection changes.
+            // The line runs from the selected element to its data pill.
+            // When the pill is scrolled out of the drawer, a ghost chip in
+            // the canvas margin holds the landing (MS-760). Pin (scroll the
+            // pill into view) only when the selection changes.
             refreshWires(opts) {
                 const wires = [];
+                const ghosts = [];
                 const main = document.querySelector('.pe-main');
                 const viewport = document.getElementById('pe-viewport');
-                const query = document.querySelector('.pe-query');
+                const drawer = document.getElementById('pe-drawer');
+                const body = document.querySelector('.pe-drawer__body');
+                const stage = document.querySelector('.pe-stage');
                 const node = this.selectedNode;
                 const nodeId = node && node.id;
                 const pin = !!(opts && opts.pinChip)
@@ -1583,22 +1755,61 @@
                 const repeatSource = this.repeatContext && this.repeatContext.repeat
                     ? this.repeatContext.repeat.source : '';
                 if (pin && node) this.syncQueryToSelection();
-                if (main && node && node.bind && !this.dragWire && query) {
+                const pendingGhostWires = [];
+                if (main && node && node.bind && !this.dragWire) {
                     Object.keys(node.bind).forEach(prop => {
                         const b = node.bind[prop];
                         if (!this.wireLandsOnQuery(b)) return;
                         const key = PrintableEditorWires.wireKey(b, repeatSource);
-                        if (pin) this.scrollQueryIntoDrawer();
                         const el = ui.world && ui.world.querySelector('[data-pid="' + node.id + '"]');
                         if (!el) return;
                         if (viewport && !PrintableEditorWires.elementOnCanvas(el.getBoundingClientRect(), viewport.getBoundingClientRect())) return;
                         const a = this.pointOf(el);
-                        const c = this.pointOf(query);
+                        let chip = PrintableEditorWires.findChipEl(drawer, key);
+                        if (pin) {
+                            if (chip) this.scrollChipIntoDrawer(chip);
+                            else this.scrollQueryIntoDrawer();
+                            chip = PrintableEditorWires.findChipEl(drawer, key);
+                        }
                         const enter = !prev[key];
                         nextKeys[key] = true;
-                        wires.push({ x1: a.x + a.w, y1: a.y, x2: c.x, y2: c.y, key: key, enter: enter });
+                        const bodyRect = body && body.getBoundingClientRect();
+                        const chipVisible = !!(chip && bodyRect
+                            && PrintableEditorWires.chipInDrawer(chip.getBoundingClientRect(), bodyRect));
+                        if (chipVisible) {
+                            const c = this.pointOf(chip);
+                            wires.push({ x1: a.x + a.w, y1: a.y, x2: c.x, y2: c.y, key: key, enter: enter });
+                            return;
+                        }
+                        // Pill missing or scrolled away — ghost in the margin.
+                        const mainRect = main.getBoundingClientRect();
+                        const stageRect = (stage || main).getBoundingClientRect();
+                        const anchor = PrintableEditorWires.ghostChipPoint(mainRect, stageRect, a.y);
+                        const label = PrintableEditorWires.ghostChipLabel(chip, key);
+                        ghosts.push({
+                            key: key,
+                            x: anchor.x,
+                            y: anchor.y,
+                            icon: label.icon,
+                            name: label.name,
+                            value: label.value,
+                        });
+                        pendingGhostWires.push({
+                            x1: a.x + a.w, y1: a.y, key: key, enter: enter, ghost: true,
+                        });
                     });
                 }
+                PrintableEditorWires.syncGhostChips(document.getElementById('pe-wire-ghosts'), ghosts);
+                const ghostHost = document.getElementById('pe-wire-ghosts');
+                pendingGhostWires.forEach(w => {
+                    const ghostEl = ghostHost && ghostHost.querySelector('[data-ghost-chip="' + w.key.replace(/"/g, '\\"') + '"]');
+                    if (ghostEl) {
+                        const c = this.pointOf(ghostEl);
+                        wires.push({ x1: w.x1, y1: w.y1, x2: c.x, y2: c.y, key: w.key, enter: w.enter, ghost: true });
+                    } else {
+                        wires.push({ x1: w.x1, y1: w.y1, x2: w.x1 + 80, y2: w.y1, key: w.key, enter: w.enter, ghost: true });
+                    }
+                });
                 if (this.dragWire) wires.push({ x1: this.dragWire.to.x, y1: this.dragWire.to.y, x2: this.dragWire.from.x, y2: this.dragWire.from.y, live: true });
                 this.wires = wires;
                 this._wireKeys = nextKeys;
@@ -1694,6 +1905,81 @@
                 if (!r || !page) return;
                 const layout = Object.assign({}, r.repeat.layout, { [key]: value });
                 this.replacePage(Core.updateNode(page, r.id, { repeat: Object.assign({}, r.repeat, { layout: layout }) }));
+                this.commit();
+                this.renderAll();
+            },
+
+            // The repeating box whose slice the query builder is showing.
+            get iterationNode() {
+                if (this.queryScope === 'own') {
+                    const node = this.selectedNode;
+                    return node && node.repeat ? node : null;
+                }
+                if (this.queryScope === 'row') return this.repeatContext;
+                return null;
+            },
+
+            // Start and stop are 1-based positions in the list. 0 is the
+            // default: start at the first row, or run through the end.
+            get iterationSlice() {
+                const node = this.iterationNode;
+                if (!node || !node.repeat || !node.repeat.source) return null;
+                const from = Math.max(0, Math.round(Number(node.repeat.from)) || 0);
+                const to = Math.max(0, Math.round(Number(node.repeat.to)) || 0);
+                return { from: from, to: to, active: from > 1 || to > 0 };
+            },
+
+            get showIterationRange() {
+                return !!this.iterationSlice;
+            },
+
+            // Blank when the default is in force, so the field reads as
+            // "from the start" / "through the end" instead of a zero.
+            iterationRangeValue(key) {
+                const slice = this.iterationSlice;
+                if (!slice) return '';
+                const n = key === 'to' ? slice.to : slice.from;
+                return n > 0 ? n : '';
+            },
+
+            // The name list is already the slice. A row that carries its own
+            // index (every sheet of one hymn shares one) shows that. Otherwise
+            // number from the start row, so row 2 still says 2 when the page
+            // begins there.
+            queryRowIndex(i) {
+                const listed = this.queryResults && this.queryResults.indexes;
+                const stamped = listed && listed[i];
+                if (stamped != null && stamped !== '' && Number.isFinite(Number(stamped))) return Number(stamped);
+                const slice = this.iterationSlice;
+                const start = slice && slice.from > 1 ? slice.from : 1;
+                return start + Number(i || 0);
+            },
+
+            queryCountLabel() {
+                const n = this.queryResults.count;
+                if (n == null || n === undefined) return '';
+                const word = n === 1 ? 'row' : 'rows';
+                const slice = this.iterationSlice;
+                if (slice && slice.active) {
+                    const start = slice.from > 1 ? slice.from : 1;
+                    const stop = slice.to > 0 ? String(slice.to) : 'end';
+                    return n + ' ' + word + ' on this page (rows ' + start + '–' + stop + ')';
+                }
+                return n + ' ' + word + ' today';
+            },
+
+            // Inclusive 1-based row range on the Repeat (MS-743). 0 means
+            // default: from the start, or through the end.
+            setRepeatRange(key, value) {
+                const r = this.repeatContext;
+                const page = this.pageOfNode(r && r.id);
+                if (!r || !page || (key !== 'from' && key !== 'to')) return;
+                const n = Math.max(0, Math.round(Number(value)) || 0);
+                this.replacePage(Core.updateNode(page, r.id, { repeat: Object.assign({}, r.repeat, { [key]: n }) }));
+                if (this.resolver && r.repeat.overflow === 'new-page') {
+                    const host = document.getElementById('pe-measure');
+                    Live.pruneExcessContinuationPages(this.project, this.resolver, host, { repeatNodeId: r.id });
+                }
                 this.commit();
                 this.renderAll();
             },
@@ -1811,15 +2097,52 @@
                 }));
             },
 
-            // What the chips say today: the typed text of that Sunday, read
-            // the way a wire would read it.
-            typedRowFor(date, service) {
+            // The occurrence that holds this Sunday's fill-ins. The date the
+            // page was opened uses that occurrence. Any other Sunday is the
+            // Sunday Service date.
+            /** @param {any} date @return {string} */
+            bookletOccurrenceId(date) {
+                const self = /** @type {any} */ (this);
+                if (self.occurrenceId && date === self.viewDate) return self.occurrenceId;
+                const Core = /** @type {any} */ (global).EventsOccurrenceCore;
+                if (Core && Core.occurrenceId && Core.SUNDAY_SERVICE_ID) {
+                    return Core.occurrenceId(Core.SUNDAY_SERVICE_ID, date) || '';
+                }
+                return date ? 'sunday_service_' + date : '';
+            },
+
+            /** @param {any} date */
+            async bookletBagFor(date) {
+                const self = /** @type {any} */ (this);
+                const byDate = ui.bundle && ui.bundle.bookletByDate;
+                if (byDate && Object.prototype.hasOwnProperty.call(byDate, date)) return byDate[date] || {};
+                if (date === self.viewDate && ui.bundle && ui.bundle.eventInputs) return ui.bundle.eventInputs;
+                const occId = self.bookletOccurrenceId(date);
+                const printableId = self.id;
+                if (!occId || !printableId || typeof db === 'undefined' || !db) return {};
                 try {
-                    const res = Data.resolve('sunday_typed', { when: { mode: 'date', date: date } }, { services: { [date]: service } }, {
-                        today: this.viewDate, level: this.permissionLevel,
-                    });
-                    return (service && res.rows && res.rows[0]) || {};
+                    const doc = await db.collection('event_occurrences').doc(occId).get();
+                    if (!doc || !doc.exists) return {};
+                    const inputs = (doc.data() || {}).printableInputs || {};
+                    const bag = inputs[printableId];
+                    return bag && typeof bag === 'object' ? bag : {};
                 } catch (e) {
+                    console.error(e);
+                    return {};
+                }
+            },
+
+            // What the chips say today: the fill-ins stored for that Sunday.
+            /** @param {any} date @param {any} bag */
+            typedRowFor(date, bag) {
+                const host = /** @type {any} */ (global);
+                const Typed = host.SundayTypedCore;
+                const Migrate = host.PrintableLegacyMigrate;
+                if (!Typed || !Migrate) return {};
+                try {
+                    return Typed.toRow(Typed.fromDraft(Migrate.draftFromBag(bag)), date);
+                } catch (e) {
+                    console.error(e);
                     return {};
                 }
             },
@@ -1847,7 +2170,7 @@
                 return href;
             },
 
-            // ── A Sunday's fields, grouped by its order ──────────────────
+            // ── A Sunday's fields, in its liturgy order ──────────────────
 
             // The Sunday the builder is browsing decides the order its chips
             // follow (ADR 0080): the builder's own read of it when there is
@@ -2054,118 +2377,21 @@
             },
 
             async loadTypedDraft() {
-                const Typed = global.SundayTypedCore;
-                if (!Typed) {
-                    this.data.typed.draft = emptyTypedDraft();
+                const host = /** @type {any} */ (global);
+                const self = /** @type {any} */ (this);
+                const Typed = host.SundayTypedCore;
+                const Migrate = host.PrintableLegacyMigrate;
+                if (!Typed || !Migrate) {
+                    self.data.typed.draft = emptyTypedDraft();
                     return;
                 }
-                const date = this.typedSundayDate();
-                let service = (ui.bundle && ui.bundle.services && ui.bundle.services[date]) || null;
-                if (!service && typeof db !== 'undefined' && db) {
-                    try {
-                        const doc = await db.collection('services').doc(date).get();
-                        if (doc && doc.exists) {
-                            service = doc.data();
-                            if (!ui.bundle) ui.bundle = { services: {} };
-                            ui.bundle.services = ui.bundle.services || {};
-                            ui.bundle.services[date] = service;
-                        }
-                    } catch (e) { service = null; }
-                }
-                if (date !== this.typedSundayDate()) return;
-                this.data.typed.date = date;
-                this.data.typed.draft = Typed.toDraft(Typed.fromService(service));
-                this.data.typed.row = this.typedRowFor(date, service);
-                this.data.typed.status = '';
-            },
-
-            addTypedAnnouncement() {
-                if (!this.data.typed.draft) return;
-                this.data.typed.draft.announcements.push({ title: '', content: '' });
-            },
-
-            removeTypedAnnouncement(i) {
-                if (!this.data.typed.draft) return;
-                this.data.typed.draft.announcements.splice(i, 1);
-                if (!this.data.typed.draft.announcements.length) {
-                    this.data.typed.draft.announcements.push({ title: '', content: '' });
-                }
-            },
-
-            async onTypedCountryImage(e) {
-                const file = e.target.files && e.target.files[0];
-                if (e.target) e.target.value = '';
-                if (!file || !this.data.typed.draft) return;
-                const Typed = global.SundayTypedCore;
-                if (!Typed) return;
-                const err = Typed.fileUploadError(file);
-                if (err) { this.data.typed.status = err; return; }
-                let upload = file;
-                const intake = global.ImageIntake;
-                if (Typed.fileNeedsPrepare(file)) {
-                    this.data.typed.status = (intake && intake.COMPRESSING_MESSAGE) || 'Compressing the image…';
-                    if (!intake) {
-                        this.data.typed.status = 'Could not read that image.';
-                        return;
-                    }
-                    try {
-                        upload = await intake.prepare(file, { maxBytes: Typed.MAX_UPLOAD_BYTES - 1 });
-                    } catch (prep) {
-                        this.data.typed.status = (prep && prep.message) || 'Could not read that image.';
-                        return;
-                    }
-                }
-                this.data.typed.status = 'Uploading country map…';
-                try {
-                    const date = this.typedSundayDate();
-                    const safe = (upload.name || 'map').replace(/[^\w.-]+/g, '_');
-                    const fileId = (global.PrintableCore && PrintableCore.newId
-                        ? PrintableCore.newId('map')
-                        : String(Date.now())) + '_' + safe;
-                    const path = Typed.countryMapStoragePath(date, fileId);
-                    if (!path || typeof firebase === 'undefined' || !firebase.storage) {
-                        this.data.typed.status = 'Country map upload is not available.';
-                        return;
-                    }
-                    const ref = firebase.storage().ref(path);
-                    await ref.put(upload, { contentType: upload.type || 'image/jpeg' });
-                    const url = await ref.getDownloadURL();
-                    this.data.typed.draft.prayerCountryImage = url;
-                    this.data.typed.status = 'Country map uploaded. Save to keep it on this Sunday.';
-                } catch (ex) {
-                    console.error(ex);
-                    this.data.typed.status = 'That country map did not upload.';
-                }
-            },
-
-            async saveTypedDraft() {
-                const Typed = global.SundayTypedCore;
-                if (!Typed || !this.data.typed.draft || !this.canEdit) return;
-                const date = this.typedSundayDate();
-                this.data.typed.saving = true;
-                this.data.typed.status = '';
-                try {
-                    Typed.assertCountryImageWritable(this.data.typed.draft.prayerCountryImage);
-                    const content = Typed.fromDraft(this.data.typed.draft);
-                    Typed.assertCountryImageWritable(content.pastoralPrayer.countryImage);
-                    await db.collection('services').doc(date).set({ typedContent: Typed.normalise(content) }, { merge: true });
-                    if (!ui.bundle) ui.bundle = { services: {} };
-                    ui.bundle.services = ui.bundle.services || {};
-                    const cur = ui.bundle.services[date] || {};
-                    ui.bundle.services[date] = Object.assign({}, cur, { typedContent: Typed.normalise(content) });
-                    this.data.typed.date = date;
-                    this.data.typed.row = this.typedRowFor(date, ui.bundle.services[date]);
-                    this.data.typed.status = 'Saved for ' + Data.formatDate(date, 'medium') + '. Bound pages will read it.';
-                    this.rebindData();
-                    this.renderAll();
-                } catch (e) {
-                    console.error(e);
-                    this.data.typed.status = (e && e.code === 'country-map-size' && e.message)
-                        ? e.message
-                        : 'Could not save. Check your connection and try again.';
-                } finally {
-                    this.data.typed.saving = false;
-                }
+                const date = self.typedSundayDate();
+                const bag = await self.bookletBagFor(date);
+                if (date !== self.typedSundayDate()) return;
+                self.data.typed.date = date;
+                self.data.typed.draft = Migrate.draftFromBag(bag);
+                self.data.typed.row = self.typedRowFor(date, bag);
+                self.data.typed.status = '';
             },
         };
     }

@@ -8,6 +8,7 @@ const path = require('node:path');
 // writes what it describes with the same documents the computer merge writes.
 
 require('../public/access-core.js');
+const Levels = require('../public/account-levels-core.js');
 require('../public/phone-directory-edit.js');
 const Shepherding = require('../public/shepherding-core.js');
 global.ShepherdingCore = Shepherding;
@@ -19,12 +20,18 @@ const Prayer = require('../public/pastoral-prayer-core.js');
 global.PastoralPrayerCore = Prayer;
 const Merge = require('../public/phone-directory-merge.js');
 
-const editor = { permissionLevel: 'editor' };
-const admin = { permissionLevel: 'admin' };
-const elder = { permissionLevel: 'elder' };
-const superAdmin = { permissionLevel: 'super_admin' };
-const member = { permissionLevel: 'member' };
-const assistant = { permissionLevel: 'member', pastoralAssistant: true };
+function account(preset, extra) {
+    const id = Levels.BUILTIN_LEVEL_IDS[preset];
+    if (!id) return Object.assign({ accountLevelId: null, permissions: {} }, extra || {});
+    return Object.assign({}, Levels.userWriteFromLevel(id), extra || {});
+}
+
+const editor = account('editor');
+const admin = account('admin');
+const elder = account('elder');
+const superAdmin = account('super_admin');
+const member = account('member');
+const assistant = account('pastoral_assistant');
 
 const LINES = [
     'All involvement history will be moved.',
@@ -252,17 +259,17 @@ test('an Involvement is copied only when the survivor lacks that date, role, and
     assert.equal(merged.personUpdate.totalInvolvements, 3);
 });
 
-test('a serve with no series stored matches the Sunday Service', () => {
+test('a serve with no series stored does not dedupe against Sunday', () => {
     const retiredServes = [serve('r1', '2024-01-07', 'piano')];
     const keptServes = [serve('k1', '2024-01-07', 'piano', 'sunday_service')];
     const merged = plan(person({ id: 'old' }), person({ id: 'keep' }), {
         retiredInvolvement: retiredServes,
         keptInvolvement: keptServes,
     });
-    assert.deepStrictEqual(merged.copyInvolvement, []);
+    assert.equal(merged.copyInvolvement.length, 1);
     assert.deepStrictEqual(merged.deleteInvolvement, ['r1']);
-    assert.equal(merged.serveCount, 1);
-    assert.equal(Events.seriesIdOf(retiredServes[0]), 'sunday_service');
+    assert.equal(merged.serveCount, 2);
+    assert.equal(Events.seriesIdOf(retiredServes[0]), '');
 });
 
 test('a serve on another series is not the Sunday already on the survivor', () => {
@@ -453,11 +460,13 @@ test('the search looks on both tabs, including Inactive, and hides people the di
 
 test('Merge is offered in Edit Mode to an editor, admin, elder, or super admin, and to nobody else', () => {
     for (const user of [editor, admin, elder, superAdmin]) {
-        assert.equal(Merge.offerMerge(user, true), true, user.permissionLevel);
+        assert.equal(Merge.offerMerge(user, true), true, user.accountLevelId);
     }
     assert.equal(Merge.offerMerge(member, true), false);
     assert.equal(Merge.offerMerge(assistant, true), true);
-    assert.equal(Merge.offerMerge({ permissionLevel: 'pastoral_assistant' }, true), true);
+    assert.equal(Merge.offerMerge('pastoral_assistant', true), true);
+    assert.equal(Merge.offerMerge({ permissionLevel: 'pastoral_assistant' }, true), false);
+    assert.equal(Merge.offerMerge({ permissionLevel: 'member', pastoralAssistant: true }, true), false);
     assert.equal(Merge.offerMerge(editor, false), false);
     assert.equal(Merge.offerMerge(null, true), false);
 });

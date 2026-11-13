@@ -64,8 +64,8 @@
         if (Cache) {
           Cache.writeIdentity(user.uid, {
             personId: data.personId || null,
-            permissionLevel: flags ? flags.currentPermissionLevel : (data.permissionLevel || data.role || "viewer"),
-            pastoralAssistant: flags ? flags.pastoralAssistant : (data.pastoralAssistant === true),
+            permissionLevel: flags ? flags.currentPermissionLevel : ((window.AccessCore ? AccessCore.permissionLevelOf(data) : "viewer")),
+            pastoralAssistant: flags ? flags.pastoralAssistant : false,
             accountLevelId: account && account.accountLevelId,
             permissions: account && account.permissions,
           });
@@ -88,8 +88,8 @@
         var name = data.name || data.displayName || user.displayName || (user.email ? user.email.split("@")[0] : "Friend");
         var flags = window.AccessCore ? window.AccessCore.pageFlags(data) : null;
         var account = flags ? flags.account : {
-          permissionLevel: data.permissionLevel || data.role || "viewer",
-          pastoralAssistant: data.pastoralAssistant === true,
+          permissionLevel: (window.AccessCore ? AccessCore.permissionLevelOf(data) : "viewer"),
+          pastoralAssistant: false,
         };
         var permissionLevel = flags ? flags.currentPermissionLevel : account.permissionLevel;
         var pastoralAssistant = flags ? flags.pastoralAssistant : account.pastoralAssistant;
@@ -105,8 +105,6 @@
           // and the rules read the document — what the document itself held
           // (MS-725, ADR 0082). app.js asks canFixSundayService of this object.
           permissions: account.permissions || null,
-          savedPermissions: account.savedPermissions || null,
-          storedLevel: account.storedLevel || null,
           roleLabel: Destinations.accountLabel(account),
           personId: data.personId || null,
           photoUrl: person.photoUrl || null,
@@ -135,8 +133,7 @@
       var user = cred.user;
       return db.collection("users").doc(user.uid).set({
         email: user.email,
-        permissionLevel: "viewer",
-        role: "viewer",
+        accountLevelId: "level_viewer",
         createdAt: firebase.firestore.FieldValue.serverTimestamp(),
       }).then(function () { return cred; });
     });
@@ -395,7 +392,6 @@
       serviceLeader: d.serviceLeader || d.leader || "",
       musicLeader: d.musicLeader || "",
       hasBaptism: !!d.hasBaptism,
-      isIrregular: !!d.isIrregular,
       // A hymn pulled out of the order is not part of the readiness tally.
       removedHymns: Array.isArray(d.removedHymns) ? d.removedHymns : [],
       // Which Liturgy Order the tally walks, and who carries the elements
@@ -424,11 +420,8 @@
   // against the order it follows. An empty collection reads as Standard.
   function loadLiturgyCatalog() {
     var Core = window.LiturgyOrderCore;
-    return Promise.all([
-      get(db.collection(Core.COLLECTIONS.elements)),
-      get(db.collection(Core.COLLECTIONS.orders)),
-    ]).then(function (snaps) {
-      return Core.catalogFrom({ elements: mapDocs(snaps[0]), orders: mapDocs(snaps[1]) });
+    return get(db.collection(Core.COLLECTIONS.orders)).then(function (snap) {
+      return Core.catalogFrom({ orders: mapDocs(snap) });
     });
   }
   function getLiturgyCatalog() { return remembered("liturgyCatalog", loadLiturgyCatalog); }

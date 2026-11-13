@@ -746,17 +746,13 @@
     // Only an editor is shown this. A member cannot fill a place, and a count
     // of gaps they can do nothing about is just weather.
     //
-    // The Roles come from two levels, exactly as the Event page reads them: the
-    // series' `roleSlugs` apply to every date, `occurrenceRoleSlugs` to this one
-    // alone. Liturgical Roles are filled in the order of service and print in
-    // the booklet, so they are not places this screen can chase.
+    // The Roles come from the series' `roleSlugs` on every date. Liturgical Roles
+    // are filled in the order of service and print in the booklet, so they are
+    // not places this screen can chase.
 
     function rolesOn(occurrence) {
         const notLiturgical = slug => Roles.LITURGICAL_SLUGS.indexOf(slug) === -1;
-        const fromSeries = ((occurrence && occurrence.seriesRoleSlugs) || []).filter(notLiturgical);
-        const fromDate = ((occurrence && occurrence.occurrenceRoleSlugs) || [])
-            .filter(slug => notLiturgical(slug) && fromSeries.indexOf(slug) === -1);
-        return fromSeries.concat(fromDate);
+        return ((occurrence && occurrence.seriesRoleSlugs) || []).filter(notLiturgical);
     }
 
     const standing = a => a && (a.state || Core.STATES.PENDING) !== Core.STATES.DECLINED;

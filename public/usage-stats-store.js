@@ -48,19 +48,10 @@
     // prayer cache instead.
     const PASTORAL_PRAYER_FIELDS = Object.freeze(['prayerMale', 'prayerFemale']);
 
-    // service-builder.js names these fields `prayerPraise`/`prayerConfession`;
-    // service-calendar.js's table view names the same
-    // two fields `prayerPraiseName`/`prayerConfessionName` (personFields).
-    // Both spellings are kept here rather than normalized at the call site,
-    // so each picker can pass whatever it already calls its own field.
     const ROLE_STAT_KEY_BY_FIELD = Object.freeze({
         serviceLeader: Core.roleStatKey('service_leader'),
         musicLeader: Core.roleStatKey('worship_leader'),
         preacher: Core.roleStatKey('preacher'),
-        prayerPraise: Core.roleStatKey('prayer', 'praise'),
-        prayerPraiseName: Core.roleStatKey('prayer', 'praise'),
-        prayerConfession: Core.roleStatKey('prayer', 'confession'),
-        prayerConfessionName: Core.roleStatKey('prayer', 'confession'),
         elements: Core.roleStatKey('elements'),
         other: Core.roleStatKey('other'),
         musicHelpers: Core.roleStatKey('worship_helper'),

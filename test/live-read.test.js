@@ -249,7 +249,7 @@ test('unsubscribing stops the listener and the re-reading both', async () => {
 });
 
 test('the setting can send the app straight to re-reading', async () => {
-    const { live, clock: c, page: p } = helper({ isNativeApp: () => true });
+    const { live, page: p } = helper({ isNativeApp: () => true });
     p.storage.setItem(LiveRead.MODE_KEY, 'reread');
     const q = query();
     live.watch(q, () => {}, { fallbackEveryMs: 3000 });
@@ -317,7 +317,7 @@ test('a listener that cannot even be opened falls back instead of throwing at th
 // ── When the listener fails outright ─────────────────────────────────────────
 
 test('a listener error falls back to re-reading rather than leaving the page blank', async () => {
-    const { live, clock: c } = helper();
+    const { live } = helper();
     const q = query();
     const errors = [];
     const seen = [];

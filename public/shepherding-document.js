@@ -842,7 +842,7 @@ function makePersonPanelNodeView({ node, getPos, editor }) {
 // ── PersonPanel TipTap node ───────────────────────────────────────────────────
 
 function createPersonPanelNode() {
-    const { Node, InputRule } = window._TipTap;
+    const { Node } = window._TipTap;
 
     return Node.create({
         name: 'personPanel',
@@ -974,7 +974,7 @@ document.addEventListener('alpine:init', () => {
             auth.onAuthStateChanged(async user => {
                 if (!user) { window.location.href = 'login.html'; return; }
                 const userData = await getUserData(user.uid);
-                this.currentPermissionLevel = (userData && (userData.permissionLevel || userData.role)) || 'viewer';
+                this.currentPermissionLevel = (window.AccessCore ? AccessCore.permissionLevelOf(userData) : 'viewer');
                 Object.assign(this, AccessCore.pageFlags(userData));
                 if (!this.canReadElder) {
                     window.location.href = 'index.html';

@@ -74,7 +74,10 @@ function deriveMembership(person) {
     // Fallback: no membership tag at all → map the legacy status across.
     if (!stage) stage = statusToStage(status);
 
-    const inactive = Core.isInactiveMembership(p.membership) || tags.indexOf('Inactive') !== -1;
+    const membership = p.membership || {};
+    const inactive = !!membership.inactive
+        || membership.status === 'inactive'
+        || tags.indexOf('Inactive') !== -1;
 
     // Conflict: an explicit, recognised legacy status that maps to a DIFFERENT
     // stage than the tags did. Reported, not auto-resolved.

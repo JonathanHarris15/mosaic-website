@@ -9,9 +9,10 @@
 // not work left and not work done. A song typed in but not linked to the book
 // is not blank, and it is not set either. A people element (Baptism) counts
 // only once somebody is on it — most Sundays have nobody, and that is not a
-// blank. An element that carries a person is unfinished until the person is
-// named. Theme, the key verse, and the optional prayer leaders are not part
-// of the tally.
+// blank. A person event is unfinished until the person is named. Theme and
+// the key verse are not part of the tally. A prayer the order allows someone
+// else to pray stays out until that Sunday has a carriedBy entry for it. The
+// entry is the prayer leader: unset while nobody is named, set when a person is.
 //
 // Pass the congregation's catalog (LiturgyOrderStore.loadCatalog) as the
 // second argument; without one, every Sunday is read against Standard.
@@ -84,28 +85,10 @@
         return formatDate(d);
     }
 
-    // Older saves wrote 'liturgy.sermon' as a literal field name. Fold those
-    // into the nested liturgy the rest of the page reads. Same pass index.html
-    // used to run inline.
-    function normalizeService(raw) {
-        const src = raw || {};
-        const out = {};
-        Object.keys(src).forEach(function (key) {
-            if (key.indexOf('.') === -1) out[key] = src[key];
-        });
-        Object.keys(src).forEach(function (key) {
-            if (key.indexOf('.') === -1) return;
-            const parts = key.split('.');
-            let obj = out;
-            for (let i = 0; i < parts.length - 1; i++) {
-                if (typeof obj[parts[i]] !== 'object' || obj[parts[i]] === null) obj[parts[i]] = {};
-                obj = obj[parts[i]];
-            }
-            const leaf = parts[parts.length - 1];
-            if (!obj[leaf]) obj[leaf] = src[key];
-        });
-        return out;
-    }
+    const Dotted = (typeof require !== 'undefined')
+        ? require('./service-dotted-keys-core.js')
+        : global.ServiceDottedKeysCore;
+    const normalizeService = Dotted.readServiceDoc;
 
     function filledText(value) {
         return !!(value && String(value).trim());
@@ -135,25 +118,42 @@
         return typeof value === 'string' && value.trim() ? 1 : 0;
     }
 
-    // An Irregular Service from before Liturgy Orders is a different shape.
-    // Until somebody gives it an order, scoring it against Standard would
-    // call a finished custom Sunday unfinished. Once it has a liturgyOrderId,
-    // the tally is that order, the same as any other Sunday.
-    function unscoredIrregular(service) {
-        if (!service || !service.isIrregular) return false;
-        const id = service.liturgyOrderId;
-        return !(typeof id === 'string' && id.trim());
+    // null — leave it out. 'blank' — the Sunday added a prayer leader and
+    // nobody is named yet. 'set' — that person is named.
+    //
+    // `prayedByOther` only allows an alternate. The slot is the carriedBy
+    // entry itself: { id, name }. Absent, the service leader prays it.
+    /**
+     * @param {any} service
+     * @param {any} el
+     * @return {null | 'blank' | 'set'}
+     */
+    function prayerLeaderTally(service, el) {
+        if (!el || el.kind !== 'prayer' || el.prayedByOther !== true) return null;
+        const map = (service && service.carriedBy) || {};
+        const ref = map[el.id];
+        if (!ref || typeof ref !== 'object' || Array.isArray(ref)) return null;
+        return personSet(ref) ? 'set' : 'blank';
     }
 
     function checklist(svc, catalog) {
         const service = svc || {};
-        if (unscoredIrregular(service)) return [];
         const liturgy = service.liturgy || {};
         const removed = Array.isArray(service.removedHymns) ? service.removedHymns : [];
+        /** @type {Array<{key: any, label: any, state: any, part?: string}>} */
         const items = [];
 
-        function add(key, label, state) {
-            items.push({ key: key, label: label, state: state });
+        /**
+         * @param {any} key
+         * @param {any} label
+         * @param {any} state
+         * @param {string} [part]
+         */
+        function add(key, label, state, part) {
+            /** @type {{key: any, label: any, state: any, part?: string}} */
+            const item = { key: key, label: label, state: state };
+            if (part) item.part = part;
+            items.push(item);
         }
 
         add('serviceLeader', 'Service Leader', personSet(service.serviceLeader) ? 'set' : 'blank');
@@ -168,16 +168,18 @@
                 if (removed.indexOf(el.id) !== -1) return;
                 state = hymnState(value);
             } else if (el.kind === 'prayer') {
-                const needsRequests = !!el.requests;
-                const needsPerson = el.prayedByOther === true;
-                if (!needsRequests && !needsPerson) return;
-                let ready = true;
-                if (needsRequests) {
+                const leader = prayerLeaderTally(service, el);
+                if (el.requests) {
                     const named = Array.isArray(value) ? value.filter(function (p) { return p && (p.id || (p.name && String(p.name).trim())); }).length : 0;
-                    if (named < el.requests.count) ready = false;
+                    add(el.id, Liturgy.elementDisplayName(el), named >= el.requests.count ? 'set' : 'blank');
                 }
-                if (needsPerson && !Liturgy.carrierOf(service, el)) ready = false;
-                state = ready ? 'set' : 'blank';
+                if (leader) {
+                    const label = el.requests
+                        ? Liturgy.elementDisplayName(el) + ' leader'
+                        : Liturgy.elementDisplayName(el);
+                    add(el.id, label, leader, 'leader');
+                }
+                return;
             } else if (el.primitive === 'people') {
                 if (!peopleCount(value)) return;
                 state = 'set';
@@ -212,24 +214,11 @@
 
     function readiness(svc, catalog) {
         const service = svc || {};
-        if (unscoredIrregular(service)) {
-            return {
-                irregular: true,
-                total: 0,
-                set: 0,
-                notReady: false,
-                fraction: '',
-                short: '',
-                blanks: [],
-                literals: [],
-            };
-        }
         const items = checklist(service, catalog);
         const blanks = items.filter(function (item) { return item.state === 'blank'; }).map(function (item) { return item.label; });
         const literals = items.filter(function (item) { return item.state === 'literal'; }).map(function (item) { return item.label; });
         const set = items.length - blanks.length - literals.length;
         return {
-            irregular: false,
             total: items.length,
             set: set,
             notReady: blanks.length + literals.length > 0,
@@ -240,11 +229,8 @@
         };
     }
 
-    function glance(svc) {
+    function glance(svc, catalog) {
         const service = svc || {};
-        if (unscoredIrregular(service)) {
-            return { theme: '', sermon: '', pairs: [], baptism: '' };
-        }
         const liturgy = service.liturgy || {};
         const pairs = [];
         if (filledText(liturgy.sermon)) pairs.push({ k: 'Sermon', v: String(liturgy.sermon).trim() });
@@ -253,8 +239,17 @@
         if (service.musicLeader) pairs.push({ k: 'Music Leader', v: String(service.musicLeader) });
 
         const prayers = [];
-        if (liturgy.prayerMale && liturgy.prayerMale.name) prayers.push(liturgy.prayerMale.name);
-        if (liturgy.prayerFemale && liturgy.prayerFemale.name) prayers.push(liturgy.prayerFemale.name);
+        const seen = {};
+        Liturgy.elementsFor(service, catalog).forEach(function (el) {
+            if (!el || el.kind !== 'prayer' || !el.requests) return;
+            const list = liturgy[el.id];
+            if (!Array.isArray(list)) return;
+            list.forEach(function (person) {
+                if (!person || !person.id || !person.name || seen[person.id]) return;
+                seen[person.id] = true;
+                prayers.push(person.name);
+            });
+        });
         if (prayers.length) pairs.push({ k: 'Pastoral Prayer', v: prayers.join(', ') });
 
         let baptism = '';
@@ -333,6 +328,7 @@
         normalizeService: normalizeService,
         checklist: checklist,
         readiness: readiness,
+        prayerLeaderTally: prayerLeaderTally,
         glance: glance,
         compactTime: compactTime,
         weekStrip: weekStrip,

@@ -41,7 +41,6 @@ export function analyticsPage() {
         selectedChapter: null,
         showBookNames: false,
         gridZoom: 1, // 1 is standard, 0.75 is small, 1.5 is large
-        drillDownData: null, // Will hold the book object with chapters and verses usage
         sortKey: 'count', // 'name', 'status', 'count', 'lastUsed'
         sortOrder: 'desc', // 'asc', 'desc'
         currentPermissionLevel: 'viewer',
@@ -92,10 +91,7 @@ export function analyticsPage() {
         },
 
         get isAdmin() {
-            return AccessCore.readsAsElder({
-                permissionLevel: this.currentPermissionLevel,
-                pastoralAssistant: this.pastoralAssistant,
-            });
+            return AccessCore.readsAsElder(this.account || this.currentPermissionLevel);
         },
 
         get isEditor() {
@@ -224,8 +220,6 @@ export function analyticsPage() {
                 preacher: 'preacher',
                 musicLeader: 'worship_leader',
                 // Suffix name fields
-                prayerPraiseName: 'prayer',
-                prayerConfessionName: 'prayer',
                 elementsName: 'other',
                 otherName: 'other'
             };
@@ -259,27 +253,17 @@ export function analyticsPage() {
                 }
             });
 
+            const carried = data.carriedBy && typeof data.carriedBy === 'object' ? data.carriedBy : {};
+            ['prayerOfPraise', 'prayerOfConfession'].forEach((key) => {
+                const ref = carried[key];
+                if (ref && ref.name) addInvolvement(ref.name, 'prayer');
+            });
+
             // Music Helpers are stored as a list; each accrues a worship_helper involvement.
             if (Array.isArray(data.musicHelpers)) {
                 data.musicHelpers.forEach(h => addInvolvement(h, 'worship_helper'));
             }
 
-            // Handle irregular elements
-            if (data.isIrregular && Array.isArray(data.irregularElements)) {
-                data.irregularElements.forEach(el => {
-                    if (el.type === 'person' && el.value) {
-                        let type = el.key.toLowerCase().replace(/\s+/g, '_');
-                        // Map common irregular keys to canonical types
-                        if (type.includes('prayer')) type = 'prayer';
-                        if (type.includes('preacher')) type = 'preacher';
-                        if (type.includes('leader')) {
-                            if (type.includes('worship') || type.includes('music')) type = 'worship_leader';
-                            else if (type.includes('service')) type = 'service_leader';
-                        }
-                        addInvolvement(el.value, type);
-                    }
-                });
-            }
         },
 
         async fetchPeople() {

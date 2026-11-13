@@ -1,5 +1,7 @@
 const { test } = require('node:test');
 const assert = require('node:assert');
+const fs = require('node:fs');
+const path = require('node:path');
 
 const { updateForType } = require('../scripts/backfill-relationship-types.js');
 
@@ -36,6 +38,17 @@ test('an already-migrated type yields no patch — a second run is a no-op', () 
     // And a Group type an elder created after the migration is likewise left alone.
     const group = { name: 'Bible Study', kind: 'group', priority: true, leaderLabel: 'Leader', memberLabel: 'Member' };
     assert.strictEqual(updateForType(group, DELETE), null);
+});
+
+test('prod-ops resolves credentials through service-account.js', () => {
+    const src = fs.readFileSync(
+        path.join(__dirname, '..', 'scripts', 'backfill-relationship-types.js'),
+        'utf8',
+    );
+    assert.match(src, /require\('\.\/service-account\.js'\)/);
+    assert.match(src, /serviceAccount\(\)/);
+    assert.doesNotMatch(src, /resolveServiceAccount/);
+    assert.doesNotMatch(src, /readdirSync\(root\)/);
 });
 
 test('the patch a legacy type produces is itself a valid Relationship Type', () => {

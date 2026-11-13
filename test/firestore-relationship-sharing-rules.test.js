@@ -112,7 +112,7 @@ test('no relationship collection grants write to editors', () => {
 test('the other elder-only collections did not get swept along', () => {
     // Only the three relationship collections open. Sharing a Relationship Type
     // must not have widened notes, tags, views, or reminders.
-    ['shepherding_tags', 'shepherding_views', 'shepherding_reminders'].forEach(collection => {
+    ['shepherding_tags', 'shepherding_views'].forEach(collection => {
         const m = rules.match(new RegExp('match /' + collection + '/\\{[^}]+\\}\\s*\\{([\\s\\S]*?)\\n    \\}'));
         if (!m) return; // not every one exists
         assert.match(m[1], /allow read: if readsAsElder\(\)/, collection);

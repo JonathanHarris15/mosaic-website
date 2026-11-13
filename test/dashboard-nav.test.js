@@ -1,10 +1,12 @@
 const test = require('node:test');
 const assert = require('node:assert');
-const AccessCore = require('../public/access-core.js');
+const Levels = require('../public/account-levels-core.js');
 const DashboardNav = require('../public/dashboard-nav.js');
 
-function account(level, pastoralAssistant) {
-    return AccessCore.accountOf({ permissionLevel: level, pastoralAssistant: !!pastoralAssistant });
+function account(preset, extra) {
+    const id = Levels.BUILTIN_LEVEL_IDS[preset];
+    if (!id) return Object.assign({ accountLevelId: null, permissions: {} }, extra || {});
+    return Object.assign({}, Levels.userWriteFromLevel(id), extra || {});
 }
 
 test('visible tiles match the dashboard gates for a member', () => {
@@ -45,6 +47,7 @@ test('saved order is applied and unknown keys append at the end', () => {
 test('drawer destinations are exactly the registry hrefs plus home', () => {
     assert.ok(DashboardNav.isDrawerDestination('hymns.html'));
     assert.ok(DashboardNav.isDrawerDestination('index.html'));
+    assert.ok(DashboardNav.isDrawerDestination('resources.html'));
     assert.ok(!DashboardNav.isDrawerDestination('commitments.html'));
     assert.ok(!DashboardNav.isDrawerDestination('calendar-event.html'));
 });

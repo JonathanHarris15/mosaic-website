@@ -425,8 +425,16 @@
         fields(attrs) { return [{ key: attrs.key, type: 'image', label: attrs.label || attrs.key, required: isRequired(attrs) }]; },
         render(ctx) {
             const val = ctx.values[ctx.attrs.key];
-            const cls = ctx.attrs.class || 'w-full h-full object-contain';
-            if (val) return `<img src="${attrEsc(val)}" class="${attrEsc(cls)}" />`;
+            // Not w-full/h-full. Those set both axes to 100%, and the default
+            // object-fit (fill) stretches the picture into the box. The box
+            // stays the parent's; the picture keeps its own shape inside it.
+            // An author class (a frame, a radius) still applies; the inline
+            // fit wins over a utility that would set both axes to 100%.
+            const fit = 'max-width:100%;max-height:100%;width:auto;height:auto;object-fit:contain;min-width:0;min-height:0;display:block';
+            if (val) {
+                const cls = ctx.attrs.class ? ` class="${attrEsc(ctx.attrs.class)}"` : '';
+                return `<img src="${attrEsc(val)}" alt=""${cls} style="${fit}" />`;
+            }
             const ph = ctx.attrs.placeholder || 'No Image';
             return `<div class="w-full h-full border border-dashed border-gray-200 flex items-center justify-center bg-transparent"><span class="text-[8pt] text-gray-400 italic text-center px-2">${esc(ph)}</span></div>`;
         },

@@ -25,11 +25,24 @@ const BUILDER_JS = read('public', 'form.js');
 const BUILDER_HTML = read('public', 'form.html');
 const CONTROLS = require('../public/form-question-markup.js').QUESTION_CONTROLS;
 
+// The shape a Person document actually stores. Membership is asked of
+// `membership` (ShepherdingCore.carriesMemberTag). A tag scope reads `tags`.
+// `isMember`, `membershipStage`, and `tagIds` are not fields on a Person.
 const directory = () => [
-    { id: 'p1', name: 'Rebecca Hall', isMember: true, tagIds: ['worship'] },
-    { id: 'p2', name: 'Sam Okoro', isMember: true, tagIds: ['elders'] },
-    { id: 'p3', name: 'Casey New', isMember: false, tagIds: [] },
+    { id: 'p1', name: 'Rebecca Hall', membership: { stage: 'member', inactive: false }, tags: ['worship'] },
+    { id: 'p2', name: 'Sam Okoro', membership: { stage: 'member', inactive: false }, tags: ['elders'] },
+    { id: 'p3', name: 'Casey New', membership: { stage: 'visitor', inactive: false }, tags: [] },
 ];
+
+/**
+ * @param {any} choices
+ * @param {string} questionId
+ * @return {string[]}
+ */
+function offeredIds(choices, questionId) {
+    const rows = /** @type {Array<{id: string}>} */ (choices[questionId] || []);
+    return rows.map((row) => row.id);
+}
 
 const withPicker = (scope, tagId) => FormsCore.buildFormTemplate({
     rung: 'member',
@@ -75,6 +88,76 @@ test('only an id and a name leave the server', () => {
     const choices = fp.pickerChoices(withPicker('everyone'), directory());
     assert.deepEqual(Object.keys(choices.who[0]).sort(), ['id', 'name'],
         'something other than a name and an id about a Person reached a form');
+});
+
+test('a stage-Member person is offered to members, withheld from non-members, and offered for a tag they carry', () => {
+    // isMember is absent. The stored fields are enough.
+    const ada = {
+        id: 'ada',
+        name: 'Ada Lovelace',
+        membership: { stage: 'member', inactive: false },
+        tags: ['choir'],
+    };
+    assert.equal(Object.prototype.hasOwnProperty.call(ada, 'isMember'), false);
+    assert.deepEqual(offeredIds(fp.pickerChoices(withPicker('member'), [ada]), 'who'), ['ada']);
+    assert.deepEqual(offeredIds(fp.pickerChoices(withPicker('non_member'), [ada]), 'who'), []);
+    assert.deepEqual(offeredIds(fp.pickerChoices(withPicker('tag', 'choir'), [ada]), 'who'), ['ada']);
+});
+
+test('moving membership is a member and an inactive member is not', () => {
+    const moving = {
+        id: 'mo', name: 'Mo Ving',
+        membership: { stage: 'moving_membership', inactive: false }, tags: [],
+    };
+    const inactive = {
+        id: 'ina', name: 'Ina Active',
+        membership: { stage: 'member', inactive: true }, tags: ['Member'],
+    };
+    assert.deepEqual(offeredIds(fp.pickerChoices(withPicker('member'), [moving, inactive]), 'who'), ['mo']);
+    assert.deepEqual(offeredIds(fp.pickerChoices(withPicker('non_member'), [moving, inactive]), 'who'), ['ina']);
+    // A tag scope reads the tags they carry, not the member projection.
+    assert.deepEqual(offeredIds(fp.pickerChoices(withPicker('tag', 'Member'), [inactive]), 'who'), ['ina']);
+});
+
+test('phantom isMember, membershipStage, and tagIds do not put somebody in scope', () => {
+    const phantom = {
+        id: 'ph',
+        name: 'Phantom',
+        isMember: true,
+        membershipStage: 'member',
+        tagIds: ['choir'],
+        membership: { stage: 'visitor', inactive: false },
+        tags: [],
+    };
+    assert.deepEqual(offeredIds(fp.pickerChoices(withPicker('member'), [phantom]), 'who'), []);
+    assert.deepEqual(offeredIds(fp.pickerChoices(withPicker('tag', 'choir'), [phantom]), 'who'), []);
+    assert.deepEqual(offeredIds(fp.pickerChoices(withPicker('non_member'), [phantom]), 'who'), ['ph']);
+});
+
+test('the directory row is built from membership and tags', () => {
+    const row = FormsCore.directoryPerson('ada', {
+        name: 'Ada Lovelace',
+        membership: { stage: 'member', inactive: false },
+        tags: ['choir'],
+        isMember: false,
+        membershipStage: 'visitor',
+        tagIds: ['nope'],
+    });
+    assert.deepEqual(Object.keys(row).sort(), ['id', 'membership', 'name', 'tags']);
+    assert.equal(row.membership.stage, 'member');
+    assert.deepEqual(row.tags, ['choir']);
+    assert.deepEqual(offeredIds(fp.pickerChoices(withPicker('member'), [row]), 'who'), ['ada']);
+    assert.deepEqual(offeredIds(fp.pickerChoices(withPicker('tag', 'nope'), [row]), 'who'), []);
+});
+
+test('publicForm builds that row and addPerson does not send the phantom fields', () => {
+    const index = read('functions', 'index.js');
+    const fetch = index.slice(index.indexOf('if (op === "fetch")'), index.indexOf('if (op === "addPerson")'));
+    const add = index.slice(index.indexOf('if (op === "addPerson")'), index.indexOf('// ── submit'));
+    assert.match(fetch, /FormsCore\.directoryPerson/);
+    assert.doesNotMatch(fetch, /isMember|membershipStage|tagIds/);
+    assert.match(add, /id: ref\.id, name: proposal\.person\.name/);
+    assert.doesNotMatch(add, /isMember|membershipStage|tagIds/);
 });
 
 test('a form with no picker sends no people', () => {

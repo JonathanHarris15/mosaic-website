@@ -6,18 +6,15 @@
 //
 // test/functions-shared-sync.test.js fails if this copy is stale.
 
-// Sunday Typed Core — the weekly booklet text that lives on a Sunday
-// (MS-481 / MS-588).
+// Sunday Typed Core — the shape of weekly booklet text (MS-481 / MS-588).
 //
-// Prayer-country facts, Mosaic Kids lesson, and announcements are typed
-// once for a date and stored on `services/{YYYY-MM-DD}.typedContent`.
-// Every Printable bound to that Sunday reads the same fields. Nothing
-// here lives inside a box tree (ADR-0057: the Printable holds wires,
-// not values).
-//
-// A week that still only has the old Service Guide filled in is read
-// through as a fallback, so existing Sundays print without retyping.
-// `typedContent` wins field-by-field once an editor saves here.
+// Prayer-country facts, Mosaic Kids lesson, and announcements are one
+// record. The Printable holds the wires, not the values (ADR 0057).
+// The values for a Sunday live on that date's occurrence fill-ins
+// (ADR 0078). This module only normalises the record and turns it into
+// the flat row a fill-in stores. It does not read the week's guide.
+// The prod copy (`scripts/migrate-booklet-text-to-occurrences.js`) is
+// the one place the old service fields are still read.
 //
 // Pure: no Firestore, no DOM. Browser global + Node export.
 
@@ -282,17 +279,13 @@
         });
     }
 
-    // One Sunday's typed content. `typedContent` on the service wins
-    // field-by-field; the old guide is only a fallback for that same date.
+    // The booklet record stored on a service document, and nothing else.
+    // The week's guide is not booklet text. Callers that print read the
+    // occurrence fill-ins instead.
     function fromService(service) {
         const s = service && typeof service === 'object' ? service : null;
         if (!s) return empty();
-        const stored = normalise(s.typedContent);
-        const guide = s.guide || {};
-        const fallback = guide.format === 'v2' || (guide.values && typeof guide.values === 'object')
-            ? fromGuideValues(guide.values)
-            : fromLegacyGuide(guide);
-        return mergePreferFilled(stored, fallback);
+        return normalise(s.typedContent);
     }
 
     function listText(list) {

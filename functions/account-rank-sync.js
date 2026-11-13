@@ -1,9 +1,8 @@
 // Pure decision logic for the Person account-rank projection (MS-554 /
 // MS-539). The Trade picker can read People and cannot read other `users`
 // docs (own-only). Invite-relevant rank is therefore denormalized onto the
-// Person as `accountRank`, matching server `rankOf`: permissionLevel, then
-// the legacy `role` fallback. The Pastoral Assistant grant is not part of
-// the projection — `rankOf` does not read it.
+// Person as `accountRank`, matching server `rankOf`: the derived account
+// rank from accountLevelId and the permissions map.
 //
 // Exact sync, like the Elder Tag: written on link and permission change,
 // cleared on unlink. The Firestore trigger in index.js wraps these
@@ -11,16 +10,18 @@
 // people-onWrite member sync does not loop.
 
 /** Field name on `people/{id}`. */
+const AccountLevels = require("./shared/account-levels-core");
+
 const ACCOUNT_RANK_FIELD = "accountRank";
 
 /**
  * Invite-relevant rank of a User document, matching server `rankOf`.
  * @param {?Object} user the users/{uid} data, or null
- * @return {?string} permissionLevel || role, or null
+ * @return {?string} the derived rank, or null when there is no user
  */
 function rankFromUser(user) {
-  if (!user) return null;
-  return user.permissionLevel || user.role || null;
+  if (!user || typeof user !== "object") return null;
+  return AccountLevels.accessRank(user);
 }
 
 /**

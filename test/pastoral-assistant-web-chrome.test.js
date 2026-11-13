@@ -8,16 +8,31 @@ const path = require('node:path');
 // same chrome is visible and usable for them.
 
 const Access = require('../public/access-core.js');
+const Levels = require('../public/account-levels-core.js');
+
+function account(preset, extra) {
+    const id = Levels.BUILTIN_LEVEL_IDS[preset];
+    if (!id) return Object.assign({ accountLevelId: null, permissions: {} }, extra || {});
+    return Object.assign({}, Levels.userWriteFromLevel(id), extra || {});
+}
 
 const PUBLIC = path.join(__dirname, '..', 'public');
 const read = (f) => fs.readFileSync(path.join(PUBLIC, f), 'utf8');
 
 test('a Pastoral Assistant has canDecide, so web decision chrome is visible', () => {
-    const flags = Access.pageFlags({ permissionLevel: 'member', pastoralAssistant: true });
+    const flags = Access.pageFlags(account('pastoral_assistant'));
     assert.equal(flags.canDecide, true);
-    const member = Access.pageFlags({ permissionLevel: 'member' });
+    assert.equal(flags.canReadElder, true);
+    assert.equal(flags.canWriteRecord, true);
+    assert.equal(flags.canWriteEditor, true);
+    assert.equal(Access.isAnElder(account('pastoral_assistant')), false);
+    const flag = Access.pageFlags({ permissionLevel: 'member', pastoralAssistant: true });
+    assert.equal(flag.canDecide, false);
+    assert.equal(flag.canReadElder, false);
+    assert.equal(flag.canWriteEditor, false);
+    const member = Access.pageFlags(account('member'));
     assert.equal(member.canDecide, false);
-    const elder = Access.pageFlags({ permissionLevel: 'elder' });
+    const elder = Access.pageFlags(account('elder'));
     assert.equal(elder.canDecide, true);
 });
 
@@ -142,9 +157,9 @@ test('Service Builder Send prayer now is a canDecide write, not canReadElder', (
     const canSend = js.slice(js.indexOf('canSendPrayerText(which)'), js.indexOf('canSendPrayerText(which)') + 120);
     assert.match(canSend, /if\s*\(\s*!this\.canDecide\s*\)\s*return false/);
     const html = read('service-builder.html');
-    const sendBtn = html.indexOf('sendPrayerRequestNow(which)');
-    assert.ok(sendBtn !== -1);
-    assert.match(html.slice(Math.max(0, sendBtn - 400), sendBtn), /x-show="canDecide"/);
+    const sendBtn = html.indexOf('sendPrayerRequestNow(slot.id)');
+    assert.ok(sendBtn !== -1, 'Send Now lives on the requesting-prayer card');
+    assert.match(html.slice(Math.max(0, sendBtn - 800), sendBtn), /x-show="canDecide"/);
 });
 
 // ── MS-572 / MS-573 / MS-574 — leftover chrome after MS-540 ────────────────

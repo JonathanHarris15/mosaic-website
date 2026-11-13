@@ -10,15 +10,12 @@
   var html = M.html, Ic = M.Ic;
   var useState = M.hooks.useState, useEffect = M.hooks.useEffect;
   var ui = M.ui, data = M.data;
-  var Screen = ui.Screen, TopBar = ui.TopBar, BarAction = ui.BarAction, Body = ui.Body,
-      Overline = ui.Overline, SerifHead = ui.SerifHead, Row = ui.Row, CardList = ui.CardList,
-      Medallion = ui.Medallion, Button = ui.Button, Badge = ui.Badge, Avatar = ui.Avatar, Input = ui.Input;
+  var Screen = ui.Screen, ScreenAmbientRings = ui.ScreenAmbientRings, TopBar = ui.TopBar, BarAction = ui.BarAction, Body = ui.Body,
+      Overline = ui.Overline, Button = ui.Button, Avatar = ui.Avatar, Input = ui.Input;
 
   // Routes not yet ported render the in-shell ComingSoon screen, offering the
   // desktop page as "open full page" — no jarring bounce out of the shell.
-  var ROUTE_META = {
-    serviceGuide: { title: "Service Guide", page: "service-guide-editor.html" },
-  };
+  var ROUTE_META = {};
 
   function currentRoute() {
     var m = (location.hash || "").replace(/^#\/?/, "");
@@ -294,23 +291,10 @@
     var svcState = M.useAsync(data.getNextService, []);
     var svc = svcState.data;
     var liturgyState = M.useAsync(data.getLiturgyCatalog, []);
-    // The Home card grid mirrors the drawer's top-level destinations (permission-gated).
-    var tiles = [
-      { icon: "book-open", label: "Hymns", route: "hymnDirectory" },
-      { icon: "church", label: "Services", route: "calendar" },
-      // Route "events", not "calendar" — see data.js. "calendar" is Services.
-      { icon: "calendar-days", label: "Calendar", route: "events" },
-      // Same gate as the drawer's entry (destinations.js) and as the web's
-      // dashboard card. Ungated, this tile handed a signed-out guest the whole
-      // directory — see MS-197 / ADR-0031.
-      { icon: "users", label: "Membership Directory", route: "people", permissionLevels: ["member", "editor", "elder", "admin", "super_admin"] },
-      { icon: "shield", label: "Shepherd", route: "shepherd", permissionLevels: ["elder", "super_admin"] },
-      { icon: "settings-2", label: "Admin", route: "admin", permissionLevels: ["admin", "super_admin"] },
-      // A drawer destination now as well as a tile here (destinations.js) —
-      // on a phone the drawer IS the navigation, and reachable only from Home
-      // meant going home to reach it. Same gate as the web's card, MS-120.
-      { icon: "hand-heart", label: "Roles Manager", route: "rolesManager", permissionLevels: ["editor", "elder", "admin", "super_admin"] },
-    ].filter(function (t) { return data.canSee(t, user); });
+    // The Home card grid IS the drawer's destinations, gates and all
+    // (dashboard-nav.js). It used to keep a list of its own; when the drawer
+    // moved to gating by registry key, Home's keyless tiles all vanished.
+    var tiles = window.MosaicDestinations.homeTiles(user);
     var HD = window.HomeDashboard;
     var theme = svc && svc.theme && svc.theme !== "(no theme)" ? svc.theme : "";
     var sermon = svc && svc.sermon ? svc.sermon : "";
@@ -328,14 +312,9 @@
     var tileBtn = { display: "flex", flexDirection: "column", gap: 10, height: 84, padding: 12, background: "var(--surface-container-lowest)", border: "1px solid var(--outline-variant)", borderRadius: "var(--radius)", cursor: "pointer", textAlign: "left", color: "var(--on-surface)" };
     var plate = { display: "inline-flex", alignItems: "center", justifyContent: "center", width: 30, height: 30, borderRadius: "var(--radius-sm)", background: "var(--primary)", color: "var(--on-primary)" };
     return html`
-      <${Screen} style=${{ position: "relative" }}>
-        <svg aria-hidden="true" viewBox="0 0 390 700" preserveAspectRatio="xMidYMid slice" style=${{ position: "absolute", inset: 0, width: "100%", height: "100%", pointerEvents: "none" }}>
-          <g class="home-ambient" transform="translate(360,20)" fill="none" stroke="var(--secondary)">
-            <circle r="90" stroke-width="1" opacity="0.16"></circle>
-            <circle r="140" stroke-width="1" opacity="0.12"></circle>
-            <circle r="190" stroke-width="1" opacity="0.08"></circle>
-          </g>
-        </svg>
+      <${Screen}>
+        <${ScreenAmbientRings} />
+        <div class="m-screen-foreground">
         <${TopBar} title="Mosaic Services" onMenu=${props.openMenu} right=${html`<${BarAction} icon="user-round" label="Profile" onClick=${function () { props.nav("profile"); }} />`} />
         <${Body} style=${{ padding: "18px 16px 16px", position: "relative" }}>
           <div style=${{ background: "var(--surface-container-lowest)", border: "1px solid var(--outline-variant)", borderRadius: "var(--radius-xl)", overflow: "hidden", marginBottom: 16 }}>
@@ -378,6 +357,7 @@
               </a>
             </div>`}
         </${Body}>
+        </div>
       </${Screen}>`;
   }
 

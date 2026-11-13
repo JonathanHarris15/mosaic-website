@@ -373,6 +373,8 @@
                 uid: uid,
                 personId: identity.personId || null,
                 permissionLevel: identity.permissionLevel || null,
+                accountLevelId: identity.accountLevelId || null,
+                permissions: identity.permissions || null,
             }));
         } catch (e) {}
     }

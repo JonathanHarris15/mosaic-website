@@ -24,7 +24,7 @@
 //
 // The drawer's query builder offers every source a level may read, single
 // or list (`querySourcesFor`), except kinds that are not queried there: a
-// **scalar** insert (the date, the page number — General live data) and a
+// **scalar** insert (the date — General live data) and a
 // source marked **noDrawer** (kept for resolving stored wires; not offered
 // to author in the drawer). Fill-ins a person types live on the printable
 // as event blanks, not as catalog sources.
@@ -55,6 +55,9 @@
     const HymnVersions = (typeof require !== 'undefined')
         ? require('./hymn-versions.js')
         : global.HymnVersions;
+    const Dotted = (typeof require !== 'undefined')
+        ? require('./service-dotted-keys-core.js')
+        : global.ServiceDottedKeysCore;
 
     // The congregation's Liturgy Elements and Orders (ADR-0080). A Sunday's
     // order of service is the elements of its order, so its fields, its rows
@@ -63,7 +66,10 @@
     const Liturgy = (typeof require !== 'undefined')
         ? require('./liturgy-order-core.js')
         : global.LiturgyOrderCore;
-
+    // Who decided each element — read here for who wrote the order of service.
+    const Authorship = (typeof require !== 'undefined')
+        ? require('./service-authorship.js')
+        : /** @type {*} */ (global).ServiceAuthorship;
     const LEVELS = ['viewer', 'member', 'editor', 'admin', 'elder', 'super_admin'];
 
     function access() {
@@ -138,6 +144,7 @@
 
     // "Sunday 14 June 2026" — how a date reads on paper. `monthDay` is
     // "Jun 14", the designed Service Guide's preaching-schedule column.
+    // `slash` is "06/14/26", the legacy booklet's schedule column.
     function formatDate(dateStr, style) {
         if (!isDateStr(dateStr)) return String(dateStr || '');
         const d = parseDate(dateStr);
@@ -146,6 +153,11 @@
         if (style === 'monthDay') return MONTHS[d.getMonth()].slice(0, 3) + ' ' + d.getDate();
         if (style === 'weekday') return DAYS[d.getDay()];
         if (style === 'medium') return d.getDate() + ' ' + MONTHS[d.getMonth()] + ' ' + d.getFullYear();
+        if (style === 'slash') {
+            const mm = String(d.getMonth() + 1).padStart(2, '0');
+            const dd = String(d.getDate()).padStart(2, '0');
+            return mm + '/' + dd + '/' + String(d.getFullYear()).slice(-2);
+        }
         return DAYS[d.getDay()] + ' ' + d.getDate() + ' ' + MONTHS[d.getMonth()] + ' ' + d.getFullYear();
     }
 
@@ -301,25 +313,56 @@
 
     // What a row of one Sunday carries — the single Sunday and each row of
     // the Sundays list are the same shape. The Sunday's own facts first (who
-    // is preaching is the preaching schedule), then one field per Liturgy
-    // Element, keyed by its id, so a field bound to `sermon` or `hymn1`
-    // still resolves and another church's element is a field the moment it
-    // is saved. A Sunday has one field per element, never two: who carries
-    // an element is not a second field.
+    // is preaching is the preaching schedule), then each Liturgy Element's
+    // value keyed by its id (so a field bound to `sermon` or `hymn1` still
+    // resolves), plus the facts the Liturgy Order sets on that placement
+    // (`id.name`, `id.message`, …) and who carries it / its note when the
+    // order says those apply. `prayerLabel` is not a field any more — that
+    // heading was the old latent Pastoral Prayer title; bind the prayer
+    // element's `.name` from the order instead. Old wires still resolve
+    // `prayerLabel` from the Sunday row.
     const SUNDAY_IDENTITY_FIELDS = [
         { key: 'date', label: 'Date', kind: 'date' },
         { key: 'longDate', label: 'Date (Sunday, June 14, 2026)', kind: 'date' },
         { key: 'shortDate', label: 'Short date (Sep 6)', kind: 'date' },
         { key: 'dateShort', label: 'Date (6 Sep)', kind: 'date' },
+        { key: 'slashDate', label: 'Date (06/14/26)', kind: 'date' },
         { key: 'preacher', label: 'Preacher', kind: 'text' },
         { key: 'theme', label: 'Theme', kind: 'text' },
         { key: 'keyVerse', label: 'Key verse', kind: 'text' },
-        { key: 'prayerLabel', label: 'Prayer heading', kind: 'text' },
         { key: 'serviceLeader', label: 'Service leader', kind: 'text' },
         { key: 'musicLeader', label: 'Music leader', kind: 'text' },
-        { key: 'prayerMale', label: 'Prayer (man)', kind: 'text' },
-        { key: 'prayerFemale', label: 'Prayer (woman)', kind: 'text' },
+        // Whoever decided most of this Sunday's elements (Element authorship).
+        // A typo fixed by somebody else does not move the credit.
+        { key: 'oosWriter', label: 'Order of service by', kind: 'text' },
+        { key: 'oosWriterFirst', label: 'Order of service by (first name)', kind: 'text' },
     ];
+
+    // Aspects of a placement beyond its Sunday value. The value stays at
+    // `el.id`; these are `el.id.name`, `el.id.message`, and the rest. A
+    // prayer with request lines also exposes `el.id.person.0`,
+    // `el.id.message.0`, `el.id.response.0` — one chip per line, never a
+    // comma-joined People pill.
+    const SUNDAY_ASPECTS = Object.freeze({
+        name: 'name',
+        message: 'message',
+        response: 'response',
+        person: 'person',
+        carriedBy: 'carriedBy',
+        note: 'note',
+    });
+
+    function sundayAspectKey(elementId, aspect) {
+        return String(elementId || '') + '.' + String(aspect || '');
+    }
+
+    function parseSundayFieldKey(field) {
+        const key = String(field || '');
+        if (!key) return { id: '', aspect: '' };
+        const dot = key.indexOf('.');
+        if (dot <= 0) return { id: key, aspect: '' };
+        return { id: key.slice(0, dot), aspect: key.slice(dot + 1) };
+    }
 
     function catalogOrSeed(catalog) {
         return (catalog && Array.isArray(catalog.elements) && Array.isArray(catalog.orders))
@@ -327,26 +370,164 @@
             : Liturgy.standardCatalog();
     }
 
-    function sundayFieldsFor(catalog) {
-        return SUNDAY_IDENTITY_FIELDS.concat(catalogOrSeed(catalog).elements.map(el => ({
-            key: el.id,
-            label: Liturgy.elementDisplayName ? Liturgy.elementDisplayName(el) : el.name,
+    function valueFieldLabel(el) {
+        const kind = el && (el.kind || el.primitive);
+        if (kind === 'hymn' || kind === 'song') return 'Hymn';
+        if (kind === 'scripture') return 'Reference';
+        if (kind === 'prayer') return 'People';
+        if (kind === 'person' || kind === 'people') return 'Person';
+        return Liturgy.elementDisplayName ? Liturgy.elementDisplayName(el) : (el && el.name) || '';
+    }
+
+    // The request lines a prayer sends (or empty). Index is stable: Sunday
+    // people sit at the same index under `liturgy.<id>`.
+    function prayerRequestLines(el) {
+        if (!el || el.kind !== 'prayer' || !el.requests) return [];
+        return Array.isArray(el.requests.people) ? el.requests.people : [];
+    }
+
+    function prayerLineWhoLabel(line, index, total) {
+        const who = line && line.who;
+        if (who === 'male') return 'Man';
+        if (who === 'female') return 'Woman';
+        return total > 1 ? ('Person ' + (index + 1)) : 'Person';
+    }
+
+    // {name} → first name on the message/response a prayer sends. {link} is
+    // left alone — a Printable does not mint answer links.
+    function fillPrayerProse(template, person) {
+        const first = firstName(person && person.name);
+        return String(template == null ? '' : template).replace(/\{name\}/g, first);
+    }
+
+    // Fields one placement offers: its Sunday value, the name on the order,
+    // and for a prayer the message and response — one chip per request line
+    // when the order lists people, so two subjects are never one pill.
+    // Carried-by and note follow what the order toggled on that placement.
+    function fieldsForElement(el) {
+        if (!el || !el.id) return [];
+        const kind = el.kind || el.primitive || '';
+        const out = [];
+        out.push({
+            key: sundayAspectKey(el.id, SUNDAY_ASPECTS.name),
+            label: 'Name',
             kind: 'text',
-            element: el.kind || el.primitive,
-        })));
+            element: kind,
+            aspect: SUNDAY_ASPECTS.name,
+            elementId: el.id,
+        });
+        const lines = prayerRequestLines(el);
+        if (kind === 'prayer' && lines.length) {
+            lines.forEach((line, i) => {
+                const who = prayerLineWhoLabel(line, i, lines.length);
+                out.push({
+                    key: sundayAspectKey(el.id, SUNDAY_ASPECTS.person + '.' + i),
+                    label: who,
+                    kind: 'text',
+                    element: kind,
+                    aspect: SUNDAY_ASPECTS.person,
+                    lineIndex: i,
+                    elementId: el.id,
+                });
+                out.push({
+                    key: sundayAspectKey(el.id, SUNDAY_ASPECTS.message + '.' + i),
+                    label: lines.length > 1 ? ('Message · ' + who) : 'Message',
+                    kind: 'text',
+                    element: kind,
+                    aspect: SUNDAY_ASPECTS.message,
+                    lineIndex: i,
+                    elementId: el.id,
+                });
+                out.push({
+                    key: sundayAspectKey(el.id, SUNDAY_ASPECTS.response + '.' + i),
+                    label: lines.length > 1 ? ('Response · ' + who) : 'Response',
+                    kind: 'text',
+                    element: kind,
+                    aspect: SUNDAY_ASPECTS.response,
+                    lineIndex: i,
+                    elementId: el.id,
+                });
+            });
+        } else {
+            // Other has nothing to fill on the Sunday — the name is the print.
+            // Scripture's citation is the Reference chip (same key as the value).
+            // A prayer with no request lines keeps one People chip + the
+            // order's message/response templates.
+            if (kind !== 'other') {
+                out.push({
+                    key: el.id,
+                    label: valueFieldLabel(el),
+                    kind: 'text',
+                    element: kind,
+                    aspect: 'value',
+                    elementId: el.id,
+                });
+            }
+            if (kind === 'prayer') {
+                out.push({
+                    key: sundayAspectKey(el.id, SUNDAY_ASPECTS.message),
+                    label: 'Message',
+                    kind: 'text',
+                    element: kind,
+                    aspect: SUNDAY_ASPECTS.message,
+                    elementId: el.id,
+                });
+                out.push({
+                    key: sundayAspectKey(el.id, SUNDAY_ASPECTS.response),
+                    label: 'Response',
+                    kind: 'text',
+                    element: kind,
+                    aspect: SUNDAY_ASPECTS.response,
+                    elementId: el.id,
+                });
+            }
+        }
+        if (el.prayedByOther || el.hasRole) {
+            out.push({
+                key: sundayAspectKey(el.id, SUNDAY_ASPECTS.carriedBy),
+                label: el.prayedByOther ? 'Prayer leader' : 'Carried by',
+                kind: 'text',
+                element: kind,
+                aspect: SUNDAY_ASPECTS.carriedBy,
+                elementId: el.id,
+            });
+        }
+        if (el.hasNote) {
+            out.push({
+                key: sundayAspectKey(el.id, SUNDAY_ASPECTS.note),
+                label: 'Note',
+                kind: 'text',
+                element: kind,
+                aspect: SUNDAY_ASPECTS.note,
+                elementId: el.id,
+            });
+        }
+        return out;
+    }
+
+    function sundayFieldsFor(catalog) {
+        const fields = SUNDAY_IDENTITY_FIELDS.slice();
+        catalogOrSeed(catalog).elements.forEach(el => {
+            fieldsForElement(el).forEach(f => fields.push(f));
+        });
+        return fields;
     }
 
     // A Sunday field that holds a scripture citation — the seed list, or any
-    // scripture placement on the congregation's orders (ADR 0080).
+    // scripture placement on the congregation's orders (ADR 0080). Aspect
+    // keys (`sermon.name`) are not citations.
     function isScriptureField(field, liturgy) {
         if (!field) return false;
-        if (field === 'keyVerse') return true;
+        const parsed = parseSundayFieldKey(field);
+        if (parsed.aspect && parsed.aspect !== 'value') return false;
+        const id = parsed.id;
+        if (id === 'keyVerse') return true;
         const root = typeof globalThis !== 'undefined' ? globalThis : global;
         const Passage = root && root.ScripturePassage;
-        if (Passage && Array.isArray(Passage.FIELDS) && Passage.FIELDS.indexOf(field) !== -1) {
+        if (Passage && Array.isArray(Passage.FIELDS) && Passage.FIELDS.indexOf(id) !== -1) {
             return true;
         }
-        const el = Liturgy.elementById(catalogOrSeed(liturgy), field);
+        const el = Liturgy.elementById(catalogOrSeed(liturgy), id);
         return !!(el && (el.kind === 'scripture' || el.primitive === 'scripture'));
     }
 
@@ -475,7 +656,7 @@
         },
         {
             key: 'sunday_hymns', region: 'Sunday', label: 'Hymns of a Sunday', shape: 'list', minLevel: 'viewer',
-            blurb: 'One row per sheet-music page, in service order. A hymn with three pages is three rows. Missing images stay blank — nothing is invented.',
+            blurb: 'One row per sheet-music page, in service order. Every page of a hymn shares that hymn\'s index, so a range keeps the hymn together. A hymn with three pages is three rows and one index. Missing images stay blank — nothing is invented.',
             params: [WHEN_PARAM],
             fields: [
                 { key: 'name', label: 'Hymn name', kind: 'text' },
@@ -486,22 +667,11 @@
                 { key: 'attribution', label: 'Attribution', kind: 'text' },
                 { key: 'sheetTitle', label: 'Title on the first sheet', kind: 'text' },
                 { key: 'sheetCredit', label: 'Credit on the last sheet', kind: 'text' },
+                { key: 'sheetFooter', label: 'Footer ((next page) or credit)', kind: 'text' },
             ],
             filters: [
                 { key: 'slot', label: 'Which hymn', kind: 'choice', default: '', verbatim: true, options: [{ value: '', label: 'Every hymn' }]
                     .concat(hymnSlotOptions(null)) },
-            ],
-        },
-        {
-            // Resolve-only for unmigrated wires / typedContent read-through.
-            // Not offered in the drawer — use Fill-in library + query lists.
-            key: 'sunday_typed', region: 'Sunday', label: 'Sunday booklet text', shape: 'single', noDrawer: true, minLevel: 'viewer',
-            blurb: 'Legacy typed Sunday fields. Migrated printables use event fill-ins instead.',
-            params: [WHEN_PARAM],
-            fields: (typedCore() && typedCore().FIELDS) || [
-                { key: 'prayerNation', label: 'Prayer country', kind: 'text' },
-                { key: 'kidsLessonTitle', label: 'Mosaic Kids lesson', kind: 'text' },
-                { key: 'announcements', label: 'Announcements', kind: 'text' },
             ],
         },
         {
@@ -519,7 +689,7 @@
         },
         {
             key: 'sunday_announcements', region: 'Sunday', label: 'Announcements of a Sunday', shape: 'list', minLevel: 'viewer',
-            blurb: 'One row per announcement handed out that Sunday — typed announcements first, then printed Event announcements. The booklet text still joins them into one field.',
+            blurb: 'One row per announcement handed out that Sunday — the occurrence fill-in first, then printed Event announcements.',
             params: [WHEN_PARAM],
             fields: [
                 { key: 'date', label: 'Sunday', kind: 'date' },
@@ -612,23 +782,19 @@
             ],
             fields: [{ key: 'value', label: 'Date', kind: 'date' }],
         },
-        {
-            key: 'insert_page_number', region: 'Insert', label: 'Page number', shape: 'single', scalar: true, minLevel: 'viewer',
-            blurb: 'The number of this page in the booklet, with an optional custom start page.',
-            params: [{ key: 'startAt', label: 'Start numbering at', kind: 'text', default: 1 }],
-            fields: [
-                { key: 'number', label: 'Page number', kind: 'number' },
-                { key: 'edgeClass', label: 'Outer edge', kind: 'text' },
-            ],
-        },
     ];
 
     function sourceByKey(key) {
         return SOURCES.find(s => s.key === key) || null;
     }
 
+    /** @param {any} field */
+    function specMinLevel(field) {
+        return field && field.minLevel;
+    }
+
     function visibleSpecs(list, level) {
-        return (list || []).filter(s => !s.minLevel || mayRead(level, s.minLevel));
+        return (list || []).filter(s => !specMinLevel(s) || mayRead(level, specMinLevel(s)));
     }
 
     // What one Permission Level may see: the sources at or below their rank,
@@ -639,7 +805,7 @@
         return SOURCES
             .filter(s => mayRead(level, s.minLevel))
             .map(s => Object.assign({}, s, {
-                fields: s.fields.filter(f => !f.minLevel || mayRead(level, f.minLevel)),
+                fields: s.fields.filter(f => !specMinLevel(f) || mayRead(level, specMinLevel(f))),
                 params: visibleSpecs(s.params, level),
                 filters: visibleSpecs(s.filters, level),
             }));
@@ -761,12 +927,42 @@
 
     // ── People ───────────────────────────────────────────────────────────────
 
+    /** @param {string|null|undefined} name */
     function firstName(name) { return String(name || '').trim().split(/\s+/)[0] || ''; }
+    /** @param {string|null|undefined} name */
     function lastName(name) { const p = String(name || '').trim().split(/\s+/); return p.length > 1 ? p[p.length - 1] : ''; }
+
+    // ADR 0074: when nameParts are stored, the booklet last name is the
+    // remembered last name — not the last word of the full name (a suffix
+    // would otherwise title the household and the row differently).
+    function personNameCore() {
+        if (typeof global !== 'undefined' && global && global.PersonName) return global.PersonName;
+        if (typeof window !== 'undefined' && window && window.PersonName) return window.PersonName;
+        if (typeof require === 'function') {
+            try {
+                return require('./person-name.js');
+            } catch (e) {
+                return null;
+            }
+        }
+        return null;
+    }
+
+    /** @param {{ name?: string, nameParts?: * }|null|undefined} person */
+    function personLastName(person) {
+        if (!person) return '';
+        const PN = personNameCore();
+        if (person.nameParts && PN) {
+            const remembered = PN.rememberedLastName(person);
+            if (remembered.noLastName) return '';
+            if (remembered.lastName) return remembered.lastName;
+        }
+        return lastName(person.name);
+    }
 
     function isInactive(person) {
         const m = (person && person.membership) || {};
-        return !!m.inactive || m.status === 'inactive';
+        return !!m.inactive;
     }
 
     function isMember(person) {
@@ -806,8 +1002,12 @@
 
     function comparePeople(sort) {
         return (a, b) => {
-            const ka = sort === 'first' ? firstName(a.name) + ' ' + lastName(a.name) : lastName(a.name) + ' ' + firstName(a.name);
-            const kb = sort === 'first' ? firstName(b.name) + ' ' + lastName(b.name) : lastName(b.name) + ' ' + firstName(b.name);
+            const ka = sort === 'first'
+                ? firstName(a.name) + ' ' + personLastName(a)
+                : personLastName(a) + ' ' + firstName(a.name);
+            const kb = sort === 'first'
+                ? firstName(b.name) + ' ' + personLastName(b)
+                : personLastName(b) + ' ' + firstName(b.name);
             return ka.localeCompare(kb) || String(a.name || '').localeCompare(String(b.name || ''));
         };
     }
@@ -860,7 +1060,7 @@
             _id: person.id,
             name: person.name || '',
             firstName: firstName(person.name),
-            lastName: lastName(person.name),
+            lastName: personLastName(person),
             photo: person.photoUrl || '',
             email: c.email || person.email || '',
             phone: c.phone || person.phone || '',
@@ -952,24 +1152,7 @@
 
     // ── Sundays ──────────────────────────────────────────────────────────────
 
-    // Folds legacy dotted field names ('liturgy.sermon') back into nested
-    // values — the ADR-0034 trap. A nested value wins over a dotted one.
-    function normaliseService(raw) {
-        const data = {};
-        Object.keys(raw || {}).forEach(k => { if (k.indexOf('.') < 0) data[k] = raw[k]; });
-        Object.keys(raw || {}).forEach(k => {
-            if (k.indexOf('.') < 0) return;
-            const parts = k.split('.');
-            let obj = data;
-            for (let i = 0; i < parts.length - 1; i++) {
-                if (typeof obj[parts[i]] !== 'object' || obj[parts[i]] === null) obj[parts[i]] = {};
-                obj = obj[parts[i]];
-            }
-            const leaf = parts[parts.length - 1];
-            if (!obj[leaf]) obj[leaf] = raw[k];
-        });
-        return data;
-    }
+    const normaliseService = Dotted.readServiceDoc;
 
     function slotText(value) {
         if (value == null) return '';
@@ -1008,33 +1191,36 @@
     // already known, and a baptism is not something to be announced later.
     // TBA is only written onto text fields — a date is a date — and never
     // onto a people element (a baptism's candidates).
-    const NEVER_TO_BE_ANNOUNCED = ['date', 'shortDate', 'dateShort'];
+    const NEVER_TO_BE_ANNOUNCED = ['date', 'shortDate', 'dateShort', 'slashDate'];
 
     // One Sunday as a row — the single Sunday, and each row of the Sundays
-    // list. Every element of the catalog has its field, whatever order this
-    // Sunday follows: a field is an element, and the value under
-    // `liturgy.<id>` is there or it is not. A hymn the Sunday has dropped
-    // reads as nothing, as it did on the old guide. `notPlanned`, when it has
-    // words, stands in for whatever nobody has written yet ("TBA"); a dropped
-    // hymn is not coming, so it stays blank.
+    // list. Every element of the catalog has its value field, whatever order
+    // this Sunday follows, plus the order-side aspects (name, message, …).
+    // A hymn the Sunday has dropped reads as nothing, as it did on the old
+    // guide. `notPlanned`, when it has words, stands in for whatever nobody
+    // has written yet ("TBA"); a dropped hymn is not coming, so it stays blank.
+    // `prayerLabel` stays on the row for old wires only — it is not a catalog field.
     function sundayRow(date, s, notPlanned, catalog) {
         const cat = catalogOrSeed(catalog);
         const lit = (s && s.liturgy) || {};
+        const notes = (s && s.notes) || {};
         const dropped = (s && Array.isArray(s.removedHymns)) ? s.removedHymns : [];
+        const writer = writerOfSunday(s, cat, dropped);
         const row = {
             _id: date,
             date: formatDate(date),
             longDate: formatDate(date, 'longUs'),
             shortDate: formatDate(date, 'monthDay'),
             dateShort: formatDate(date, 'short'),
+            slashDate: formatDate(date, 'slash'),
             theme: slotText(s && s.theme),
             keyVerse: slotText(s && s.keyVerse),
             preacher: slotText(s && s.preacher),
             serviceLeader: slotText(s && s.serviceLeader),
             musicLeader: slotText(s && s.musicLeader),
-            prayerMale: slotText(lit.prayerMale),
-            prayerFemale: slotText(lit.prayerFemale),
             prayerLabel: slotText(lit.prayerLabel) || 'Pastoral Prayer',
+            oosWriter: writer ? writer.name : '',
+            oosWriterFirst: writer ? (writer.name.split(/\s+/)[0] || '') : '',
         };
         const textKeys = SUNDAY_IDENTITY_FIELDS.filter(f => f.kind === 'text').map(f => f.key);
         cat.elements.forEach(el => {
@@ -1042,8 +1228,38 @@
             // Other has no Sunday field. A value already stored (an older text
             // element) still prints; otherwise the row is the name.
             const stored = slotText(lit[el.id]);
+            const displayName = Liturgy.elementDisplayName ? Liturgy.elementDisplayName(el) : (el.name || '');
             row[el.id] = dropsOut ? '' : (el.kind === 'other' ? (stored || el.name) : stored);
-            if (el.kind !== 'other' && el.kind !== 'person' && el.kind !== 'prayer' && el.primitive !== 'people' && !dropsOut) textKeys.push(el.id);
+            row[sundayAspectKey(el.id, SUNDAY_ASPECTS.name)] = displayName;
+            if (el.kind === 'prayer') {
+                const msg = String(el.message || '');
+                const res = String(el.response || '');
+                // Order templates stay resolvable for older wires.
+                row[sundayAspectKey(el.id, SUNDAY_ASPECTS.message)] = msg;
+                row[sundayAspectKey(el.id, SUNDAY_ASPECTS.response)] = res;
+                const lines = prayerRequestLines(el);
+                const people = Array.isArray(lit[el.id]) ? lit[el.id] : [];
+                lines.forEach((line, i) => {
+                    const person = people[i] || null;
+                    row[sundayAspectKey(el.id, SUNDAY_ASPECTS.person + '.' + i)] =
+                        person ? slotText(person) : '';
+                    row[sundayAspectKey(el.id, SUNDAY_ASPECTS.message + '.' + i)] =
+                        fillPrayerProse(msg, person);
+                    row[sundayAspectKey(el.id, SUNDAY_ASPECTS.response + '.' + i)] =
+                        fillPrayerProse(res, person);
+                });
+            }
+            if (el.prayedByOther || el.hasRole) {
+                const carrier = Liturgy.carrierOf ? Liturgy.carrierOf(s, el) : null;
+                row[sundayAspectKey(el.id, SUNDAY_ASPECTS.carriedBy)] = carrier ? (carrier.name || '') : '';
+            }
+            if (el.hasNote) {
+                const rawNote = notes[el.id];
+                row[sundayAspectKey(el.id, SUNDAY_ASPECTS.note)] = rawNote == null ? '' : String(rawNote);
+            }
+            if (el.kind !== 'other' && el.kind !== 'person' && el.kind !== 'prayer' && el.primitive !== 'people' && !dropsOut) {
+                textKeys.push(el.id);
+            }
         });
         if (!row.sermon && s && s.sermon) row.sermon = slotText(s.sermon);
         const fill = typeof notPlanned === 'string' ? notPlanned.trim() : '';
@@ -1054,6 +1270,25 @@
             });
         }
         return row;
+    }
+
+    // Who wrote this Sunday's order of service: whoever decided the most of
+    // the elements its order carries (a dropped hymn is not on it).
+    /**
+     * @param {*} s the Sunday, as normaliseService reads it
+     * @param {*} cat the liturgy catalog
+     * @param {string[]} dropped hymns this Sunday has dropped
+     * @return {{name: string}|null}
+     */
+    function writerOfSunday(s, cat, dropped) {
+        if (!s || !Authorship || !Authorship.writerOf) return null;
+        /** @type {Array<{id: string, kind?: string, primitive?: string}>} */
+        const elements = Liturgy.elementsFor(s, cat);
+        const ids = elements
+            .filter(el => !((el.kind === 'hymn' || el.primitive === 'song') && dropped.indexOf(el.id) !== -1))
+            .map(el => el.id);
+        const writer = Authorship.writerOf(s, ids);
+        return writer && writer.name ? writer : null;
     }
 
     function resolveSunday(params, data, ctx) {
@@ -1097,12 +1332,11 @@
         return { rows: rows, warnings: rows.length ? [] : ['The order of service for ' + formatDate(date) + ' is empty.'], date: date };
     }
 
-    // Subjects named on that Sunday's pastoral prayers, with their request text.
+    // Subjects named on that Sunday's requesting prayers, with their request text.
     function prayerSubjectsOf(service, catalog) {
         const s = service || {};
         const lit = s.liturgy || {};
         const cat = catalogOrSeed(catalog);
-        const label = slotText(lit.prayerLabel) || 'Pastoral Prayer';
         const out = [];
         const push = (person, who, slot, id) => {
             if (!person || !person.id) return;
@@ -1110,22 +1344,21 @@
                 personId: person.id,
                 name: person.name || '',
                 who: who || '',
-                slot: slot || label,
-                label: label,
+                slot: slot || '',
+                label: slot || '',
                 _id: id || person.id,
             });
         };
-        push(lit.prayerMale, 'man', label + ' (man)', 'male');
-        push(lit.prayerFemale, 'woman', label + ' (woman)', 'female');
         Liturgy.elementsFor(s, cat).forEach(el => {
             if (!el || el.kind !== 'prayer' || !el.requests) return;
             const list = lit[el.id];
             if (!Array.isArray(list)) return;
             const people = el.requests.people || [];
+            const slot = Liturgy.elementDisplayName(el);
             list.forEach((person, i) => {
                 const line = people[i] || {};
                 const who = line.who === 'male' ? 'man' : (line.who === 'female' ? 'woman' : (line.who || 'anyone'));
-                push(person, who, Liturgy.elementDisplayName(el), person && person.id);
+                push(person, who, slot, person && person.id);
             });
         });
         return out;
@@ -1167,6 +1400,7 @@
         const removed = Array.isArray(s.removedHymns) ? s.removedHymns : [];
         const rows = [];
         const warnings = [];
+        let hymnIndex = 0;
         Liturgy.songIdsOf(Liturgy.orderFor(s, cat), cat).forEach(slot => {
             if (p.slot && slot !== p.slot) return;
             if (removed.indexOf(slot) !== -1) return;
@@ -1177,11 +1411,15 @@
             const name = (hymn && hymn.hymn_name) || h.name;
             if (!hymn) warnings.push('"' + h.name + '" is not in the hymn book, so it has no sheet music.');
             else if (!pages.length) warnings.push('"' + name + '" has no sheet-music pages.');
-            // One row per real page. A hymn with nothing to show still gets
-            // one blank row so the slot is not silently dropped.
+            // One row per real page, one index per hymn. A hymn with nothing
+            // to show still gets one blank row so the slot is not dropped.
+            // The index is the hymn's place, shared by every sheet, so a
+            // from/to range cannot take page two and leave page one behind.
+            hymnIndex += 1;
             const images = pages.length ? pages : [''];
             const credit = (hymn && hymn.attribution) || '';
             images.forEach((image, i) => {
+                const last = i === images.length - 1;
                 rows.push({
                     _id: slot + '~' + i,
                     name: name,
@@ -1192,9 +1430,12 @@
                     attribution: credit,
                     // The designed booklet prints the title on the first sheet
                     // and the credit on the last. A one-page hymn prints both.
+                    // The legacy booklet puts "(next page)" on every sheet but
+                    // the last, and the credit on the last — sheetFooter.
                     sheetTitle: i === 0 ? name : '',
-                    sheetCredit: i === images.length - 1 ? credit : '',
-                    number: rows.length + 1,
+                    sheetCredit: last ? credit : '',
+                    sheetFooter: last ? credit : (images.length > 1 ? '(next page)' : ''),
+                    number: hymnIndex,
                 });
             });
         });
@@ -1204,43 +1445,46 @@
         return { rows: rows, warnings: warnings, date: date };
     }
 
-    function resolveSundayTyped(params, data, ctx) {
+    // Booklet text on the occurrence for this printable, keyed by Sunday.
+    // A missing date was not loaded. An empty bag was loaded and is empty.
+    const BOOKLET_ANNOUNCEMENTS = 'legacy_announcements';
+    const BOOKLET_KIDS_QUESTIONS = 'legacy_kidsQuestions';
+
+    function bookletBag(data, date) {
+        const byDate = data && data.bookletByDate;
+        if (!byDate || !Object.prototype.hasOwnProperty.call(byDate, date)) return null;
+        const bag = byDate[date];
+        return bag && typeof bag === 'object' ? bag : {};
+    }
+
+    function announcementsFromBag(bag) {
         const Typed = typedCore();
-        const p = Object.assign(defaultParams('sunday_typed'), params || {});
-        const date = resolveWhen(p.when, ctx.today);
-        const s = serviceAt(data, date);
-        const warnings = [];
-        if (!s) warnings.push('Nothing is planned yet for ' + formatDate(date) + '.');
-        const stored = Typed ? Typed.fromService(s) : {};
-        const Lines = linesCore();
-        const events = (data.printedEventsBySunday && data.printedEventsBySunday[date]) || [];
-        const lines = (Lines && events.length) ? Lines.linesForHandedOutGuide(date, events) : [];
-        const content = lines.length
-            ? Object.assign({}, stored, { announcements: Lines.bookletAnnouncements(stored.announcements, lines) })
-            : stored;
-        const row = Typed ? Typed.toRow(content, date) : { _id: date, date: date };
-        row.date = formatDate(date);
-        if (s && Typed && Typed.isBlank(content)) {
-            warnings.push('No booklet text has been entered for ' + formatDate(date) + ' yet.');
-        }
-        return { rows: [row], warnings: warnings, date: date };
+        if (!bag || !Typed || !Object.prototype.hasOwnProperty.call(bag, BOOKLET_ANNOUNCEMENTS)) return [];
+        const text = bag[BOOKLET_ANNOUNCEMENTS];
+        if (text == null || String(text).trim() === '') return [];
+        return Typed.asAnnouncements(text);
+    }
+
+    function questionsFromBag(bag) {
+        const Typed = typedCore();
+        if (!bag || !Typed || !Object.prototype.hasOwnProperty.call(bag, BOOKLET_KIDS_QUESTIONS)) return [];
+        return Typed.asStringList(bag[BOOKLET_KIDS_QUESTIONS]);
     }
 
     // One row per announcement the handed-out guide would print that Sunday
-    // — typed first, then printed Event announcements. The booklet-text
-    // source still joins the same items into one field.
+    // — the occurrence fill-in first, then printed Event announcements.
     function resolveSundayAnnouncements(params, data, ctx) {
-        const Typed = typedCore();
         const Lines = linesCore();
         const p = Object.assign(defaultParams('sunday_announcements'), params || {});
         const date = resolveWhen(p.when, ctx.today);
         const service = serviceAt(data, date);
-        const typed = Typed ? Typed.fromService(service) : { announcements: [] };
+        const bag = bookletBag(data, date);
+        const typed = announcementsFromBag(bag);
         const events = (data.printedEventsBySunday && data.printedEventsBySunday[date]) || [];
         const printed = (Lines && events.length) ? Lines.linesForHandedOutGuide(date, events) : [];
         const announcements = Lines
-            ? Lines.bookletAnnouncements(typed.announcements, printed)
-            : (typed.announcements || []);
+            ? Lines.bookletAnnouncements(typed, printed)
+            : typed;
         const fitClass = announcementFitClass(announcements);
         const rows = announcements.map((item, i) => {
             const title = String((item && item.title) || '').trim();
@@ -1260,7 +1504,7 @@
         });
         const warnings = [];
         if (!rows.length) {
-            warnings.push(service
+            warnings.push(service || bag
                 ? 'No announcements have been entered for ' + formatDate(date, 'medium') + '.'
                 : 'Nothing is planned yet for ' + formatDate(date) + '.');
         }
@@ -1323,12 +1567,10 @@
     }
 
     function resolveSundayKidsQuestions(params, data, ctx) {
-        const Typed = typedCore();
         const p = Object.assign(defaultParams('sunday_kids_questions'), params || {});
         const date = resolveWhen(p.when, ctx.today);
-        const service = serviceAt(data, date);
-        const stored = Typed ? Typed.fromService(service) : { mosaicKids: { questions: [] } };
-        const questions = (stored.mosaicKids && stored.mosaicKids.questions) || [];
+        const bag = bookletBag(data, date);
+        const questions = questionsFromBag(bag);
         const rows = [];
         questions.forEach((question, i) => {
             const text = String(question || '').trim();
@@ -1337,7 +1579,7 @@
         });
         const warnings = [];
         if (!rows.length) {
-            warnings.push(service
+            warnings.push(bag
                 ? 'No Mosaic Kids questions for ' + formatDate(date) + '.'
                 : 'Nothing is planned yet for ' + formatDate(date) + '.');
         }
@@ -1541,19 +1783,6 @@
         return { rows: [{ _id: 'date', value: formatted, date: dateStr }], warnings: [] };
     }
 
-    function resolveInsertPageNumber() {
-        return { rows: [{ _id: 'page', number: '1' }], warnings: [] };
-    }
-
-    // What prints on a physical page (1-based page index in the project).
-    function insertPageNumberDisplay(pageIndex, startAt) {
-        const start = Math.max(1, Math.round(Number(startAt)) || 1);
-        const physical = Math.round(Number(pageIndex)) + 1;
-        if (!Number.isFinite(physical) || physical < 1) return null;
-        if (physical < start) return null;
-        return physical - start + 1;
-    }
-
     function describeInsertDate(params) {
         const p = scalarDateParams(params);
         if (p.mode === 'fixed' && isDateStr(p.fixed)) return 'fixed ' + formatDate(p.fixed, 'medium');
@@ -1573,6 +1802,7 @@
         const rows = (data.responses || [])
             .filter(r => r && r.formId === form.id)
             .map((r, i) => {
+                /** @type {Record<string, *>} */
                 const row = { _id: r.id || String(i), personName: r.personName || '', submittedAt: r.submittedAt ? formatDate(String(r.submittedAt).slice(0, 10), 'medium') : '', number: i + 1 };
                 questions.forEach(q => {
                     const v = (r.answers || {})[q.id];
@@ -1592,7 +1822,6 @@
         sunday: resolveSunday,
         sunday_rows: resolveSundayRows,
         sunday_hymns: resolveSundayHymns,
-        sunday_typed: resolveSundayTyped,
         sunday_prayer_requests: resolveSundayPrayerRequests,
         sunday_announcements: resolveSundayAnnouncements,
         sunday_kids_questions: resolveSundayKidsQuestions,
@@ -1601,7 +1830,6 @@
         role_holder: resolveRoleHolder,
         form_answers: resolveFormAnswers,
         insert_date: resolveInsertDate,
-        insert_page_number: resolveInsertPageNumber,
     };
 
     // Rows for a source, for this viewer. A source above the viewer's level
@@ -1618,7 +1846,7 @@
         // A field above the viewer's level is not in their drawer, and it is
         // not in their rows either — a wire an editor made must not read it
         // out for a member on the view-only page.
-        const hidden = source.fields.filter(f => f.minLevel && !mayRead(c.level, f.minLevel)).map(f => f.key);
+        const hidden = source.fields.filter(f => specMinLevel(f) && !mayRead(c.level, specMinLevel(f))).map(f => f.key);
         if (hidden.length) {
             out.rows = out.rows.map(row => { const r = Object.assign({}, row); hidden.forEach(k => { delete r[k]; }); return r; });
         }
@@ -1636,9 +1864,12 @@
             case 'household_children': return { people: true, families: true, households: true };
             case 'sunday': case 'sunday_rows': return { services: [resolveWhen(p.when, t)], liturgy: true };
             case 'sunday_prayer_requests': return { services: [resolveWhen(p.when, t)], liturgy: true, prayerRequests: [resolveWhen(p.when, t)] };
-            case 'sunday_typed':
-            case 'sunday_announcements': return { services: [resolveWhen(p.when, t)], printedAnnouncements: [resolveWhen(p.when, t)] };
-            case 'sunday_kids_questions': return { services: [resolveWhen(p.when, t)] };
+            case 'sunday_announcements': return {
+                services: [resolveWhen(p.when, t)],
+                printedAnnouncements: [resolveWhen(p.when, t)],
+                bookletDates: [resolveWhen(p.when, t)],
+            };
+            case 'sunday_kids_questions': return { bookletDates: [resolveWhen(p.when, t)] };
             case 'sunday_hymns': return { services: [resolveWhen(p.when, t)], hymns: true, liturgy: true };
             case 'sundays': { const w = sundaysWindow(p.range, t); return { serviceRange: { from: w.from, to: w.to }, liturgy: true }; }
             case 'event_dates': {
@@ -1651,7 +1882,7 @@
                 return { series: true, roles: true, people: true, occurrenceRange: { from: from, to: addDays(from, 120) }, rosters: p.seriesId || true };
             }
             case 'form_answers': return { forms: true, responses: p.formId || true };
-            case 'insert_date': case 'insert_page_number': return {};
+            case 'insert_date': return {};
             default: return {};
         }
     }
@@ -1669,10 +1900,6 @@
         const p = Object.assign(defaultParams(sourceKey), params || {});
         if (!s) return '';
         if (sourceKey === 'insert_date') return describeInsertDate(p);
-        if (sourceKey === 'insert_page_number') {
-            const start = Math.max(1, Math.round(Number(p.startAt)) || 1);
-            return 'numbering from page ' + start;
-        }
         const bits = [];
         (s.params || []).forEach(param => {
             const v = p[param.key];
@@ -1696,6 +1923,10 @@
         LEVELS,
         SOURCES,
         HYMN_SLOTS,
+        SUNDAY_ASPECTS,
+        sundayAspectKey,
+        parseSundayFieldKey,
+        fieldsForElement,
         sundayFieldsFor,
         isScriptureField,
         hymnSlotOptions,
@@ -1734,7 +1965,6 @@
         needsFor,
         describeParams,
         roleLabel,
-        insertPageNumberDisplay,
         describeInsertDate,
         scalarDateParams,
         prayerSubjectsOf,

@@ -57,30 +57,14 @@ function liturgyCore() {
 }
 
 // Normalize literal dotted-key fields (e.g. 'liturgy.sermon') created by older
-// saves that used set() with merge, which stored them as top-level field names
-// containing a dot rather than as nested paths. Returns a new object with such
-// keys folded into nested objects. An already-nested value wins over a
-// dotted-key value for the same leaf (the dotted key is the legacy fallback).
+function dottedKeysCore() {
+    if (typeof window !== 'undefined' && window.ServiceDottedKeysCore) return window.ServiceDottedKeysCore;
+    if (typeof require !== 'undefined') return require('./service-dotted-keys-core.js');
+    throw new Error('ServiceDottedKeysCore is not loaded');
+}
+
 function normalizeDottedKeys(raw) {
-    const data = {};
-    for (const [key, val] of Object.entries(raw || {})) {
-        if (!key.includes('.')) data[key] = val;
-    }
-    for (const [key, val] of Object.entries(raw || {})) {
-        if (key.includes('.')) {
-            const parts = key.split('.');
-            let obj = data;
-            for (let i = 0; i < parts.length - 1; i++) {
-                if (typeof obj[parts[i]] !== 'object' || obj[parts[i]] === null) {
-                    obj[parts[i]] = {};
-                }
-                obj = obj[parts[i]];
-            }
-            const leaf = parts[parts.length - 1];
-            if (!obj[leaf]) obj[leaf] = val;
-        }
-    }
-    return data;
+    return dottedKeysCore().readServiceDoc(raw);
 }
 
 // The liturgy slots, note keys, and element carriers a save descends into one
@@ -93,6 +77,11 @@ function normalizeDottedKeys(raw) {
 // marked hasRole (ADR-0080): kept beside the value, keyed the same way the
 // notes are, so it is not a second element and not a second column.
 const NESTED_SAVE_MAPS = ['liturgy', 'notes', 'carriedBy'];
+
+// A nested key that left the model. Firestore update() only changes paths we
+// send, so a prayer leader taken off has to go out as a delete or the next
+// load puts the slot back (MS-808). Not null: a hymn clear already writes null.
+const FIELD_DELETE = Object.freeze({ deleteField: true });
 
 // ── Row identity for the lists a person is picked into (MS-277) ─────────────
 //
@@ -234,20 +223,47 @@ function stampRowIds(entries, derived) {
 // current model, so `changedFieldPaths` gets two things it can compare
 // like-for-like. The parts of a save that are not a function of the model —
 // the timestamp, the guide record, involvementDeferred — are added by save().
-// The two pastoral-prayer subjects, in the shape decidePastoralPrayerSave reads.
-// A blank slot is null, not an empty string, so it is not a person id.
-function pastoralSunday(service, date) {
-    const slotId = (field) => {
-        const liturgy = service && service.liturgy;
-        const slot = liturgy && liturgy[field];
-        const id = slot && slot.id;
-        return (typeof id === 'string' && id) ? id : null;
-    };
-    return {
-        date: date,
-        prayerMaleId: slotId('prayerMale'),
-        prayerFemaleId: slotId('prayerFemale'),
-    };
+// Subjects named on requesting prayers, in the shape decidePastoralPrayerSave
+// reads. A blank slot is omitted; the same person on two lines is one id.
+function pastoralSunday(service, date, elements) {
+    const liturgy = (service && service.liturgy) || {};
+    const ids = [];
+    (elements || []).forEach((el) => {
+        if (!el || el.kind !== 'prayer' || !el.requests) return;
+        const list = liturgy[el.id];
+        if (!Array.isArray(list)) return;
+        list.forEach((person) => {
+            const id = person && person.id;
+            if (typeof id === 'string' && id && ids.indexOf(id) === -1) ids.push(id);
+        });
+    });
+    return { date: date, subjectIds: ids };
+}
+
+// The editor's carriedBy map. One shape: { id, name }. A present key is a
+// prayer leader. Nobody named is an empty slot, still in the tally.
+/**
+ * @param {any} raw
+ * @return {Record<string, {name: string, id: any}>}
+ */
+function editorCarriedBy(raw) {
+    /** @type {Record<string, {name: string, id: any}>} */
+    const carriedBy = {};
+    Object.entries(raw || {}).forEach(([key, ref]) => {
+        if (!ref || typeof ref !== 'object' || Array.isArray(ref)) return;
+        carriedBy[key] = { name: ref.name || '', id: ref.id || null };
+    });
+    return carriedBy;
+}
+
+/**
+ * @param {any} ref
+ * @return {boolean}
+ */
+function slotNamed(ref) {
+    if (!ref || typeof ref !== 'object') return false;
+    const name = ref.name != null && String(ref.name).trim();
+    return !!(ref.id || name);
 }
 
 function flattenServiceForSave(service) {
@@ -264,10 +280,6 @@ function flattenServiceForSave(service) {
             .map(h => ({ name: h.name || '', id: h.id || null })),
         preacher: ref(s.preacher).name,
         preacherId: ref(s.preacher).id,
-        prayerPraiseName: ref(s.prayerPraise).name,
-        prayerPraiseId: ref(s.prayerPraise).id,
-        prayerConfessionName: ref(s.prayerConfession).name,
-        prayerConfessionId: ref(s.prayerConfession).id,
         elementsName: ref(s.elements).name,
         elementsId: ref(s.elements).id,
         otherName: ref(s.other).name,
@@ -278,15 +290,6 @@ function flattenServiceForSave(service) {
         liturgyOrderId: s.liturgyOrderId || '',
         // Filled elements that did not fit the order this Sunday follows now.
         liturgyLeftovers: Array.isArray(s.liturgyLeftovers) ? s.liturgyLeftovers : [],
-        // Kept as stored so an older Irregular Service round-trips untouched;
-        // nothing on this page edits either any more (ADR-0080).
-        isIrregular: s.isIrregular,
-        // Both carry lists whose rows are keyed by `_rowId` (irregular elements
-        // directly, liturgy through its people elements). The id is a handle
-        // for the screen, so it is left behind on the way to the document — and
-        // on the way into changedFieldPaths, or re-keying a row would read as a
-        // changed field and write a Sunday nobody edited.
-        irregularElements: withoutRowIds(s.irregularElements),
         notes: s.notes,
         carriedBy: s.carriedBy || {},
         liturgy: withoutRowIds(s.liturgy)
@@ -306,9 +309,15 @@ function flattenServiceForSave(service) {
 // A hymn is {id, name} chosen as one act, so the SLOT is the unit; splitting
 // it could leave an id pointing at one hymn and a name reading another. Arrays
 // are compared whole and replaced whole — a list is edited as a list.
+/**
+ * @param {any} before
+ * @param {any} after
+ * @return {Record<string, any>}
+ */
 function changedFieldPaths(before, after) {
     const same = (a, b) => JSON.stringify(a === undefined ? null : a) ===
                            JSON.stringify(b === undefined ? null : b);
+    /** @type {Record<string, any>} */
     const update = {};
 
     for (const [key, val] of Object.entries(after || {})) {
@@ -326,6 +335,15 @@ function changedFieldPaths(before, after) {
         for (const [slot, slotVal] of Object.entries(val)) {
             if (!same(prevMap[slot], slotVal)) update[`${key}.${slot}`] = slotVal;
         }
+        // A key that disappeared is a change. Only carriedBy is taken off
+        // this way; liturgy slots stay on the document and are cleared in place.
+        if (key === 'carriedBy') {
+            for (const slot of Object.keys(prevMap)) {
+                if (!Object.prototype.hasOwnProperty.call(val, slot)) {
+                    update[`${key}.${slot}`] = FIELD_DELETE;
+                }
+            }
+        }
     }
 
     return update;
@@ -341,10 +359,6 @@ const PERSON_REF_PATHS = {
     musicLeaderId:        ['musicLeader', 'id'],
     preacher:             ['preacher', 'name'],
     preacherId:           ['preacher', 'id'],
-    prayerPraiseName:     ['prayerPraise', 'name'],
-    prayerPraiseId:       ['prayerPraise', 'id'],
-    prayerConfessionName: ['prayerConfession', 'name'],
-    prayerConfessionId:   ['prayerConfession', 'id'],
     elementsName:         ['elements', 'name'],
     elementsId:           ['elements', 'id'],
     otherName:            ['other', 'name'],
@@ -354,7 +368,7 @@ const PERSON_REF_PATHS = {
 // Fields that go into the document as they are.
 const PLAIN_SAVE_FIELDS = [
     'theme', 'keyVerse', 'musicHelpers', 'hasBaptism', 'removedHymns',
-    'liturgyOrderId', 'liturgyLeftovers', 'isIrregular', 'irregularElements', 'notes', 'carriedBy', 'liturgy'
+    'liturgyOrderId', 'liturgyLeftovers', 'notes', 'carriedBy', 'liturgy'
 ];
 
 // Writes one dot-path field back into the editor's nested model — the inverse
@@ -380,6 +394,11 @@ function applyFlatFieldPath(service, path, value) {
         const slot = path.slice(dot + 1);
         if (!NESTED_SAVE_MAPS.includes(map)) return false;
         if (!service[map] || typeof service[map] !== 'object') service[map] = {};
+
+        if (value === FIELD_DELETE) {
+            delete service[map][slot];
+            return true;
+        }
 
         const current = service[map][slot];
         const bothPlainObjects =
@@ -427,14 +446,6 @@ function applyFlatFieldPath(service, path, value) {
         // been careful about this; the helper list was not.
         if (!Array.isArray(service.musicHelpers)) service.musicHelpers = [];
         reconcilePersonList(service.musicHelpers, value);
-        return true;
-    }
-
-    if (path === 'irregularElements') {
-        // Rebuilt wholesale by whoever owns it (see NESTED_SAVE_MAPS), so the
-        // rows are rebuilt with it — but they still need ids, or the x-for has
-        // nothing to key on.
-        service.irregularElements = stampRowIds(value, true);
         return true;
     }
 
@@ -534,20 +545,10 @@ function parseBaptismNames(value) {
     return result;
 }
 
-// ADR-0006: liturgy.baptism is polymorphic during the migration — an array of
-// Person refs post-migration, possibly a legacy free-text string until the
-// migration runs. Coerce either shape to a clean array of { name, id } Baptism
-// Candidates: array entries are normalised (name/id defaulted), a non-empty
-// legacy string becomes a single literal candidate (id null) so it still
-// displays, and anything else (empty, absent, blank) becomes [].
+// ADR-0006: liturgy.baptism is an array of { name, id } Baptism Candidates.
 function coerceBaptismCandidates(bap) {
-    if (Array.isArray(bap)) {
-        return bap.map(c => ({ name: c.name || '', id: c.id || null }));
-    }
-    if (typeof bap === 'string' && bap.trim()) {
-        return [{ name: bap.trim(), id: null }];
-    }
-    return [];
+    if (!Array.isArray(bap)) return [];
+    return bap.map(c => ({ name: c.name || '', id: c.id || null }));
 }
 
 function describeLiturgyReadFailure(error) {
@@ -606,8 +607,6 @@ function serviceForm() {
         // The liturgy element whose station row is currently expanded (one at a
         // time). null = every row collapsed. Drives the inline picker + note editor.
         openKey: null,
-        showPrayerPraise: false,
-        showPrayerConfession: false,
         _quill: null,
         hymnRegistry: [],
         fuse: null,
@@ -631,12 +630,8 @@ function serviceForm() {
             musicLeader: { name: '', id: null },
             musicHelpers: [],
             preacher: { name: '', id: null },
-            prayerPraise: { name: '', id: null },
-            prayerConfession: { name: '', id: null },
             elements: { name: '', id: null },
             other: { name: '', id: null },
-            isIrregular: false,
-            irregularElements: [],
             hasBaptism: false,
             // Song elements the user has pulled out of this Sunday. Each entry
             // is an element id (e.g. 'hymn2'). Removed songs are kept in the
@@ -657,9 +652,6 @@ function serviceForm() {
                 hymnMid1: { id: null, name: '' },
                 hymnMid2: { id: null, name: '' },
                 scriptureReading: '',
-                prayerMale: { id: null, name: '' },
-                prayerFemale: { id: null, name: '' },
-                prayerLabel: 'Pastoral Prayer',
                 sermon: '',
                 baptism: [],
                 hymnEnd1: { id: null, name: '' },
@@ -683,6 +675,8 @@ function serviceForm() {
         liturgyCatalogLoaded: false,
         liturgyStored: null,
         liturgyReadProblem: '',
+        // Printables named on Liturgy Orders — used to enable the Service Guide button (MS-762).
+        liturgyPrintables: {},
 
         async loadLiturgyCatalog() {
             if (!window.LiturgyOrderStore) return;
@@ -693,6 +687,7 @@ function serviceForm() {
                 this.liturgyCatalogLoaded = true;
                 this.liturgyReadProblem = '';
                 this.releaseQuietRow();
+                await this.loadLiturgyPrintables();
             } catch (err) {
                 // The seed stays on screen so the Sunday can still be read.
                 // This page does not write the order.
@@ -703,11 +698,34 @@ function serviceForm() {
             }
         },
 
+        async loadLiturgyPrintables() {
+            const ids = [];
+            (this.liturgyCatalog.orders || []).forEach(o => {
+                if (o && o.printableId) ids.push(o.printableId);
+            });
+            if (!ids.length || !window.PrintableStore) {
+                this.liturgyPrintables = {};
+                return;
+            }
+            try {
+                const list = await PrintableStore.loadLinked(db, ids);
+                const map = {};
+                (list || []).forEach(p => { if (p && p.id) map[p.id] = { memberVisible: !!p.memberVisible }; });
+                this.liturgyPrintables = map;
+            } catch (e) {
+                console.warn('Liturgy order printables could not be read', e);
+                this.liturgyPrintables = {};
+            }
+        },
+
         // Every order, Standard first and then by name — the same order the
         // Service calendar lists them in.
         get liturgyOrders() {
             const Core = liturgyCore();
-            return Core.toggledOrders(this.liturgyCatalog, this.liturgyCatalog.orders.map(o => o.id));
+            const visible = Core.visibleOrders(this.liturgyCatalog);
+            return Core.toggledOrders(
+                Object.assign({}, this.liturgyCatalog, { orders: visible }),
+                visible.map(o => o.id));
         },
         get selectedOrderId() {
             return liturgyCore().orderFor(this.service, this.liturgyCatalog).id;
@@ -792,26 +810,6 @@ function serviceForm() {
 
         // The order is locked on this page. Its shape changes on the Liturgy
         // Orders page, and this Sunday only fills the values.
-        legacyHomes() {
-            const order = liturgyCore().orderFor(this.service, this.liturgyCatalog);
-            const label = this.service.liturgy && this.service.liturgy.prayerLabel;
-            return liturgyCore().legacyPrayerHomes(order, label);
-        },
-        showsPraise(item) {
-            const homes = this.legacyHomes();
-            if (homes.praiseId) return item.key === homes.praiseId;
-            return !!item.legacy;
-        },
-        showsConfession(item) {
-            const homes = this.legacyHomes();
-            if (homes.confessionId) return item.key === homes.confessionId;
-            return !!item.legacy;
-        },
-        showsPastoral(item) {
-            const homes = this.legacyHomes();
-            if (homes.pastoralId) return item.key === homes.pastoralId;
-            return !!item.legacy;
-        },
         kindLabel(kind) {
             const labels = liturgyCore().KIND_LABELS;
             return (labels && labels[kind]) || kind;
@@ -847,7 +845,11 @@ function serviceForm() {
                 } else if (el.primitive === 'song' && typeof current === 'string') {
                     s.liturgy[el.id] = { name: current, id: null };
                 }
-                if ((el.prayedByOther || el.hasRole) && !s.carriedBy[el.id]) {
+                // A role that must be carried still needs an object for its
+                // picker. A prayer someone else MAY pray does not: an empty
+                // box there is not a prayer leader, and seeding one made the
+                // Sunday look short (MS-808).
+                if (el.hasRole && !s.carriedBy[el.id]) {
                     s.carriedBy[el.id] = { name: '', id: null };
                 }
             }
@@ -867,17 +869,19 @@ function serviceForm() {
             s.hasBaptism = this._orderHasBaptism(s) && named;
         },
 
-        // Pastoral-prayer subjects (the two prayed-for members and their
-        // request texts) are asked for unless this Sunday's prayer is
-        // congregational.
-        get showPrayerSubjects() {
-            return this.service.liturgy.prayerLabel !== 'Congregational Prayer';
+        // Service Guide button: Printable linked on this Sunday's Liturgy Order (MS-762).
+        serviceGuideTarget() {
+            return liturgyCore().serviceGuideTarget(this.service, this.liturgyCatalog, {
+                date: this.date,
+                occurrenceId: this.sundayOccurrenceId || '',
+                printables: this.liturgyPrintables,
+                viewerCanEdit: !!this.canEdit,
+            });
         },
-
-        // The single shared routing rule (calendar + this page never drift).
+        get serviceGuideEnabled() { return !!this.serviceGuideTarget().enabled; },
         guideGenerateHref() {
-            if (window.GuideStore) return GuideStore.guideHref(this.service, this.date);
-            return 'service-guide-editor.html?date=' + encodeURIComponent(this.date);
+            const target = this.serviceGuideTarget();
+            return target.enabled ? target.href : '#';
         },
 
         // --- Hymn Preview ---
@@ -947,12 +951,13 @@ function serviceForm() {
             return (item && item.requestsWho) || 'either';
         },
         prayerChoices(who, currentId) {
-            const NEVER = '0000-00-00';
-            const last = (m) => (m && m.lastPastoralPrayerDate) || NEVER;
+            const sortKey = (m) => (window.PastoralPrayerCore
+                ? PastoralPrayerCore.rotationSortKey(m && m.lastPastoralPrayerDate)
+                : '');
             const list = (this.prayerMembers || [])
                 .filter(m => who !== 'male' && who !== 'female' || m.sex === who)
                 .slice()
-                .sort((a, b) => String(last(a)).localeCompare(String(last(b))));
+                .sort((a, b) => sortKey(a).localeCompare(sortKey(b)));
             if (currentId && !list.some(m => m.id === currentId)) {
                 const found = (this.prayerMembers || []).find(m => m.id === currentId);
                 if (found) list.unshift(found);
@@ -1105,17 +1110,27 @@ function serviceForm() {
             }
         },
 
-        // Typed lines belong to this Sunday. Printed lines belong to whatever
-        // event wrote them — a class, a one-off, the Sunday Service — and this
-        // tab only shows the ones the handed-out guide would print.
+        // Typed lines belong to this Sunday's service-guide fill-in. Printed
+        // lines belong to whatever event wrote them — a class, a one-off, the
+        // Sunday Service — and this tab only shows the ones the handed-out
+        // guide would print.
         async loadSundayAnnouncements() {
             if (!this.date || !window.SundayTypedCore || !window.PrintedAnnouncementGuide || !window.PrintedAnnouncementLines) return;
             this.announcementsLoading = true;
             this.announcementsError = '';
             try {
-                const snap = await db.collection('services').doc(this.date).get();
-                const service = snap.exists ? snap.data() : null;
-                const items = window.SundayTypedCore.fromService(service).announcements || [];
+                const printableId = (this.serviceGuideTarget() || {}).printableId;
+                const occId = this.sundayOccurrenceId;
+                let items = [];
+                if (printableId && occId) {
+                    const snap = await db.collection('event_occurrences').doc(occId).get();
+                    const data = snap.exists ? snap.data() : null;
+                    const bag = data && data.printableInputs && data.printableInputs[printableId];
+                    const text = bag && Object.prototype.hasOwnProperty.call(bag, 'legacy_announcements')
+                        ? bag.legacy_announcements
+                        : '';
+                    items = text ? window.SundayTypedCore.asAnnouncements(text) : [];
+                }
                 this.typedAnnouncements = items.map(item => ({
                     title: item.title || '',
                     content: item.content || '',
@@ -1145,16 +1160,31 @@ function serviceForm() {
 
         async saveSundayAnnouncements() {
             if (!this.canEdit || !this.date || !window.SundayTypedCore || this.announcementsSaving) return;
+            const printableId = (this.serviceGuideTarget() || {}).printableId;
+            const occId = this.sundayOccurrenceId;
+            if (!printableId || !occId) {
+                this.announcementsStatus = 'Link a service guide before saving announcements.';
+                return;
+            }
             this.announcementsSaving = true;
             this.announcementsStatus = '';
             try {
-                const ref = db.collection('services').doc(this.date);
+                const Typed = window.SundayTypedCore;
+                const text = Typed.announcementsText(Typed.asAnnouncements(this.typedAnnouncements));
+                if (window.EventsStore && window.EventsStore.loadOccurrence) {
+                    const occ = await window.EventsStore.loadOccurrence(db, occId);
+                    if (occ && occ.stored === false && window.EventsStore.ensureOccurrenceDocument) {
+                        await window.EventsStore.ensureOccurrenceDocument(db, occ);
+                    }
+                }
+                const ref = db.collection('event_occurrences').doc(occId);
                 const snap = await ref.get();
-                const data = snap.exists ? snap.data() : {};
-                const stored = window.SundayTypedCore.normalise(data.typedContent);
-                stored.announcements = window.SundayTypedCore.asAnnouncements(this.typedAnnouncements);
-                await ref.set({ typedContent: stored }, { merge: true });
-                this.typedAnnouncements = stored.announcements.map(item => ({
+                const prev = (snap && snap.exists && snap.data() && snap.data().printableInputs) || {};
+                const bag = Object.assign({}, prev[printableId] || {}, { legacy_announcements: text });
+                const next = Object.assign({}, prev);
+                next[printableId] = bag;
+                await ref.set({ printableInputs: next }, { merge: true });
+                this.typedAnnouncements = Typed.asAnnouncements(text).map(item => ({
                     title: item.title,
                     content: item.content,
                 }));
@@ -1190,7 +1220,7 @@ function serviceForm() {
                 if (user) {
                     try {
                         const userData = await getUserData(user.uid);
-                        const permissionLevel = (userData && (userData.permissionLevel || userData.role)) || 'viewer';
+                        const permissionLevel = (window.AccessCore ? AccessCore.permissionLevelOf(userData) : 'viewer');
                         this.currentPermissionLevel = permissionLevel;
                         Object.assign(this, AccessCore.pageFlags(userData));
                         this.canEdit = this.canWriteEditor;
@@ -1417,11 +1447,6 @@ function serviceForm() {
                 this.service.keyVerse = data.keyVerse || '';
                 this.service.liturgyOrderId = typeof data.liturgyOrderId === 'string' ? data.liturgyOrderId : '';
                 this.service.liturgyLeftovers = Array.isArray(data.liturgyLeftovers) ? data.liturgyLeftovers : [];
-                // An Irregular Service from before Liturgy Orders: its custom
-                // elements are shown read-only and kept as stored (ADR-0080).
-                this.service.isIrregular = data.isIrregular || false;
-                this.service.irregularElements = stampRowIds(data.irregularElements);
-                
                 this.service.serviceLeader.name = data.serviceLeader || '';
                 this.service.serviceLeader.id = data.serviceLeaderId || null;
                 this.service.musicLeader.name = data.musicLeader || '';
@@ -1432,27 +1457,15 @@ function serviceForm() {
                 this.service.preacher.name = data.preacher || '';
                 this.service.preacher.id = data.preacherId || null;
                 
-                this.service.prayerPraise.name = data.prayerPraiseName || '';
-                this.service.prayerPraise.id = data.prayerPraiseId || null;
-                this.service.prayerConfession.name = data.prayerConfessionName || '';
-                this.service.prayerConfession.id = data.prayerConfessionId || null;
 
                 this.service.elements.name = data.elementsName || '';
                 this.service.elements.id = data.elementsId || null;
                 this.service.other.name = data.otherName || '';
                 this.service.other.id = data.otherId || null;
 
-                // Auto-show prayer pickers if they have data
-                if (this.service.prayerPraise.id) this.showPrayerPraise = true;
-                if (this.service.prayerConfession.id) this.showPrayerConfession = true;
-
                 this.service.removedHymns = Array.isArray(data.removedHymns) ? data.removedHymns : [];
                 this.service.notes = data.notes || {};
-                const carriedBy = {};
-                Object.entries(data.carriedBy || {}).forEach(([key, ref]) => {
-                    if (ref && typeof ref === 'object') carriedBy[key] = { name: ref.name || '', id: ref.id || null };
-                });
-                this.service.carriedBy = carriedBy;
+                this.service.carriedBy = editorCarriedBy(data.carriedBy);
 
                 // Every liturgy value on the document, whichever order it was
                 // filled under: a value under an element this order leaves out
@@ -1499,9 +1512,36 @@ function serviceForm() {
             return { text: '', initialSentDate: null, reminderSent: false, source: null, noteGenerated: false };
         },
 
+        // Notice-day list on the prayer that named this person.
+        noticeDaysFor(which) {
+            for (const el of this.orderElements) {
+                if (!el.requests) continue;
+                const list = this.service.liturgy[el.id];
+                if (!Array.isArray(list)) continue;
+                if (list.some(p => p && p.id === which)) {
+                    return Array.isArray(el.noticeDays) ? el.noticeDays.slice() : [];
+                }
+            }
+            return [];
+        },
+
+        // YYYY-MM-DD dates when ask texts are scheduled for this person.
+        prayerScheduledDates(which) {
+            if (!this.date || typeof DateUtils === 'undefined') return [];
+            const days = this.noticeDaysFor(which)
+                .map(Number)
+                .filter(n => Number.isFinite(n) && n > 0);
+            const uniq = Array.from(new Set(days)).sort((a, b) => b - a);
+            return uniq.map(n => DateUtils.addDays(this.date, -n));
+        },
+
+        prayerScheduleLabel(which) {
+            const dates = this.prayerScheduledDates(which);
+            if (!dates.length) return 'No texts scheduled';
+            return 'Scheduled texts: ' + dates.join(', ');
+        },
+
         subjectFor(which) {
-            if (which === 'male') return this.service.liturgy.prayerMale || { id: null, name: '' };
-            if (which === 'female') return this.service.liturgy.prayerFemale || { id: null, name: '' };
             for (const el of this.orderElements) {
                 if (!el.requests) continue;
                 const list = this.service.liturgy[el.id];
@@ -1514,7 +1554,7 @@ function serviceForm() {
         },
 
         prayerRequestKeys() {
-            const keys = ['male', 'female'];
+            const keys = [];
             for (const el of this.orderElements) {
                 if (!el.requests) continue;
                 const list = this.service.liturgy[el.id];
@@ -1578,7 +1618,7 @@ function serviceForm() {
         prayerRequestStatus(which) {
             const subject = this.subjectFor(which);
             if (!subject || !subject.id) return '';
-            const s = this.prayerRequests[which];
+            const s = this.prayerRequests[which] || this.blankPrayerRequest();
             if ((s.text || '').trim()) return s.source === 'reply' ? 'Replied' : 'Filled in';
             const person = this.peopleRegistry.find(p => p.id === subject.id);
             const phone = person && person.contact ? (person.contact.phone || '') : '';
@@ -1595,7 +1635,8 @@ function serviceForm() {
                 alert('Save the service with this person selected before adding a prayer request.');
                 return;
             }
-            const state = this.prayerRequests[which];
+            const state = this.prayerRequests[which] || this.blankPrayerRequest();
+            this.prayerRequests[which] = state;
             const text = (state.text || '').trim();
             const personRef = db.collection('people').doc(subject.id);
             const reqRef = personRef.collection('prayer_requests').doc(this.date);
@@ -1638,14 +1679,16 @@ function serviceForm() {
             if (!this.canDecide) return false;
             const subject = this.subjectFor(which);
             if (!subject || !subject.id) return false;
-            if ((this.prayerRequests[which].text || '').trim()) return false;
+            const s = this.prayerRequests[which] || this.blankPrayerRequest();
+            if ((s.text || '').trim()) return false;
             return true;
         },
 
         prayerSendTitle(which) {
             const subject = this.subjectFor(which);
             if (!subject || !subject.id) return 'Select this person and save first';
-            if ((this.prayerRequests[which].text || '').trim()) return 'Already filled — nothing to send';
+            const s = this.prayerRequests[which] || this.blankPrayerRequest();
+            if ((s.text || '').trim()) return 'Already filled — nothing to send';
             if (!this.canSendPrayerText(which)) return 'Nothing to send';
             return 'Tell this person — Mosaic picks how';
         },
@@ -1672,17 +1715,6 @@ function serviceForm() {
             } finally {
                 this.prayerSending[which] = false;
             }
-        },
-
-        // An Irregular Service from before Liturgy Orders, read-only: its own
-        // elements, each as one line, so nothing it carried is out of sight.
-        get irregularRows() {
-            if (!this.service.isIrregular) return [];
-            return (this.service.irregularElements || []).map((el, index) => {
-                const v = el && el.value;
-                const text = (v && typeof v === 'object') ? (v.name || '') : (v == null ? '' : String(v));
-                return { key: (el && el[ROW_ID]) || 'i' + index, label: (el && el.key) || 'Untitled', value: text };
-            });
         },
 
         async validateForm() {
@@ -1734,8 +1766,6 @@ function serviceForm() {
                     { field: 'serviceLeader', role: 'service_leader' },
                     { field: 'musicLeader', role: 'worship_leader' },
                     { field: 'preacher', role: 'preacher' },
-                    { field: 'prayerPraise', role: 'prayer', metadata: { prayer_type: 'praise' } },
-                    { field: 'prayerConfession', role: 'prayer', metadata: { prayer_type: 'confession' } },
                     { field: 'elements', role: 'elements' },
                     { field: 'other', role: 'other' }
                 ];
@@ -1776,6 +1806,7 @@ function serviceForm() {
                     for (const personId of helperChanges.added) {
                         await this._addInvolvement(batch, personId, 'worship_helper');
                     }
+                    await this._syncPrayerLeaderInvolvement(batch, original, this.service);
                 } else {
                     // Nothing is owed yet — and anything already here is a record
                     // of something that has not happened, whether this save put it
@@ -1797,6 +1828,7 @@ function serviceForm() {
                     for (const personId of helperIds) {
                         await this._removeInvolvement(batch, personId, 'worship_helper');
                     }
+                    await this._syncPrayerLeaderInvolvement(batch, original, this.service);
                 }
 
                 // Baptism presence is read off this Sunday's Liturgy Order and its
@@ -1828,12 +1860,13 @@ function serviceForm() {
                 // that arrives after the last read stays on the page, so the
                 // next save writes it instead of treating it as done.
                 let frozenService = null;
-                const loadedSunday = pastoralSunday(original, this.date);
+                const requestElements = liturgyCore().elementsFor(this.service, this.liturgyCatalog);
+                const loadedSunday = pastoralSunday(original, this.date, requestElements);
                 const taken = await PastoralPrayerCore.takeSundayAfterHistoryRead(
                     loadedSunday,
                     () => {
                         frozenService = JSON.parse(JSON.stringify(this.service));
-                        return pastoralSunday(frozenService, this.date);
+                        return pastoralSunday(frozenService, this.date, requestElements);
                     },
                     (personIds) => this._readPastoralHistories(personIds)
                 );
@@ -1853,6 +1886,11 @@ function serviceForm() {
                 // lose a race it never entered. See changedFieldPaths.
                 const flatNow = flattenServiceForSave(frozenService);
                 const toSave = changedFieldPaths(flattenServiceForSave(original), flatNow);
+                Object.keys(toSave).forEach((path) => {
+                    if (toSave[path] === FIELD_DELETE) {
+                        toSave[path] = firebase.firestore.FieldValue.delete();
+                    }
+                });
 
                 // Whether this Sunday still owes its serve records. The
                 // scheduled job converts only Services carrying it, which is
@@ -1870,9 +1908,14 @@ function serviceForm() {
                 //
                 // Taking an element back out takes your name out with it.
                 const authorRemove = firebase.firestore.FieldValue.delete();
+                //
+                // A light touch to somebody else's element — a typo fixed —
+                // leaves their name on it, so `original` goes along to say
+                // what was there and who chose it.
                 Object.assign(toSave, ServiceAuthorship.stampsFor(
                     toSave, this.me,
-                    firebase.firestore.FieldValue.serverTimestamp(), authorRemove));
+                    firebase.firestore.FieldValue.serverTimestamp(), authorRemove,
+                    original));
 
                 const serviceRef = db.collection('services').doc(this.date);
                 if (this._docExists) {
@@ -2085,11 +2128,16 @@ function serviceForm() {
             return d.textContent || d.innerText || '';
         },
 
-        _buildItem(el, lit) {
+        /**
+         * @param {any} el
+         * @param {any} lit
+         * @param {any} tally
+         */
+        _buildItem(el, lit, tally) {
             const key = el.id;
             const type = this._ROW_TYPES[el.primitive];
             const removed = type === 'hymn' && this.isHymnRemoved(key);
-            let value = '', status = 'empty', emptyLabel = '';
+            let value, status, emptyLabel;
             if (type === 'hymn') {
                 const ref = lit[key] || {};
                 value = ref.name || '';
@@ -2112,10 +2160,23 @@ function serviceForm() {
                 status = names.length ? 'people' : 'empty';
                 emptyLabel = el.requests ? 'Choose who is prayed for…' : '';
                 if (!el.requests && el.prayedByOther) {
+                    const leader = (tally || []).find(function (/** @type {any} */ item) {
+                        return item.key === el.id && item.part === 'leader';
+                    });
                     const who = liturgyCore().carrierOf(this.service, el);
-                    value = who ? who.name : '';
-                    status = value ? 'people' : 'empty';
-                    emptyLabel = 'Name who prays…';
+                    if (leader && leader.state === 'set' && who) {
+                        value = who.name;
+                        status = 'people';
+                        emptyLabel = '';
+                    } else if (leader && leader.state === 'blank') {
+                        value = '';
+                        status = 'empty';
+                        emptyLabel = 'Name who prays…';
+                    } else {
+                        value = '';
+                        status = 'empty';
+                        emptyLabel = '';
+                    }
                 }
             } else if (type === 'person') {
                 const ref = lit[key] && !Array.isArray(lit[key]) ? lit[key] : {};
@@ -2138,6 +2199,7 @@ function serviceForm() {
                 requests: el.requests || null,
                 requestsWho: el.requests ? el.requests.who : 'either',
                 requestPeople: el.requests && el.requests.people ? el.requests.people : [],
+                noticeDays: el.requests && Array.isArray(el.noticeDays) ? el.noticeDays.slice() : [],
                 prayedByOther: !!el.prayedByOther,
                 hasRole: el.hasRole,
                 carrierName: carrier ? carrier.name : '',
@@ -2151,31 +2213,15 @@ function serviceForm() {
         // show; no value is dropped.
         get rows() {
             const lit = this.service.liturgy;
-            return this.orderElements.map(el => this._buildItem(el, lit));
+            const tally = window.HomeDashboard
+                ? window.HomeDashboard.checklist(
+                    flattenServiceForSave(this.service), this.liturgyCatalog)
+                : [];
+            return this.orderElements.map(el => this._buildItem(el, lit, tally));
         },
 
-        // The locked order, plus one trailing row when an older prayer field
-        // has no element to sit under. That row is not part of the order.
         get displayRows() {
-            const rows = this.rows.slice();
-            const homes = this.legacyHomes();
-            if (homes.praiseId && homes.confessionId && homes.pastoralId) return rows;
-            rows.push({
-                key: '__legacy_prayer__',
-                type: 'legacy',
-                legacy: true,
-                label: '',
-                removed: false,
-                requests: null,
-                prayedByOther: false,
-                hasRole: false,
-                noteOn: false,
-                value: '',
-                emptyLabel: '',
-                noted: false,
-                carrierName: '',
-            });
-            return rows;
+            return this.rows.slice();
         },
 
         // The order's song elements, for linking typed hymns and printing
@@ -2201,14 +2247,13 @@ function serviceForm() {
 
         // "X of Y set" — the same tally the home card and the phone use
         // (home-dashboard-core). This page used to add theme, the key verse,
-        // and the optional prayer leaders, and to count a hymn name as finished
-        // before it was linked, so the two screens disagreed.
+        // and every optional prayer leader, and to count a hymn name as
+        // finished before it was linked, so the two screens disagreed. An
+        // optional prayer leader is in that tally only once one is added.
         get filledLabel() {
             const ready = window.HomeDashboard.readiness(
                 flattenServiceForSave(this.service), this.liturgyCatalog);
-            // An old irregular Sunday has not been given an order yet. The
-            // fraction would score it as a blank Standard, which it is not.
-            return ready.irregular ? 'Custom order' : ready.fraction;
+            return ready.fraction;
         },
 
         // Service notes surfaced for the leader, in service order, one card
@@ -2230,13 +2275,12 @@ function serviceForm() {
 
         // A row opens only when its panel has a field. A hymn, a scripture, a
         // line of text, or a person is entered there. So is a prayer's people
-        // and its leader, and the older praise, confession, and pastoral
-        // fields that belong to this row. A prayer or an Other that is only a
-        // name on the order has nothing to enter, so it stays closed.
+        // and its leader, and the older praise and confession leaders that
+        // belong to this row. A prayer or an Other that is only a name on the
+        // order has nothing to enter, so it stays closed.
         rowOpens(item) {
             if (!item || item.removed || item.type === 'legacy') return false;
             if (item.noteOn || item.hasRole || item.requests || item.prayedByOther) return true;
-            if (this.showsPraise(item) || this.showsConfession(item) || this.showsPastoral(item)) return true;
             return item.type === 'hymn' || item.type === 'verse' || item.type === 'text'
                 || item.type === 'people' || item.type === 'person';
         },
@@ -2463,6 +2507,57 @@ function serviceForm() {
         },
 
         // ── People elements (Baptism Candidates, or any other) ───────────────
+        // A prayer leader counts only after one is added (MS-808). The order's
+        // "may pray" flag leaves the box closed; this opens an empty slot.
+        /**
+         * @param {string} key
+         */
+        prayerLeaderClearLabel(key) {
+            const carried = /** @type {Record<string, any>} */ (this.service.carriedBy || {});
+            const ref = carried[key];
+            return slotNamed(ref) ? 'Clear prayer leader' : 'Remove prayer leader';
+        },
+        /**
+         * @param {string} key
+         */
+        prayerLeaderOpen(key) {
+            if (!window.HomeDashboard || !window.HomeDashboard.prayerLeaderTally) return false;
+            const el = (this.orderElements || []).find(function (/** @type {any} */ item) {
+                return item && item.id === key;
+            });
+            return !!window.HomeDashboard.prayerLeaderTally(this.service, el);
+        },
+        /**
+         * @param {string} key
+         */
+        addPrayerLeader(key) {
+            if (!this.service.carriedBy || typeof this.service.carriedBy !== 'object') {
+                this.service.carriedBy = {};
+            }
+            const carried = /** @type {Record<string, any>} */ (this.service.carriedBy);
+            const current = carried[key];
+            if (current && typeof current === 'object' && !Array.isArray(current)) return;
+            carried[key] = { name: '', id: null };
+        },
+        // A named leader clears back to an empty slot, which stays in the
+        // tally. Clearing that empty slot removes it.
+        /**
+         * @param {string} key
+         */
+        clearPrayerLeader(key) {
+            const raw = this.service.carriedBy;
+            if (!raw || typeof raw !== 'object') return;
+            const map = /** @type {Record<string, any>} */ (raw);
+            const ref = map[key];
+            if (!ref || typeof ref !== 'object') return;
+            if (slotNamed(ref)) {
+                ref.id = null;
+                ref.name = '';
+                return;
+            }
+            delete map[key];
+        },
+
         addPerson(key) {
             if (!Array.isArray(this.service.liturgy[key])) this.service.liturgy[key] = [];
             this.service.liturgy[key].push({ name: '', id: null, [ROW_ID]: newRowId() });
@@ -2483,21 +2578,15 @@ function serviceForm() {
             this.service.musicLeader = { name: '', id: null };
             this.service.musicHelpers = [];
             this.service.preacher = { name: '', id: null };
-            this.service.prayerPraise = { name: '', id: null };
-            this.service.prayerConfession = { name: '', id: null };
             this.service.elements = { name: '', id: null };
             this.service.other = { name: '', id: null };
             this.service.hasBaptism = false;
             this.service.removedHymns = [];
             this.service.notes = {};
             this.service.carriedBy = {};
-            const liturgy = {
-                prayerMale: { id: null, name: '' },
-                prayerFemale: { id: null, name: '' },
-                prayerLabel: 'Pastoral Prayer',
-            };
+            const liturgy = {};
             Object.keys(this.service.liturgy || {}).forEach(key => {
-                if (!(key in liturgy)) liturgy[key] = '';
+                liturgy[key] = '';
             });
             this.service.liturgy = liturgy;
             for (const el of this.liturgyCatalog.elements) {
@@ -2683,6 +2772,23 @@ function serviceForm() {
         },
 
         // --- Involvement Helpers ---
+        async _syncPrayerLeaderInvolvement(batch, originalService, nextService) {
+            if (typeof ServiceInvolvementCore === 'undefined') return;
+            const catalog = this.liturgyCatalog;
+            const kinds = ['praise', 'confession'];
+            const prayerRecords = (doc) => ServiceInvolvementCore.servingInvolvement(
+                flattenServiceForSave(doc), catalog).filter((r) => r.type === 'prayer');
+            const oldList = prayerRecords(originalService);
+            const newList = prayerRecords(nextService);
+            for (const kind of kinds) {
+                const oldId = (oldList.find(r => r.metadata && r.metadata.prayer_type === kind) || {}).personId || null;
+                const newId = (newList.find(r => r.metadata && r.metadata.prayer_type === kind) || {}).personId || null;
+                if (oldId === newId) continue;
+                if (oldId) await this._removeInvolvement(batch, oldId, 'prayer', { prayer_type: kind });
+                if (newId) await this._addInvolvement(batch, newId, 'prayer', { prayer_type: kind });
+            }
+        },
+
         async _addInvolvement(batch, personId, role, metadata = null) {
             const personRef = db.collection('people').doc(personId);
             const invRef = personRef.collection('involvement').doc();
@@ -2769,6 +2875,24 @@ function personPicker(personRef, parent = null, suggestionsKey = null, field = n
             const stat = this.field && UsageStats.personStatFor(candidate, this.field);
             return stat && stat.count ? `${stat.count}×` : '';
         },
+        optionLabel(person) {
+            if (!person || person.isNew) return (person && person.name) || '';
+            if (typeof PeoplePickerCore !== 'undefined') {
+                return PeoplePickerCore.optionLabel(person, this.results);
+            }
+            return person.name || '';
+        },
+        finalizePickerResults(found, registry) {
+            if (typeof PeoplePickerCore === 'undefined') return found;
+            let list = PeoplePickerCore.finalizePickerList(found, registry, {
+                keepIds: [this.personRef && this.personRef.id],
+            });
+            const suggestions = this.suggestions;
+            if (suggestions && suggestions.length) {
+                list = PeoplePickerCore.excludeIds(list, suggestions);
+            }
+            return list;
+        },
         get suggestions() {
             if (typeof this.suggestionsKey === 'string' && this.parent && this.parent.prayerSuggestions) {
                 return this.parent.prayerSuggestions[this.suggestionsKey] || [];
@@ -2818,7 +2942,7 @@ function personPicker(personRef, parent = null, suggestionsKey = null, field = n
 
             if (hasFuse) {
                 this.hadFuse = true;
-                let found = [];
+                let found;
                 if (!this.query || this.query.trim().length === 0) {
                     if (this.suggestionsKey) {
                         found = [];
@@ -2835,7 +2959,7 @@ function personPicker(personRef, parent = null, suggestionsKey = null, field = n
                         found.push({ id: 'NEW', name: this.query.trim(), isNew: true });
                     }
                 }
-                this.results = found;
+                this.results = this.finalizePickerResults(found, registry);
                 return;
             }
 
@@ -2864,7 +2988,7 @@ function personPicker(personRef, parent = null, suggestionsKey = null, field = n
                     found.push({ id: 'NEW', name: this.query.trim(), isNew: true });
                 }
 
-                this.results = found;
+                this.results = this.finalizePickerResults(found, this.parent && this.parent.peopleRegistry);
             } catch (error) {
                 console.error("Error searching people:", error);
             }
@@ -3043,5 +3167,5 @@ function hymnPicker(hymnRef, parent = null) {
 
 // Expose pure helpers for Node-based unit tests; ignored in the browser.
 if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { worshipHelperInvolvementChanges, personRefSetChanges, parseBaptismNames, normalizeDottedKeys, coerceBaptismCandidates, flattenServiceForSave, changedFieldPaths, applyFlatFieldPath, pickSaveFields, remoteAdoptions, ROW_ID, newRowId, withRowIds, stampRowIds, reconcilePersonList, serviceSnapshot, stepHref, stepToService, serviceForm };
+    module.exports = { worshipHelperInvolvementChanges, personRefSetChanges, parseBaptismNames, normalizeDottedKeys, coerceBaptismCandidates, flattenServiceForSave, editorCarriedBy, changedFieldPaths, applyFlatFieldPath, pickSaveFields, remoteAdoptions, FIELD_DELETE, ROW_ID, newRowId, withRowIds, stampRowIds, reconcilePersonList, serviceSnapshot, stepHref, stepToService, serviceForm };
 }

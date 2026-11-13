@@ -1,3 +1,4 @@
+/* global AccessCore */
 const { test } = require('node:test');
 const assert = require('node:assert');
 
@@ -98,7 +99,7 @@ function fakeDb(seed = {}, { deny = [], failWrites = false } = {}) {
 global.window = global;
 global.AccessCore = require('../public/access-core.js');
 const Roles = require('../public/roles-core.js');
-const EventsCore = require('../public/events-core.js');
+require('../public/events-core.js');
 require('../public/relationship-core.js');
 require('../public/roles-manager.js');
 
@@ -1180,15 +1181,15 @@ test('an editor can actually reach the Roles Manager from a phone', () => {
         'the route opens the page outside the shell');
 
     const appJs = fs.readFileSync(path.join(PUBLIC, 'mobile', 'app.js'), 'utf8');
-    const tile = appJs.match(/{[^{}]*route: "rolesManager"[^{}]*}/);
-    assert.ok(tile, 'the phone home has no Roles Manager tile');
+    assert.match(appJs, /homeTiles\(/, 'the phone home no longer reads the shared tile list');
+    const onHome = level => D.homeTiles(level).some(t => t.route === 'rolesManager');
 
     // The same gate as the dashboard card it mirrors — a tile offered to
     // somebody the page will bounce is worse than no tile.
     const gate = ['editor', 'elder', 'admin', 'super_admin'];
-    gate.forEach(level => assert.ok(tile[0].indexOf('"' + level + '"') !== -1,
+    gate.forEach(level => assert.ok(onHome(level),
         level + ' is offered the Roles Manager on the web but not on a phone'));
-    ['member', 'viewer'].forEach(level => assert.equal(tile[0].indexOf('"' + level + '"'), -1,
+    ['member', 'viewer'].forEach(level => assert.equal(onHome(level), false,
         level + ' is offered a page they will be refused'));
 
     const page = window.RolesManager();
@@ -1319,7 +1320,7 @@ test('the page\'s own styles are all still inside the stylesheet', () => {
     // And nothing outside a comment may start with prose.
     const code = style.replace(/\/\*[\s\S]*?\*\//g, '');
     code.split('\n').map(l => l.trim()).filter(Boolean).forEach(line => {
-        assert.ok(/[{}:;,]|^<style>$|^[.\w#\[@]/.test(line),
+        assert.ok(/[{}:;,]|^<style>$|^[.\w#[@]/.test(line),
             'this line is neither CSS nor a comment: ' + line);
     });
 });

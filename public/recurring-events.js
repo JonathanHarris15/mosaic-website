@@ -232,7 +232,7 @@
                             const data = await getUserData(user.uid);
                             this.account = data || null;
                             this.personId = (data && data.personId) || null;
-                            resolve((data && (data.permissionLevel || data.role)) || 'viewer');
+                            resolve((window.AccessCore ? AccessCore.permissionLevelOf(data) : 'viewer'));
                         } catch (e) {
                             this.personId = null;
                             resolve('viewer');
@@ -1405,7 +1405,7 @@
                 const name = (def && def.name) || slug;
 
                 this.saving = true;
-                let usage = [];
+                let usage;
                 try {
                     usage = await this.seriesRoleUsage(slug);
                 } catch (e) {

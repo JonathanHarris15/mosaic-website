@@ -19,8 +19,10 @@ function fullService() {
         musicLeaderId: 'p-mia',
         musicHelpers: [{ name: 'Ade Bello', id: 'p-ade' }, { name: 'Ruth Vale', id: 'p-ruth' }],
         preacherId: 'p-jono',
-        prayerPraiseId: 'p-ana',
-        prayerConfessionId: 'p-ben',
+        carriedBy: {
+            prayerOfPraise: { id: 'p-ana', name: 'Ana' },
+            prayerOfConfession: { id: 'p-ben', name: 'Ben' },
+        },
         elementsId: 'p-cara',
         otherId: 'p-dev',
     };
@@ -90,7 +92,10 @@ test('the two Music Helpers get one record each', () => {
 
 test('the two prayers get one record each, told apart by metadata', () => {
     const records = fn.conversion(
-        { prayerPraiseId: 'p-ana', prayerConfessionId: 'p-ana' }, '2026-10-12', '2026-10-13');
+        { carriedBy: {
+            prayerOfPraise: { id: 'p-ana', name: 'Ana' },
+            prayerOfConfession: { id: 'p-ana', name: 'Ana' },
+        } }, '2026-10-12', '2026-10-13');
     assert.strictEqual(records.length, 2);
     assert.notStrictEqual(records[0].id, records[1].id, 'one person can lead both');
 });

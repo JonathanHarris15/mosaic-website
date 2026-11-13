@@ -78,6 +78,46 @@ test('a field filled on the event is a blank, including one cell of a list', () 
     assert.equal(Fill.tally(empty, () => '').left, 1);
 });
 
+test('a column wired on the repeating element itself is a cell of that row', () => {
+    const project = guide([
+        {
+            id: 'line', tag: 'p', text: 'Prompt',
+            repeat: { source: 'event_list', params: { inputId: 'prompts' } },
+            bind: { text: { scope: 'item', field: 'line' } },
+        },
+    ], [
+        { id: 'prompts', label: 'Prayer prompts', kind: 'list', fields: [{ id: 'line', label: 'Prompt', kind: 'text' }] },
+    ]);
+    const index = Fill.indexProject(project);
+    const first = Fill.slotFor(project.pages[0].nodes[0], index);
+    assert.equal(first.store, 'event-row');
+    assert.equal(first.id, 'row:prompts:0:line');
+    assert.equal(first.rowIndex, 0);
+    const second = Fill.slotFor({
+        id: 'line~1', tag: 'p', bind: { text: { scope: 'item', field: 'line' } },
+    }, index);
+    assert.equal(second.id, 'row:prompts:1:line');
+    assert.equal(second.rowIndex, 1);
+});
+
+test('adding a row leaves a blank that can be written and removed', () => {
+    const input = { id: 'prompts', label: 'Prayer prompts', kind: 'list', fields: [{ id: 'line', label: 'Prompt', kind: 'text' }] };
+    let bag = Fill.addEventRow({}, input);
+    assert.deepEqual(bag.prompts, [{ line: '' }]);
+    bag = Fill.setEventCell(bag, input, 0, 'line', 'Pray for churches');
+    bag = Fill.addEventRow(bag, input);
+    assert.deepEqual(bag.prompts, [{ line: 'Pray for churches' }, { line: '' }]);
+    assert.deepEqual(Fill.unplacedColumns(input, []).map(c => c.id), ['line']);
+    assert.deepEqual(Fill.unplacedColumns(input, ['line']), []);
+    bag = Fill.removeEventRow(bag, input, 0);
+    assert.deepEqual(bag.prompts, [{ line: '' }]);
+    bag = Fill.removeEventRow(bag, input, 0);
+    assert.deepEqual(bag.prompts, []);
+    assert.deepEqual(Fill.removeEventRow(bag, input, 3).prompts, []);
+    assert.deepEqual(Fill.removeKidsLine(['Jonah', ''], 1), ['Jonah']);
+    assert.deepEqual(Fill.removeKidsLine(['Jonah'], 4), ['Jonah']);
+});
+
 test('a kids question row is a blank and an announcement list is not', () => {
     const project = guide([
         {
@@ -178,6 +218,21 @@ test('the preview is where an editor fills blanks, and the link place does not l
     const folioFn = viewJs.slice(viewJs.indexOf('printFolio()'));
     assert.equal(printFn.includes('fillFor'), false);
     assert.equal(folioFn.includes('fillFor'), false);
+    const fillCss = viewHtml.slice(viewHtml.indexOf('textarea.pv-fill.pv-fill--text {'), viewHtml.indexOf('.pv-fill-extra .pv-fill'));
+    assert.match(fillCss, /white-space:\s*pre-wrap/, 'a filled blank wraps');
+    assert.match(fillCss, /overflow-wrap:\s*break-word/, 'a long word stays inside the blank');
+    assert.match(fillCss, /field-sizing:\s*content/, 'a value sizes to its words');
+    assert.match(fillCss, /:placeholder-shown[\s\S]*white-space:\s*nowrap/, 'an empty name stays one line');
+    assert.match(fillCss, /text-overflow:\s*ellipsis/, 'a long name clips with an ellipsis');
+    assert.match(fillCss, /:placeholder-shown[\s\S]*field-sizing:\s*fixed/, 'an empty name does not size the blank');
+    assert.match(fillCss, /:placeholder-shown[\s\S]*min-width:\s*0/, 'an empty name uses the row it already has');
+    assert.equal(
+        /:where\(:has\(\.pv-fill\)\)\s*\{[^}]*min-width:\s*0/.test(viewHtml),
+        false,
+        'a filled value keeps the width of its words'
+    );
+    assert.match(viewHtml, /:has\(> \.pv-fill:placeholder-shown\)\)\s*\{[^}]*padding-inline-start:\s*0\.5em/, 'a name stays clear of its label');
+    assert.match(viewHtml, /\.pv-fill-extra\s*\{[^}]*min-width:\s*8em/, 'an unplaced column keeps its minimum');
     [eventHtml, sundayHtml].forEach(html => {
         assert.equal(html.includes('For the linked printable'), false);
         assert.equal(html.includes('Save for this date'), false);

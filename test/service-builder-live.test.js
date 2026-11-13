@@ -24,6 +24,7 @@ const vm = require('node:vm');
 
 const {
     flattenServiceForSave,
+    editorCarriedBy,
     changedFieldPaths,
     applyFlatFieldPath,
     pickSaveFields,
@@ -41,8 +42,6 @@ function model(overrides = {}) {
         musicLeader: { id: null, name: '' },
         musicHelpers: [],
         preacher: { id: null, name: '' },
-        prayerPraise: { id: null, name: '' },
-        prayerConfession: { id: null, name: '' },
         elements: { id: null, name: '' },
         other: { id: null, name: '' },
         hasBaptism: false,
@@ -86,14 +85,14 @@ test('every field a save writes can be written back onto the model', () => {
         musicLeader: { id: 'p-2', name: 'Ben Ross' },
         musicHelpers: [{ id: 'p-3', name: 'Cara Woo' }],
         preacher: { id: 'p-4', name: 'Dan Hall' },
-        prayerPraise: { id: 'p-5', name: 'Eve Park' },
-        prayerConfession: { id: 'p-6', name: 'Finn Roy' },
+        carriedBy: {
+            prayerOfPraise: { id: 'p-5', name: 'Eve Park' },
+            prayerOfConfession: { id: 'p-6', name: 'Finn Roy' },
+        },
         elements: { id: 'p-7', name: 'Gus Tate' },
         other: { id: 'p-8', name: 'Hal Vane' },
         hasBaptism: true,
         removedHymns: ['hymn2'],
-        isIrregular: true,
-        irregularElements: [{ key: 'Sermon', value: 'John 1' }],
         notes: { hymn1: 'check the key' },
     });
     full.liturgy.hymn1 = { id: 'h-1', name: 'Holy Holy Holy' };
@@ -108,6 +107,17 @@ test('every field a save writes can be written back onto the model', () => {
     }
 
     assert.deepStrictEqual(flattenServiceForSave(rebuilt), flat);
+});
+
+test('a reloaded prayer leader is { id, name } and nothing else', () => {
+    assert.deepStrictEqual(editorCarriedBy({
+        prayerOfPraise: { name: '', id: null, added: true },
+        prayerOfConfession: { name: 'Ada Example', id: 'p1' },
+    }), {
+        prayerOfPraise: { name: '', id: null },
+        prayerOfConfession: { name: 'Ada Example', id: 'p1' },
+    });
+    assert.deepStrictEqual(editorCarriedBy(null), {});
 });
 
 test('a liturgy slot is mutated in place, so the hymn picker keeps its object', () => {
@@ -212,7 +222,7 @@ function loadPage(overrides) {
     sandbox.db = {};
     sandbox.document = { addEventListener() {}, getElementById() { return null; } };
     sandbox.DateUtils = require('../public/date-utils.js');
-    sandbox.GuideStore = require('../public/guide-store.js');
+    sandbox.ServiceDottedKeysCore = require('../public/service-dotted-keys-core.js');
     sandbox.LiturgyOrderCore = require('../public/liturgy-order-core.js');
     sandbox.MosaicIdentity = require('../public/mosaic-identity.js');
     sandbox.ServiceAuthorship = require('../public/service-authorship.js');
@@ -387,11 +397,17 @@ test("another editor's switch lands on this page, and a row that left closes", (
         PresenceStore: { release() {} },
         LiturgyTranslateCore: require('../public/liturgy-translate-core.js'),
     });
+    const shortIds = ['hymn1', 'sermon', 'hymnEnd1'];
+    const byId = new Map(Orders.STANDARD_ELEMENTS.map((el) => [el.id, el]));
     page.liturgyCatalog = Orders.catalogFrom({
-        elements: Orders.STANDARD_ELEMENTS,
         orders: [
             Orders.STANDARD_ORDER,
-            { id: 'short', name: 'Short', elementIds: ['hymn1', 'sermon', 'hymnEnd1'] },
+            {
+                id: 'short',
+                name: 'Short',
+                elementIds: shortIds,
+                elements: shortIds.map((id) => byId.get(id)),
+            },
         ],
     });
     page.originalService = serviceSnapshot(page.service);

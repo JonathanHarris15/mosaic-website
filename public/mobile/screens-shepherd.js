@@ -164,7 +164,6 @@
     var flags = userKnown && props.user && window.AccessCore ? AccessCore.pageFlags(props.user) : null;
     var canReadElder = !!(flags && flags.canReadElder);
     var canDecide = !!(flags && flags.canDecide);
-    var canWriteRecord = !!(flags && flags.canWriteRecord);
     var canReadEditor = !!(flags && flags.canReadEditor);
 
     // Load everything; fetch Tag-Hold history only if a view needs it (ADR-0011).
@@ -439,6 +438,7 @@
     var peopleS = useState([]), tagsS = useState([]), viewsS = useState([]);
     var searchS = useState(""), sortByS = useState("name"), filtersOpenS = useState(false);
     var tagFiltersS = useState([]), tagModeS = useState("any"), statusZonesS = useState([]);
+    var tagHoldsS = useState({}), holdsLoadedS = useState(false);
     var showSaveS = useState(false), saveNameS = useState("");
     var tagModalS = useState(null), addModalS = useState(false);
     var blankPerson = function () {
@@ -456,7 +456,6 @@
     var flags = userKnown && props.user && window.AccessCore ? AccessCore.pageFlags(props.user) : null;
     var canReadElder = !!(flags && flags.canReadElder);
     var canDecide = !!(flags && flags.canDecide);
-    var canWriteRecord = !!(flags && flags.canWriteRecord);
     var canWriteEditor = !!(flags && flags.canWriteEditor);
 
     useEffect(function () {
@@ -466,6 +465,15 @@
         .catch(function () { if (alive) { errS[1](true); loadingS[1](false); } });
       return function () { alive = false; };
     }, []);
+
+    useEffect(function () {
+      if (tagFilters.length !== 1 && sortByS[0] === "tagDate") sortByS[1]("name");
+    }, [tagFilters.length]);
+
+    useEffect(function () {
+      if (sortByS[0] !== "tagDate" || holdsLoadedS[0] || !people.length) return;
+      data.getShepherdingTagHolds(people).then(function (h) { tagHoldsS[1](h); holdsLoadedS[1](true); });
+    }, [sortByS[0], people.length]);
 
     var filtered = people.filter(function (p) {
       if (searchS[0] && String(p.name || "").toLowerCase().indexOf(searchS[0].toLowerCase()) === -1) return false;
@@ -479,8 +487,12 @@
       }
       return true;
     }).sort(function (a, b) {
-      if (sortByS[0] === "name") return String(a.name || "").localeCompare(String(b.name || ""));
-      return statusScore(a.shepherdingStatus) - statusScore(b.shepherdingStatus);
+      var sortKey = sortByS[0];
+      if (sortKey === "tagDate" && tagFilters.length !== 1) sortKey = "name";
+      return window.ShepherdingCore.comparePeopleList(a, b, sortKey, {
+        tagHolds: tagHoldsS[0],
+        tagId: sortKey === "tagDate" ? tagFilters[0] : null,
+      });
     });
 
     var activeFilterCount = tagFilters.length + statusZones.length;
@@ -544,7 +556,9 @@
           <div style=${{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14 }}>
             <span style=${Object.assign({}, SP_OVER, { letterSpacing: "0.14em" })}>Sort</span>
             <div style=${{ display: "flex", background: "var(--surface-container)", borderRadius: "var(--radius)", padding: 3, border: "1px solid var(--outline-variant)", flex: 1 }}>
-              ${[["name", "Name"], ["attention", "Needs Attention"]].map(function (o) {
+              ${[["name", "Name"], ["added", "Date added"], ["tagDate", "Tag date"], ["attention", "Needs attention"]].filter(function (o) {
+                return o[0] !== "tagDate" || tagFilters.length === 1;
+              }).map(function (o) {
                 var on = sortByS[0] === o[0];
                 return html`<button key=${o[0]} onClick=${function () { sortByS[1](o[0]); }} style=${{ flex: 1, padding: "7px 6px", border: "none", borderRadius: 7, cursor: "pointer", fontFamily: "var(--font-sans)", fontSize: 12.5, fontWeight: 600, background: on ? "var(--surface-container-lowest)" : "transparent", color: on ? "var(--primary)" : "var(--on-surface-variant)", boxShadow: on ? "var(--shadow-xs)" : "none" }}>${o[1]}</button>`;
               })}
@@ -961,7 +975,6 @@
     var flags = userKnown && props.user && window.AccessCore ? AccessCore.pageFlags(props.user) : null;
     var canReadElder = !!(flags && flags.canReadElder);
     var canDecide = !!(flags && flags.canDecide);
-    var canWriteRecord = !!(flags && flags.canWriteRecord);
     // Live (MS-490): everything on this screen is watched rather than read
     // once, the way the web profile is, so another elder's note, status or tag
     // shows up here without leaving and coming back. Leaving the screen stops

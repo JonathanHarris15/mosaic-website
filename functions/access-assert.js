@@ -13,7 +13,6 @@
  */
 
 const Access = require("./shared/access-core.js");
-const {isAdminPermissionLevel} = require("./sms.js");
 
 /**
  * A gate refusal the callable maps onto HttpsError.
@@ -106,8 +105,7 @@ async function assertEditsServices(db, authCtx) {
  */
 async function assertIsAdmin(db, authCtx, what) {
   const account = await loadAccount(db, authCtx);
-  const level = account.permissionLevel || account.role;
-  if (!isAdminPermissionLevel(level)) {
+  if (!Access.accessesAdminDashboard(account)) {
     throw refuse("permission-denied", what ?
       `Admins only — ${what}.` : "Admins only.");
   }

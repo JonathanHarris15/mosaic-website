@@ -2,8 +2,14 @@ const { test } = require('node:test');
 const assert = require('node:assert');
 
 const { h, Fragment } = require('preact');
-const { useState, useEffect } = require('preact/hooks');
 const render = require('preact-render-to-string');
+const Levels = require('../public/account-levels-core.js');
+
+function account(preset, extra) {
+    const id = Levels.BUILTIN_LEVEL_IDS[preset];
+    if (!id) return Object.assign({ accountLevelId: null, permissions: {} }, extra || {});
+    return Object.assign({}, Levels.userWriteFromLevel(id), extra || {});
+}
 // htm is not an npm dependency — the app loads the same vendored UMD build the
 // browser does, so the test exercises exactly the build that ships.
 const htm = require('../public/vendor/htm-3.1.1.umd.js');
@@ -78,7 +84,7 @@ const BIBLE_STUDY = { id: 'tb', name: 'Bible Study', kind: 'group', priority: tr
 async function renderTab(seed) {
     const hooks = makeHooks();
     const M = mountShell(seed, hooks);
-    const user = seed.user || { permissionLevel: 'elder' };
+    const user = seed.user || account('elder');
     const el = h(M.RelationshipsTab, { showToast: () => {}, user: user });
 
     hooks.rewind(); render(el);
@@ -120,8 +126,14 @@ test('a Group type is labelled Group, not Pairwise', async () => {
     assert.match(out, /Leader \/ Member/);
 });
 
-test('a legacy directional type renders as Prioritized, before the backfill has run', async () => {
-    const out = await renderTab({ types: [{ id: 'tm', name: 'mentors', directional: true }], people: PEOPLE });
+test('MS-797 — a prioritized pairwise type renders as Prioritized', async () => {
+    const out = await renderTab({
+        types: [{
+            id: 'tm', name: 'mentors', kind: 'pairwise', priority: true,
+            holderLabel: 'mentors', counterpartLabel: 'mentors',
+        }],
+        people: PEOPLE,
+    });
     assert.match(out, /mentors/);
     assert.match(out, /Prioritized/);
     assert.doesNotMatch(out, /undefined/, 'a legacy doc must not leak undefined labels into the UI');
@@ -151,12 +163,20 @@ test('a Pastoral Assistant can read types and gets the same write chrome as an e
     const out = await renderTab({
         types: [DISCIPLESHIP, BIBLE_STUDY],
         people: PEOPLE,
-        user: { permissionLevel: 'member', pastoralAssistant: true },
+        user: account('pastoral_assistant'),
     });
     assert.match(out, /Discipleship/);
     assert.match(out, /Bible Study/);
-    assert.doesNotMatch(out, /Relationship vocabulary is an elder's decision/);
+    assert.doesNotMatch(out, /Elder-only tools/);
     assert.match(out, /New Relationship Type/);
     assert.match(out, /aria-label="Edit type"/);
     assert.match(out, /aria-label="Delete type"/);
+
+    const flagged = await renderTab({
+        types: [DISCIPLESHIP],
+        people: PEOPLE,
+        user: { permissionLevel: 'member', pastoralAssistant: true },
+    });
+    assert.match(flagged, /Elder-only tools/);
+    assert.doesNotMatch(flagged, /New Relationship Type/);
 });

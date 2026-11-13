@@ -282,6 +282,63 @@ test('digest: no designated subjects → never', () => {
     }), false);
 });
 
+test('elderDigestGroups: one group per requesting prayer with digest on', () => {
+    const groups = pr.elderDigestGroups({
+        liturgy: {
+            pastoral: [{ id: 'p-ada', name: 'Ada' }, { id: 'p-bea', name: 'Bea' }],
+            quiet: [{ id: 'p-cal', name: 'Cal' }],
+        },
+        elements: [
+            {
+                id: 'pastoral', kind: 'prayer',
+                requests: { people: [{ who: 'either' }, { who: 'either' }] },
+                elderDigest: true,
+            },
+            {
+                id: 'quiet', kind: 'prayer',
+                requests: { people: [{ who: 'either' }] },
+                elderDigest: false,
+            },
+        ],
+    });
+    assert.strictEqual(groups.length, 1);
+    assert.strictEqual(groups[0].id, 'pastoral');
+    assert.deepStrictEqual(groups[0].subjects.map((s) => s.id), ['p-ada', 'p-bea']);
+});
+
+test('elderDigestGroups: no requesting prayer yields no group', () => {
+    const groups = pr.elderDigestGroups({
+        liturgy: {
+            prayerMale: { id: 'p-ada', name: 'Ada' },
+            prayerFemale: { id: 'p-bea', name: 'Bea' },
+        },
+        elements: [],
+    });
+    assert.deepStrictEqual(groups, []);
+});
+
+test('elderDigestGroups: requesting prayer with digest off yields no group', () => {
+    const groups = pr.elderDigestGroups({
+        liturgy: {
+            quiet: [{ id: 'p-ada', name: 'Ada' }],
+        },
+        elements: [{
+            id: 'quiet', kind: 'prayer',
+            requests: { people: [{ who: 'either' }] },
+            elderDigest: false,
+        }],
+    });
+    assert.deepStrictEqual(groups, []);
+});
+
+test('scheduledTextDates subtracts notice days from the Sunday', () => {
+    assert.deepStrictEqual(
+        pr.scheduledTextDates('2026-10-12', [5, 3, 1]),
+        ['2026-10-07', '2026-10-09', '2026-10-11']);
+    assert.deepStrictEqual(pr.scheduledTextDates('2026-10-12', []), []);
+    assert.deepStrictEqual(pr.scheduledTextDates('', [5]), []);
+});
+
 // ── Elder digest rendering ─────────────────────────────────────────────────
 test('formatServiceDate renders a friendly Sunday date', () => {
     assert.strictEqual(pr.formatServiceDate('2026-06-28'), 'Sunday, June 28, 2026');
@@ -328,16 +385,12 @@ test('resolveTemplates includes elderDigest (default and override)', () => {
 
 const SERVICE = '2026-06-28';
 const TODAY_IN_WINDOW = '2026-06-23';
-const liturgyFor = (maleId, femaleId) => ({
-    prayerMale: { id: maleId || null, name: '' },
-    prayerFemale: { id: femaleId || null, name: '' },
-});
 
 const baseMayAnswer = {
     personId: 'p-jane',
     serviceDate: SERVICE,
     todayDate: TODAY_IN_WINDOW,
-    liturgy: liturgyFor('p-jane', 'p-john'),
+    subjectIds: ['p-jane', 'p-john'],
     viaAnswerLink: false,
     initialSentDate: null,
 };
@@ -352,7 +405,7 @@ test('mayAnswer: still a subject, in the window → yes', () => {
 test('mayAnswer: no longer on the service → no', () => {
     assert.strictEqual(pr.mayAnswerPrayerRequest({
         ...baseMayAnswer,
-        liturgy: liturgyFor('p-other', 'p-john'),
+        subjectIds: ['p-other', 'p-john'],
         viaAnswerLink: true,
     }), false);
 });
@@ -512,12 +565,46 @@ test('DEFAULT_PRAYER_MESSAGES initial and reminder carry {link}', () => {
     assert.ok(pr.DEFAULT_PRAYER_MESSAGES.reminder.includes('{link}'));
 });
 
-test('renderPrayerRequestMessage substitutes {link} when sending', () => {
+test('renderPrayerRequestMessage substitutes {link} when links are enabled', () => {
     const url = 'https://mosaic-hymn-database.web.app/a/tok';
     const msg = pr.renderPrayerRequestMessage('initial', 'Jane', {
         initial: 'Hi {name}. Answer: {link}',
-    }, url);
+    }, url, true);
     assert.strictEqual(msg, 'Hi Jane. Answer: ' + url);
+});
+
+test('prayerSmsIncludeAnswerLink is off unless includeAnswerLinkInSms is true', () => {
+    assert.strictEqual(pr.prayerSmsIncludeAnswerLink(null), false);
+    assert.strictEqual(pr.prayerSmsIncludeAnswerLink({}), false);
+    assert.strictEqual(pr.prayerSmsIncludeAnswerLink({ includeAnswerLinkInSms: false }), false);
+    assert.strictEqual(pr.prayerSmsIncludeAnswerLink({ includeAnswerLinkInSms: true }), true);
+});
+
+test('prayerSmsIncludeReplyWebhook is off unless includeReplyWebhookInSms is true', () => {
+    assert.strictEqual(pr.prayerSmsIncludeReplyWebhook(null), false);
+    assert.strictEqual(pr.prayerSmsIncludeReplyWebhook({}), false);
+    assert.strictEqual(pr.prayerSmsIncludeReplyWebhook({ includeReplyWebhookInSms: false }), false);
+    assert.strictEqual(pr.prayerSmsIncludeReplyWebhook({ includeReplyWebhookInSms: true }), true);
+});
+
+test('preparePrayerSmsTextTemplates strips link wording when links are off', () => {
+    const out = pr.preparePrayerSmsTextTemplates(pr.DEFAULT_PRAYER_MESSAGES, false);
+    assert.ok(!out.initial.includes('{link}'));
+    assert.ok(!out.reminder.includes('{link}'));
+    assert.ok(!/answer here/i.test(out.initial));
+    assert.ok(!/answer here/i.test(out.reminder));
+    assert.ok(!out.initial.includes('http'));
+    const rendered = pr.renderPrayerRequestMessage('initial', 'Jane', out, 'https://example.test/a/x', false);
+    assert.ok(!rendered.includes('http'));
+    assert.ok(rendered.includes('Just reply to this message'));
+});
+
+test('messageWithLink does not append {link} when links are off', () => {
+    const prose = 'Hello {name}, or answer here: {link}';
+    const stripped = pr.messageWithLink(prose, false);
+    assert.ok(!stripped.includes('{link}'));
+    assert.ok(!/answer here/i.test(stripped));
+    assert.ok(!stripped.includes('http'));
 });
 
 test('templatesWithAnswerLink adds a {link} slot when a saved template omitted it', () => {
@@ -572,6 +659,10 @@ test('a list of days sends once on each day, and not twice in one day', () => {
         sentDays: [5], initialSentDate: baseAuto.today,
     }), {action: 'none', day: null});
     assert.deepStrictEqual(pr.prayerAskPlan({
+        ...baseAuto, daysUntilService: 5, noticeList: list,
+        lastSendAttemptDate: baseAuto.today,
+    }), {action: 'none', day: null});
+    assert.deepStrictEqual(pr.prayerAskPlan({
         ...baseAuto, daysUntilService: 1, noticeList: [],
     }), {action: 'none', day: null});
     assert.deepStrictEqual(pr.noticeListOf({
@@ -612,7 +703,7 @@ test('notice days: a prayer with no number keeps the old five', () => {
     assert.strictEqual(pr.noticeDaysOf({ kind: 'hymn' }), 0);
 });
 
-test('pastoral subjects: a prayer and the older fields are one list', () => {
+test('pastoral subjects: older male/female fields are ignored', () => {
     const prayer = {
         id: 'pastoral', kind: 'prayer', name: 'Pastoral Prayer',
         requests: { count: 1, who: 'either' }, noticeDays: 10,
@@ -625,11 +716,9 @@ test('pastoral subjects: a prayer and the older fields are one list', () => {
         },
         elements: [prayer],
     });
-    assert.deepStrictEqual(subjects.map((s) => s.id), ['p-ada', 'p-bea']);
-    const ada = subjects.find((s) => s.id === 'p-ada');
-    assert.strictEqual(ada.noticeDays, 10);
-    assert.strictEqual(ada.fromElement, true);
-    assert.strictEqual(subjects.find((s) => s.id === 'p-bea').noticeDays, 10);
+    assert.deepStrictEqual(subjects.map((s) => s.id), ['p-ada']);
+    assert.strictEqual(subjects[0].noticeDays, 10);
+    assert.strictEqual(subjects[0].fromElement, true);
 });
 
 test('pastoral subjects: a prayer set to 0 does not tell its own people', () => {
@@ -644,7 +733,7 @@ test('pastoral subjects: a prayer set to 0 does not tell its own people', () => 
         }],
     });
     assert.strictEqual(subjects.find((s) => s.id === 'p-ada').noticeDays, 0);
-    assert.strictEqual(subjects.find((s) => s.id === 'p-bea').noticeDays, 5);
+    assert.strictEqual(subjects.find((s) => s.id === 'p-bea'), undefined);
 });
 
 test('prayer notice plan: days on a prayer turn asking on', () => {
@@ -656,9 +745,9 @@ test('prayer notice plan: days on a prayer turn asking on', () => {
     });
     assert.strictEqual(on.notifies, true);
     const off = pr.prayerNoticePlan({
-        liturgy: { prayerMale: { id: 'p-ada', name: 'Ada' } },
+        liturgy: { quiet: [{ id: 'p-ada', name: 'Ada' }] },
         elements: [{
-            id: 'p', kind: 'prayer', requests: { count: 1, who: 'either' }, noticeDays: 0,
+            id: 'quiet', kind: 'prayer', requests: { count: 1, who: 'either' }, noticeDays: 0,
         }],
     });
     assert.strictEqual(off.notifies, false);
@@ -668,7 +757,6 @@ test('prayer notice plan: days on a prayer turn asking on', () => {
 test('mayAnswer: a person named on a requesting prayer can answer', () => {
     assert.strictEqual(pr.mayAnswerPrayerRequest({
         ...baseMayAnswer,
-        liturgy: liturgyFor('p-other', 'p-john'),
         subjectIds: ['p-jane'],
         noticeDays: 10,
         todayDate: '2026-06-18',
@@ -694,7 +782,7 @@ test('ensureAnswerLinkInTemplate appends the link when {link} is missing', () =>
     assert.strictEqual(appended, 'Custom wording only.\n' + url);
     const rendered = pr.renderPrayerRequestMessage('initial', 'Sam', {
         initial: appended,
-    }, url);
+    }, url, true);
     assert.ok(rendered.endsWith(url));
     assert.ok(!rendered.includes('{link}'));
 });

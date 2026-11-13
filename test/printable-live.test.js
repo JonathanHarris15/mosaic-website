@@ -37,13 +37,41 @@ test('the resolver answers rows for a list and values for both kinds of binding'
     };
     const res = Live.resolver(project(), bundle, { today: '2026-09-03', level: 'editor' });
     const card = Core.findNode(project().pages[0], 'card');
-    assert.deepEqual(res.rowsFor(card).map(r => r.name), ['Anna Baker']);
+    assert.deepEqual(res.rowsFor(card).map((/** @type {any} */ r) => r.name), ['Anna Baker']);
     assert.deepEqual(res.valueFor({ scope: 'item', field: 'name' }, { name: 'Anna Baker' }), { ok: true, value: 'Anna Baker' });
     assert.deepEqual(res.valueFor({ scope: 'global', source: 'sunday', params: { when: { mode: 'next' } }, field: 'theme' }, null), { ok: true, value: 'Hope' });
     const miss = res.valueFor({ scope: 'global', source: 'sunday', params: { when: { mode: 'next' } }, field: 'preacher' }, null);
     assert.equal(miss.ok, false);
     assert.match(miss.why, /preacher/);
     assert.equal(res.sourceWarnings().length, 0);
+});
+
+test('a Repeat\'s from/to keeps only that slice of the list (1-based; to 0 = through end)', () => {
+    const people = [
+        { id: 'a', name: 'Anna', tags: ['Member'] },
+        { id: 'b', name: 'Ben', tags: ['Member'] },
+        { id: 'c', name: 'Cara', tags: ['Member'] },
+        { id: 'd', name: 'Dan', tags: ['Member'] },
+    ];
+    const p = Core.buildPrintable({
+        name: 'Split directory',
+        template: { paper: 'letter', orientation: 'portrait', dpi: 96 },
+        pages: [
+            { id: 'pg1', nodes: [
+                { id: 'first', tag: 'div', repeat: { source: 'people', params: { membership: 'members' }, from: 1, to: 2 }, children: [
+                    { id: 'n1', tag: 'p', bind: { text: { scope: 'item', field: 'name' } } },
+                ] },
+            ] },
+            { id: 'pg2', nodes: [
+                { id: 'last', tag: 'div', repeat: { source: 'people', params: { membership: 'members' }, from: 3, to: 0 }, children: [
+                    { id: 'n2', tag: 'p', bind: { text: { scope: 'item', field: 'name' } } },
+                ] },
+            ] },
+        ],
+    });
+    const res = Live.resolver(p, { people: people }, { today: '2026-09-03', level: 'editor' });
+    assert.deepEqual(res.rowsFor(Core.findNode(p.pages[0], 'first')).map((/** @type {any} */ r) => r.name), ['Anna', 'Ben']);
+    assert.deepEqual(res.rowsFor(Core.findNode(p.pages[1], 'last')).map(r => r.name), ['Cara', 'Dan']);
 });
 
 test('an empty field on a dated row is named by its date in words', () => {
@@ -113,6 +141,7 @@ test('with no resolver the stand-ins are drawn, once per list', () => {
     assert.equal(pages[0].nodes[1].children[0].children[0].text, 'Jane');
 });
 
+/** @param {number} n */
 function peopleBundle(n) {
     return {
         people: Array.from({ length: n }, (_, i) => ({ id: 'p' + i, name: 'Person ' + i, tags: ['Member'] })),
@@ -144,7 +173,7 @@ test('overflow continuation pages keep their own design and take the next rows o
     const p = Core.buildPrintable({ name: 'Directory', template: t, pages: [origin, next] });
     const res = Live.resolver(p, peopleBundle(5), { today: '2026-09-03', level: 'editor' });
     const pages = Live.layoutPages(p, res, true, {
-        fitsOn: (pageIndex, start, n) => n <= 2,
+        fitsOn: (/** @type {any} */ pageIndex, /** @type {any} */ start, /** @type {any} */ n) => n <= 2,
     });
     assert.equal(pages.length, 3);
     assert.equal(pages[0].page.id, 'pg1');
@@ -199,6 +228,59 @@ test('a continuation that is not in the chain does not print the list again', ()
     const second = members.find(pg => pg.page.id === 'pg2');
     assert.ok(second, 'the continuation page is still in the document');
     assert.equal(second.nodes[0].children.length, 0);
+});
+
+test('MS-810: shrinking the Repeat row range removes stored overflow pages past the slice', () => {
+    const t = Core.buildTemplate({ paper: 'letter', dpi: 96 });
+    const origin = Core.buildPage(t, { id: 'pg1', nodes: [
+        { id: 'card', tag: 'div', repeat: { source: 'people', params: { membership: 'members' }, overflow: 'new-page', from: 1, to: 0 }, children: [
+            { id: 'nm', tag: 'p', text: 'Jane', bind: { text: { scope: 'item', field: 'name' } } },
+        ] },
+        { id: 'keep', tag: 'p', text: 'Page one marker' },
+    ] });
+    const pg2 = Core.buildPage(t, {
+        id: 'pg2',
+        continues: { from: 'pg1', repeat: 'card' },
+        nodes: [
+            { id: 'card2', tag: 'div', repeat: { source: 'people', params: { membership: 'members' }, overflow: 'new-page' }, children: [
+                { id: 'nm2', tag: 'p', text: 'Jane', bind: { text: { scope: 'item', field: 'name' } } },
+            ] },
+            { id: 'keep2', tag: 'p', text: 'Page two marker' },
+        ],
+    });
+    const pg3 = Core.buildPage(t, {
+        id: 'pg3',
+        continues: { from: 'pg1', repeat: 'card' },
+        nodes: [
+            { id: 'card3', tag: 'div', repeat: { source: 'people', params: { membership: 'members' }, overflow: 'new-page' }, children: [
+                { id: 'nm3', tag: 'p', text: 'Jane', bind: { text: { scope: 'item', field: 'name' } } },
+            ] },
+        ],
+    });
+    const p = Core.buildPrintable({ name: 'Directory', template: t, pages: [origin, pg2, pg3] });
+    const res = Live.resolver(p, peopleBundle(9), { today: '2026-09-03', level: 'editor' });
+    const paginate = { fitsOn: (/** @type {any} */ _i, /** @type {any} */ _start, /** @type {any} */ n) => n <= 3 };
+    /** @type {any} */
+    const card = Core.findNode(p.pages[0], 'card');
+    assert.ok(card && card.repeat);
+    assert.equal(Live.overflowContinuationNeed(p, origin, res, true, paginate, card), 3);
+    card.repeat.to = 5;
+    const removed = Live.pruneExcessContinuationPages(p, res, true, Object.assign({ repeatNodeId: 'card' }, paginate));
+    assert.deepEqual(removed, ['pg3']);
+    assert.equal(p.pages.length, 2);
+    /** @type {any} */
+    const keep1 = Core.findNode(p.pages[0], 'keep');
+    /** @type {any} */
+    const keep2 = Core.findNode(p.pages[1], 'keep2');
+    assert.ok(keep1 && keep2);
+    assert.equal(keep1.text, 'Page one marker');
+    assert.equal(keep2.text, 'Page two marker');
+    const pages = Live.layoutPages(p, res, true, paginate);
+    assert.deepEqual(pages[0].nodes[0].children.map((/** @type {any} */ c) => c.children[0].text), ['Person 0', 'Person 1', 'Person 2']);
+    assert.deepEqual(pages[1].nodes[0].children.map((/** @type {any} */ c) => c.children[0].text), ['Person 3', 'Person 4']);
+    card.repeat.to = 9;
+    const wide = Live.layoutPages(p, res, true, paginate);
+    assert.ok(wide.some(e => e.needsPersist), 'widening the range plans another stored page again');
 });
 
 test('a leftover continuation page stays in the document when the list shrinks', () => {
@@ -274,29 +356,58 @@ test('a nested children list is of the household card it sits in', () => {
     assert.equal(homes[0].children[1].children[0].children[0].text, 'Eve Baker');
 });
 
-test('MS-689: page-number bindings read the project page index and custom start', () => {
+test('a page number element shows which sheet it is on', () => {
     const p = Core.buildPrintable({
         name: 'Booklet',
         template: { paper: 'letter', orientation: 'portrait', dpi: 96 },
-        pages: [
-            { id: 'pg1', nodes: [{ id: 'n1', tag: 'p', text: '1', bind: { text: { scope: 'global', source: 'insert_page_number', params: { startAt: 3 }, field: 'number' } } }] },
-            { id: 'pg2', nodes: [{ id: 'n2', tag: 'p', text: '2', bind: { text: { scope: 'global', source: 'insert_page_number', params: { startAt: 3 }, field: 'number' } } }] },
-            { id: 'pg3', nodes: [{ id: 'n3', tag: 'p', text: '3', bind: { text: { scope: 'global', source: 'insert_page_number', params: { startAt: 3 }, field: 'number' } } }] },
-        ],
+        pages: [1, 2, 3].map(n => ({
+            id: 'pg' + n,
+            nodes: [{ id: 'n' + n, tag: 'p', text: '', pageNumber: { mirror: false, anchor: 'bottom-right', inset: 36, left: 36, top: 36 } }],
+        })),
     });
     const res = Live.resolver(p, {}, { today: '2026-09-03', level: 'viewer' });
-    assert.deepEqual(res.valueFor({ scope: 'global', source: 'insert_page_number', params: { startAt: 3 }, field: 'number' }, null, null, { pageIndex: 0 }), { ok: false, why: 'This page is before numbering starts.' });
-    assert.deepEqual(res.valueFor({ scope: 'global', source: 'insert_page_number', params: { startAt: 3 }, field: 'number' }, null, null, { pageIndex: 2 }), { ok: true, value: '1' });
     const pages = Live.layoutPages(p, res, null);
-    assert.equal(pages[2].nodes[0].text, '1');
+    assert.equal(pages[0].nodes[0].text, '1');
+    assert.equal(pages[1].nodes[0].text, '2');
+    assert.equal(pages[2].nodes[0].text, '3');
+    assert.equal(Core.kindOf(pages[0].nodes[0]), 'page-number');
+});
+
+test('Start numbering from here leaves the sheets before it blank and counts up', () => {
+    const folio = (n, start) => ({
+        id: 'n' + n,
+        tag: 'p',
+        text: '',
+        pageNumber: { mirror: false, anchor: 'bottom-right', inset: 36, left: 36, top: 36, startHere: start },
+    });
+    const p = Core.buildPrintable({
+        name: 'Guide',
+        template: { paper: 'letter', orientation: 'portrait', dpi: 96 },
+        pages: [1, 2, 3, 4].map(n => ({
+            id: 'pg' + n,
+            nodes: [folio(n, n === 3)],
+        })),
+    });
+    const pages = Live.layoutPages(p, null, null);
+    assert.deepEqual(pages.map(e => e.nodes[0].text), ['', '', '1', '2']);
+    assert.equal(p.pages[0].nodes[0].text, '', 'the stored page is not restamped');
+    assert.equal(p.pages[2].nodes[0].text, '');
+    assert.equal(p.pages[2].nodes[0].pageNumber.startHere, true);
+
+    const again = Core.buildPrintable({
+        name: 'Guide',
+        template: { paper: 'letter', orientation: 'portrait', dpi: 96 },
+        pages: [1, 2, 3].map(n => ({
+            id: 'pg' + n,
+            nodes: [folio(n, n === 2 || n === 3)],
+        })),
+    });
+    const both = Live.layoutPages(again, null, null);
+    assert.deepEqual(both.map(e => e.nodes[0].text), ['', '1', '2'], 'a later restart does not start over');
 });
 
 test('a list that spills numbers each physical sheet, not the stored page again', () => {
     const t = Core.buildTemplate({ paper: 'letter', dpi: 96 });
-    const num = {
-        scope: 'global', source: 'insert_page_number', params: { startAt: 1 }, field: 'number',
-    };
-    const edge = Object.assign({}, num, { field: 'edgeClass' });
     const p = Core.buildPrintable({
         name: 'Hymn',
         template: t,
@@ -309,7 +420,7 @@ test('a list that spills numbers each physical sheet, not the stored page again'
                 }, children: [
                     { id: 'nm', tag: 'p', text: '', bind: { text: { scope: 'item', field: 'name' } } },
                 ] },
-                { id: 'pg', tag: 'p', text: '', bind: { text: num, class: edge } },
+                { id: 'pg', tag: 'p', text: '', pageNumber: { mirror: true, anchor: 'bottom-right', inset: 36, left: 36, top: 36 } },
             ] }),
         ],
     });
@@ -320,14 +431,22 @@ test('a list that spills numbers each physical sheet, not the stored page again'
     assert.equal(folio(pages[1]).text, '2');
     assert.equal(folio(pages[2]).text, '3');
     assert.equal(folio(pages[3]).text, '4');
-    assert.match(folio(pages[1]).attrs.class, /m-pagenum--left/);
-    assert.match(folio(pages[2]).attrs.class, /m-pagenum--right/);
+    assert.equal(folio(pages[1]).pageNumber.mirror, true);
+    const onTwo = Core.placePageNumber(folio(pages[1]), { pageIndex: 1 });
+    const onThree = Core.placePageNumber(folio(pages[2]), { pageIndex: 2 });
+    assert.equal(onTwo.style.left, '36px', 'page 2 reflects a bottom-right place to the left');
+    assert.equal(onThree.style.right, '36px', 'page 3 keeps the place on the right');
 });
 
 test('a hymn slot with nothing planned is left out, and the next sheet keeps the number', () => {
     const t = Core.buildTemplate({ paper: 'half_letter', dpi: 150 });
-    const num = { scope: 'global', source: 'insert_page_number', params: { startAt: 1 }, field: 'number' };
-    const hymn = (id, slot, omit) => Core.buildPage(t, {
+    const folio = () => Core.buildNode({
+        id: 'folio',
+        tag: 'p',
+        name: 'Page',
+        pageNumber: { mirror: false, anchor: 'bottom-right', inset: 36 },
+    });
+    const hymn = (/** @type {any} */ id, /** @type {any} */ slot, /** @type {any} */ omit) => Core.buildPage(t, {
         id: id,
         nodes: [{
             id: id + '-card', tag: 'div',
@@ -347,7 +466,7 @@ test('a hymn slot with nothing planned is left out, and the next sheet keeps the
         pages: [
             Core.buildPage(t, { id: 'cover', nodes: [{ id: 'c', tag: 'p', text: 'Cover' }] }),
             hymn('h2', 'hymn2', true),
-            Core.buildPage(t, { id: 'after', nodes: [{ id: 'a', tag: 'p', text: '', bind: { text: num } }] }),
+            Core.buildPage(t, { id: 'after', nodes: [folio()] }),
         ],
     });
     const res = Live.resolver(p, { services: { '2026-09-06': { liturgy: { hymn1: { name: 'Amazing Grace' } } } } }, { today: '2026-09-03', level: 'editor' });
@@ -439,4 +558,61 @@ test('a field filled on the event reads that occurrence, and a list reads its ro
     assert.equal(rows.length, 2);
     assert.equal(rows[1].name, 'Lin');
     assert.equal(res.sourceWarnings().length, 0);
+});
+
+test('a multi-page hymn is one index: both sheets stay in its range, and the run moves as one', () => {
+    const t = Core.buildTemplate({ paper: 'half_letter', dpi: 96 });
+    const hymnPage = (/** @type {any} */ id, /** @type {any} */ from, /** @type {any} */ to) => Core.buildPage(t, {
+        id: id,
+        nodes: [{
+            id: id + '-card', tag: 'div',
+            repeat: {
+                source: 'sunday_hymns',
+                params: { when: { mode: 'this' } },
+                layout: { maxPerPage: 1 },
+                from: from, to: to,
+                overflow: 'new-page',
+                omitWhenEmpty: true,
+            },
+            children: [
+                { id: id + '-name', tag: 'p', text: '', bind: { text: { scope: 'item', field: 'name' } } },
+            ],
+        }],
+    });
+    const p = Core.buildPrintable({
+        name: 'Guide',
+        template: t,
+        pages: [hymnPage('before', 1, 1), hymnPage('after', 2, 0)],
+    });
+    const bundle = {
+        services: {
+            '2026-09-06': {
+                liturgy: {
+                    preparatoryHymn: { id: 'h1', name: 'Amazing Grace' },
+                    hymn1: { id: null, name: 'A Literal Hymn' },
+                },
+            },
+        },
+        hymns: {
+            h1: { hymn_name: 'Amazing Grace', versions: [{ pages: ['ag1.png', 'ag2.png'] }] },
+        },
+    };
+    const res = Live.resolver(p, bundle, { today: '2026-09-03', level: 'editor' });
+    const before = Core.findNode(p.pages[0], 'before-card');
+    const after = Core.findNode(p.pages[1], 'after-card');
+    assert.deepEqual(res.rowsFor(before).map(r => [r.name, r.number, r.page]), [
+        ['Amazing Grace', 1, 1],
+        ['Amazing Grace', 1, 2],
+    ]);
+    assert.deepEqual(res.rowsFor(after).map(r => r.name), ['A Literal Hymn']);
+    const laid = Live.layoutPages(p, res, true, { fitsOn: () => true });
+    assert.equal(laid.length, 3, 'two sheets for the first hymn, then the next hymn');
+    assert.equal(laid[0].originId, 'before');
+    assert.equal(laid[1].originId, 'before');
+    assert.equal(laid[1].continuation, 1);
+    assert.equal(laid[2].page.id, 'after');
+    const pages = laid.map(entry => entry.page);
+    assert.equal(Core.canInsertAfter(pages, 0), false, 'nothing sits between the hymn\'s sheets');
+    const moved = Core.movePageRun(pages, pages[0].id, 1);
+    assert.deepEqual(moved.map((/** @type {any} */ pg) => pg.id), [pages[2].id, pages[0].id, pages[1].id]);
 });

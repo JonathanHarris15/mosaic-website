@@ -18,10 +18,9 @@
 // applied to the LATEST column list inside a transaction, so two elders'
 // column changes both stand (ADR-0039: a list needs a lock or a row identity).
 //
-// ⚠ THE OLD SHAPE. A Care List from before columns stored a bare rich-text body
-// per person. Writing one cell's field into that would plant a column id inside
-// somebody's note, so whoever writes first normalises it, once, in a
-// transaction.
+// ⚠ IMPORT SHAPE. A Care List from before columns stored a bare rich-text body
+// per person. Batch normalise (MS-787) rewrites those onto careListColumns +
+// careListData; isOldShape and normalise() remain for import and prod-ops only.
 //
 // Pure rules first; the writes at the bottom take the Firestore handle and the
 // namespace holding FieldPath / FieldValue (`firebase.firestore` in a browser,
@@ -111,7 +110,20 @@
         return out;
     }
 
-    // The column shape, with nothing lost.
+    // Cells as stored after normalisation — no bare-body conversion.
+    function cellsForEditor(data) {
+        const stored = (data && data[CELLS]) || {};
+        const out = {};
+        Object.keys(stored).forEach(pid => {
+            const value = stored[pid];
+            if (value && typeof value === 'object' && !isBareBody(value)) {
+                out[pid] = Object.assign({}, value);
+            }
+        });
+        return out;
+    }
+
+    // The column shape, with nothing lost (import / prod-ops).
     function normalise(data) {
         return { careListColumns: columnsOf(data), careListData: cellsOf(data) };
     }
@@ -189,10 +201,9 @@
     // adopted (`saved`), the last copy of the list that arrived (`latest`),
     // and which cells — and whether the title — it has typed into since.
     function createSession(data) {
-        const saved = { title: (data && data.title) || '', columns: columnsOf(data), cells: cellsOf(data) };
+        const saved = { title: (data && data.title) || '', columns: columnsOf(data), cells: cellsForEditor(data) };
         // A separate object: both are changed in place as cells save and arrive.
         let latest = { title: saved.title, columns: saved.columns, cells: saved.cells };
-        let oldShaped = isOldShape(data);
         const dirty = new Set();
         let titleDirty = false;
         // What each cell and the title held before the save now on its way,
@@ -238,10 +249,6 @@
             title: () => saved.title,
             columns: () => saved.columns.slice(),
             cell: (pid, cid) => storedCell(saved, pid, cid),
-            oldShape: () => oldShaped,
-            // A save has written the column shape (saveEdits normalises first).
-            markNormalised() { oldShaped = false; },
-
             edited(pid, cid) { dirty.add(key(pid, cid)); },
             titleEdited() { titleDirty = true; },
             isDirty: (pid, cid) => dirty.has(key(pid, cid)),
@@ -329,8 +336,11 @@
             // over what arrived when they enter or leave it.
             adopt(remote, where) {
                 const w = where || {};
-                latest = { title: (remote && remote.title) || '', columns: columnsOf(remote), cells: cellsOf(remote) };
-                oldShaped = isOldShape(remote);
+                latest = {
+                    title: (remote && remote.title) || '',
+                    columns: columnsOf(remote),
+                    cells: cellsForEditor(remote),
+                };
 
                 const moved = takeColumns(latest.columns);
                 const columns = moved.changed ? latest.columns.slice() : null;
@@ -394,38 +404,23 @@
         return out;
     }
 
-    // Normalise an old-shaped list, once, against the latest stored copy.
-    // Resolves true if it had to.
-    function normaliseStored(db, documentId) {
-        const ref = refOf(db, documentId);
-        return db.runTransaction(tx => tx.get(ref).then(snap => {
-            const data = snap.exists ? snap.data() : null;
-            if (!data || !isOldShape(data)) return false;
-            tx.update(ref, normalise(data));
-            return true;
-        }));
-    }
-
     // Write these cells, and the title if given, each to its own field.
-    // edits: { cells: [{personId, columnId, value}], title, byName, oldShape, extra }
+    // edits: { cells: [{personId, columnId, value}], title, byName, extra }
     function saveEdits(db, fs, documentId, edits) {
         const e = edits || {};
         const cells = e.cells || [];
         const hasTitle = e.title !== null && e.title !== undefined;
         if (!cells.length && !hasTitle) return Promise.resolve(false);
-        const first = e.oldShape ? normaliseStored(db, documentId) : Promise.resolve(false);
-        return first.then(() => {
-            const args = [];
-            cells.forEach(c => {
-                const path = new fs.FieldPath(...cellPath(c.personId, c.columnId));
-                const empty = c.value === null || c.value === undefined;
-                args.push(path, empty ? fs.FieldValue.delete() : c.value);
-            });
-            if (hasTitle) args.push('title', e.title);
-            const all = args.concat(stamps(fs, e.byName, e.extra));
-            const ref = refOf(db, documentId);
-            return ref.update(all[0], all[1], ...all.slice(2)).then(() => true);
+        const args = [];
+        cells.forEach(c => {
+            const path = new fs.FieldPath(...cellPath(c.personId, c.columnId));
+            const empty = c.value === null || c.value === undefined;
+            args.push(path, empty ? fs.FieldValue.delete() : c.value);
         });
+        if (hasTitle) args.push('title', e.title);
+        const all = args.concat(stamps(fs, e.byName, e.extra));
+        const ref = refOf(db, documentId);
+        return ref.update(all[0], all[1], ...all.slice(2)).then(() => true);
     }
 
     // Apply one column change against the latest stored list, in a
@@ -438,15 +433,9 @@
             const out = applyColumnChange(data, change);
             if (!out.changed) return out;
             const args = ['careListColumns', out.columns];
-            if (isOldShape(data)) {
-                const cells = cellsOf(data);
-                out.clearCells.forEach(c => { if (cells[c.personId]) delete cells[c.personId][c.columnId]; });
-                args.push(CELLS, cells);
-            } else {
-                out.clearCells.forEach(c => {
-                    args.push(new fs.FieldPath(...cellPath(c.personId, c.columnId)), fs.FieldValue.delete());
-                });
-            }
+            out.clearCells.forEach(c => {
+                args.push(new fs.FieldPath(...cellPath(c.personId, c.columnId)), fs.FieldValue.delete());
+            });
             const all = args.concat(stamps(fs, byName, extra));
             tx.update(ref, all[0], all[1], ...all.slice(2));
             return out;
@@ -486,7 +475,7 @@
         newColumnId,
         applyColumnChange,
         createSession,
-        normaliseStored,
+        cellsForEditor,
         saveEdits,
         changeColumn,
         watch,

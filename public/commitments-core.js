@@ -46,6 +46,10 @@
             eventName: spec.eventName || 'Event',
             roleSlug: spec.roleSlug || null,
             slotId: spec.slotId || null,
+            // Which one-off job (MS-818). Every one-off shares the `one_off`
+            // slug and has no slot, so this is the only thing that tells two
+            // of them apart when one is answered.
+            oneOffId: spec.oneOffId || null,
             label: spec.label || null,
             state: spec.state || null,
             stateLabel: spec.stateLabel || null,
@@ -87,6 +91,7 @@
                     eventName: o.name || o.seriesName || 'Event',
                     roleSlug: a.roleSlug,
                     slotId: a.slotId,
+                    oneOffId: a.oneOffId || null,
                     label: a.label || null,
                     state: Core.stateOf(a),
                     stateLabel: Core.stateLabel(a, { asOwner: true }),

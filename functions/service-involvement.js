@@ -45,9 +45,9 @@
  * Field → Role slug, in the SAVED shape `services/{date}` uses. Mirrors
  * public/service-involvement-core.js; a test holds the two lists together.
  *
- * `prayerPraiseId` and `prayerConfessionId` share the `prayer` slug — one Role,
- * two places in the service — so metadata tells them apart. Without it, the
- * Sunday one person leads both prayers writes one record instead of two.
+ * Prayer leaders use `carriedBy` on liturgy prayer elements (`prayer` slug,
+ * `metadata.prayer_type` praise vs confession). Legacy top-level prayer ids are
+ * not read at runtime (MS-771).
  *
  * `elements` and `other` are serving and are included, but they are NOT
  * liturgical Roles and are deliberately absent from RolesCore.LITURGICAL_SLUGS.
@@ -56,18 +56,18 @@
  * It drives lastPastoralPrayerDate for the prayer rotation, and fairness never
  * reads it, so its timing is left exactly as it is.
  */
+const InvolvementCore = require("./shared/service-involvement-core.js");
+
 const SERVING_FIELDS = Object.freeze([
   {idField: "serviceLeaderId", slug: "service_leader"},
   {idField: "musicLeaderId", slug: "worship_leader"},
   {idField: "preacherId", slug: "preacher"},
-  {idField: "prayerPraiseId", slug: "prayer",
-    metadata: {prayer_type: "praise"}},
-  {idField: "prayerConfessionId", slug: "prayer",
-    metadata: {prayer_type: "confession"}},
   {idField: "elementsId", slug: "elements"},
   {idField: "otherId", slug: "other"},
   {idField: "musicHelpers", slug: "worship_helper", list: true},
 ]);
+
+const SERVING_SLUGS = new Set([...SERVING_FIELDS.map((f) => f.slug), "prayer"]);
 
 /** The Service field the editor stamps when it defers writing. */
 const DEFERRED_FLAG = "involvementDeferred";
@@ -79,9 +79,10 @@ const isDateStr = (v) => typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v);
  * id is a visiting speaker typed in by hand — there is no Person to credit, so
  * there is nothing to write.
  * @param {Object} service The stored `services/{date}` document.
+ * @param {?Object} catalog Liturgy catalog for carriedBy prayer leaders.
  * @return {Array<{personId: string, type: string, metadata: ?Object}>}
  */
-function servingInvolvement(service) {
+function servingInvolvement(service, catalog) {
   const doc = service || {};
   const records = [];
 
@@ -97,6 +98,9 @@ function servingInvolvement(service) {
       records.push(record);
     });
   });
+
+  InvolvementCore.prayerCarriedByInvolvement(doc, catalog)
+      .forEach((rec) => records.push(rec));
 
   return records;
 }
@@ -140,6 +144,7 @@ function conversion(service, date, today) {
 
 module.exports = {
   SERVING_FIELDS,
+  SERVING_SLUGS,
   DEFERRED_FLAG,
   servingInvolvement,
   involvementId,

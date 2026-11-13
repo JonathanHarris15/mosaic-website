@@ -316,7 +316,7 @@ test('an unknown node is walked through, never dropped', () => {
 // the other does not.
 
 test('a Word file cannot bring script into the page it lands on', () => {
-    const dirty = '<p onclick="steal()">Hello</p><script>steal()<\/script>' +
+    const dirty = '<p onclick="steal()">Hello</p><script>steal()</script>' +
         '<a href="javascript:steal()">click</a>';
     const clean = Core.sanitizeDocxHtml(dirty);
     assert.ok(!/<script/i.test(clean), 'a script tag survived');

@@ -68,12 +68,15 @@ const STANDARD_IDS = [
 // and adds one of its own. Fictional, like every fixture here.
 function twoOrderCatalog() {
     const seed = Liturgy.standardCatalog();
+    const lordsSupper = { id: 'lordsSupper', name: 'Lord\'s Supper', primitive: 'text', hasRole: true, hasNote: false };
+    const communionElements = ['hymn1', 'lordsSupper', 'sermon', 'benediction'].map((id) => {
+        if (id === 'lordsSupper') return lordsSupper;
+        const el = seed.elements.find((e) => e.id === id);
+        return { id: el.id, name: el.name, kind: el.kind, hasNote: el.hasNote };
+    });
     return Liturgy.catalogFrom({
-        elements: seed.elements.concat([
-            { id: 'lordsSupper', name: 'Lord\'s Supper', primitive: 'text', hasRole: true, hasNote: false },
-        ]),
         orders: seed.orders.concat([
-            { id: 'communion', name: 'Communion', elementIds: ['hymn1', 'lordsSupper', 'sermon', 'benediction'] },
+            { id: 'communion', name: 'Communion', elementIds: ['hymn1', 'lordsSupper', 'sermon', 'benediction'], elements: communionElements },
         ]),
     });
 }
@@ -219,7 +222,8 @@ test('a legacy slot stored as a bare string still reads', () => {
 // ── The markup ────────────────────────────────────────────────────────────
 
 test('every order has a toggle over the table, and a way to manage them', () => {
-    assert.match(HTML, /id="table-orders"[\s\S]{0,600}x-for="o in liturgyOrders"[\s\S]{0,300}toggleTableOrder\(o\.id\)/);
+    assert.match(HTML, /id="table-orders-filter"/);
+    assert.match(HTML, /id="table-orders" class="m-toolbar[\s\S]{0,2000}x-for="o in liturgyOrders"[\s\S]{0,300}toggleTableOrder\(o\.id\)/);
     assert.match(HTML, /href="liturgy-orders\.html"/);
     assert.match(HTML, /<script src="liturgy-order-core\.js"><\/script>[\s\S]*<script src="service-calendar\.js"><\/script>/);
 });
@@ -269,7 +273,7 @@ test('leaving the Planning view puts the drawer away', () => {
 
 test('the drawer is never remembered across a page load', () => {
     // A glance at the dates is not a state to leave a page in.
-    const sb = load();
+    load();
     assert.ok(/railOpen: false/.test(SRC), 'railOpen should start closed');
     assert.ok(!/calendarRailOpen/.test(SRC), 'and must not be persisted');
 });
@@ -333,18 +337,19 @@ test('the header keeps the identity columns and names each element once', () => 
 
 test('a Sunday fills the element its own order lined up, and leaves the other quiet', () => {
     const sb = load();
+    const pool = [
+        { id: 'hA', name: 'Hymn', kind: 'hymn' },
+        { id: 'hB', name: 'Hymn', kind: 'hymn' },
+        { id: 'pA', name: 'Prayer', kind: 'prayer' },
+        { id: 'bA', name: 'Baptism', kind: 'person' },
+        { id: 'hC', name: 'Hymn', kind: 'hymn' },
+        { id: 'pB', name: 'Prayer', kind: 'prayer' },
+    ];
+    const byId = new Map(pool.map((el) => [el.id, el]));
     const cat = Liturgy.catalogFrom({
-        elements: [
-            { id: 'hA', name: 'Hymn', kind: 'hymn' },
-            { id: 'hB', name: 'Hymn', kind: 'hymn' },
-            { id: 'pA', name: 'Prayer', kind: 'prayer' },
-            { id: 'bA', name: 'Baptism', kind: 'person' },
-            { id: 'hC', name: 'Hymn', kind: 'hymn' },
-            { id: 'pB', name: 'Prayer', kind: 'prayer' },
-        ],
         orders: [
-            { id: 'liturgy1', name: 'Liturgy 1', elementIds: ['hA', 'hB', 'pA'] },
-            { id: 'liturgy2', name: 'Liturgy 2', elementIds: ['bA', 'hC', 'pB'] },
+            { id: 'liturgy1', name: 'Liturgy 1', elementIds: ['hA', 'hB', 'pA'], elements: ['hA', 'hB', 'pA'].map((id) => byId.get(id)) },
+            { id: 'liturgy2', name: 'Liturgy 2', elementIds: ['bA', 'hC', 'pB'], elements: ['bA', 'hC', 'pB'].map((id) => byId.get(id)) },
         ],
     });
     sb.setLiturgyCatalog(cat);

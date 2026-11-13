@@ -31,8 +31,10 @@ const notify = require("./notification-send");
 const notifyBridge = require("./notification-send-bridge");
 const ac = require("./assignment-conversion");
 const si = require("./service-involvement");
+const siRun = require("./service-involvement-run");
 const dr = require("./directory-request");
 const lu = require("./linked-user");
+const linkedPerson = require("./linked-person");
 const {
   ACCOUNT_RANK_FIELD,
   planPersonProjection,
@@ -92,6 +94,8 @@ const {
   assertEditsServices: assertEditsServicesCore,
   assertIsAdmin: assertIsAdminCore,
 } = require("./access-assert");
+const Access = require("./shared/access-core.js");
+const AccountLevels = require("./shared/account-levels-core.js");
 // The Admin Dashboard's Push notifications tab (MS-682). Reads the Device
 // tokens the rules keep from every client and the notifications log, and
 // hands back shapes that carry no whole token. Pure but for the deps built
@@ -253,32 +257,29 @@ exports.createUser = onCall({
   const callerDoc = await db.collection("users").doc(callerUid).get();
 
   if (!callerDoc.exists ||
-      !["admin", "super_admin"].includes(
-          callerDoc.data().permissionLevel || callerDoc.data().role)) {
+      !Access.accessesAdminDashboard(callerDoc.data())) {
     throw new Error("Only admins can create new users.");
   }
 
-  const {email, password, role, permissionLevel, accountLevelId} = request.data;
-  // Accept either during the MS-119 migration.
-  const level = permissionLevel || role;
+  const {email, password, accountLevelId} = request.data;
 
-  if (!email || !password || !level) {
+  if (!email || !password || !accountLevelId) {
     throw new Error(
-        "Missing required fields: email, password, or permission level.");
+        "Missing required fields: email, password, or account level.");
   }
 
-  const AccountLevels = require("./shared/account-levels-core.js");
-  const presetKey = AccountLevels.presetKeyFromPermissionLevel(level);
-  const resolvedLevelId = accountLevelId ||
-      AccountLevels.accountLevelIdForPreset(presetKey);
-  // Builtin ids win over a stale presetKey. `level_pastoral_assistant`
-  // stores permissionLevel `pastoral_assistant` and the elder-equivalent map,
-  // not the raw id and not the Member preset.
-  const write = AccountLevels.userWriteFromLevel(resolvedLevelId, {
-    presetKey: AccountLevels.presetKeyFromAccountLevelId(resolvedLevelId) ||
-        presetKey,
+  const levelSnap = await db.collection("account_levels")
+      .doc(accountLevelId).get();
+  const knownBuiltin = AccountLevels.presetKeyFromAccountLevelId(
+      accountLevelId);
+  if (!levelSnap.exists && !knownBuiltin) {
+    throw new Error("Unknown account level.");
+  }
+  const levelData = levelSnap.exists ? levelSnap.data() : {
+    presetKey: knownBuiltin,
     custom: false,
-  });
+  };
+  const write = AccountLevels.userWriteFromLevel(accountLevelId, levelData);
 
   try {
     // 2. Create the user in Firebase Auth
@@ -287,9 +288,8 @@ exports.createUser = onCall({
       password: password,
     });
 
-    // 3. Store the user's permission level in Firestore. Write both
-    // permissionLevel and the legacy role during the MS-119 migration (MS-127
-    // drops the old role field afterwards).
+    // 3. Store the account level and its permissions map. role and
+    // permissionLevel are not written.
     //
     // The password is NOT stored here (MS-241). It went to Firebase Auth in
     // step 2, which hashes it; a readable second copy existed only so an admin
@@ -298,11 +298,8 @@ exports.createUser = onCall({
     // anything.
     await db.collection("users").doc(userRecord.uid).set({
       email: email,
-      permissionLevel: write.permissionLevel,
-      role: write.role,
       accountLevelId: write.accountLevelId,
       permissions: write.permissions,
-      pastoralAssistant: false,
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
     });
 
@@ -366,8 +363,7 @@ exports.deleteUser = onCall({
   const callerDoc = await db.collection("users").doc(callerUid).get();
 
   if (!callerDoc.exists ||
-      !["admin", "super_admin"].includes(
-          callerDoc.data().permissionLevel || callerDoc.data().role)) {
+      !Access.accessesAdminDashboard(callerDoc.data())) {
     throw new Error("Only admins can delete users.");
   }
 
@@ -411,13 +407,17 @@ exports.deleteOwnAccount = onCall({
   const uid = request.auth.uid;
   const db = admin.firestore();
   const userDoc = await db.collection("users").doc(uid).get();
-  const permissionLevel = userDoc.exists ?
-    (userDoc.data().permissionLevel || userDoc.data().role) : null;
+  const self = userDoc.exists ? userDoc.data() : null;
 
-  if (["admin", "super_admin"].includes(permissionLevel)) {
-    const admins = await db.collection("users")
-        .where("permissionLevel", "in", ["admin", "super_admin"]).get();
-    if (admins.size <= 1) {
+  if (self && Access.accessesAdminDashboard(self)) {
+    // Admin-ness is the map (or a builtin account level), not a stored
+    // permissionLevel string, so it cannot be asked as one query.
+    const users = await db.collection("users").get();
+    let admins = 0;
+    users.forEach((doc) => {
+      if (Access.accessesAdminDashboard(doc.data())) admins += 1;
+    });
+    if (admins <= 1) {
       throw new HttpsError(
           "failed-precondition",
           "You are the only administrator. Make someone else an " +
@@ -451,8 +451,7 @@ exports.updateUserPasswordAdmin = onCall({
   const callerDoc = await db.collection("users").doc(callerUid).get();
 
   if (!callerDoc.exists ||
-      !["admin", "super_admin"].includes(
-          callerDoc.data().permissionLevel || callerDoc.data().role)) {
+      !Access.accessesAdminDashboard(callerDoc.data())) {
     throw new Error("Only admins can update user passwords.");
   }
 
@@ -540,10 +539,9 @@ exports.resolveDirectoryRequest = onCall({
   const db = admin.firestore();
   const callerUid = request.auth.uid;
   const callerDoc = await db.collection("users").doc(callerUid).get();
-  const callerLevel = callerDoc.exists ?
-    (callerDoc.data().permissionLevel || callerDoc.data().role) : null;
+  const caller = callerDoc.exists ? callerDoc.data() : {};
 
-  if (!dr.canResolve(callerLevel)) {
+  if (!dr.canResolve(caller)) {
     throw new HttpsError(
         "permission-denied",
         "Only editors, elders and admins can resolve directory requests.");
@@ -884,10 +882,9 @@ exports.unlinkDirectoryPerson = onCall({
   const db = admin.firestore();
   const callerUid = request.auth.uid;
   const callerDoc = await db.collection("users").doc(callerUid).get();
-  const callerLevel = callerDoc.exists ?
-    (callerDoc.data().permissionLevel || callerDoc.data().role) : null;
+  const caller = callerDoc.exists ? callerDoc.data() : {};
 
-  if (!lu.canUnlink(callerLevel)) {
+  if (!lu.canUnlink(caller)) {
     throw new HttpsError(
         "permission-denied",
         "Only editors, elders and admins can disconnect an account.");
@@ -958,9 +955,10 @@ exports.takeAssignment = onCall(
       }
 
       const db = admin.firestore();
-      const userSnap = await db.collection("users")
-          .doc(request.auth.uid).get();
-      const user = userSnap.exists ? userSnap.data() : {};
+      // The Person is the one linked BOTH ways (MS-811), never whatever
+      // users/{uid}.personId happens to say.
+      const {user, personId} =
+        await linkedPerson.callerOf(db, request.auth.uid);
 
       const {occurrenceId, roleSlug, slotId} = request.data || {};
       if (!occurrenceId || !roleSlug) {
@@ -969,8 +967,8 @@ exports.takeAssignment = onCall(
       }
 
       const result = await aw.take(db, {
-        personId: user.personId || null,
-        rank: user.permissionLevel || user.role || null,
+        personId: personId,
+        rank: AccountLevels.accessRank(user),
         occurrenceId: occurrenceId,
         roleSlug: roleSlug,
         slotId: slotId || null,
@@ -982,7 +980,7 @@ exports.takeAssignment = onCall(
         throw new HttpsError(result.code, result.message);
       }
 
-      log(`takeAssignment: ${user.personId} took ${roleSlug} on ` +
+      log(`takeAssignment: ${personId} took ${roleSlug} on ` +
           `${occurrenceId}` +
           (result.warning ? ` (warned: ${result.warning})` : ""));
       return {success: true, warning: result.warning || null};
@@ -1019,12 +1017,9 @@ exports.answerAssignment = onCall(
       }
 
       const db = admin.firestore();
-      const userSnap = await db.collection("users")
-          .doc(request.auth.uid).get();
-      const personId = userSnap.exists ?
-        (userSnap.data().personId || null) : null;
+      const {personId} = await linkedPerson.callerOf(db, request.auth.uid);
 
-      const {occurrenceId, roleSlug, slotId, state, quiet} =
+      const {occurrenceId, roleSlug, slotId, oneOffId, state, quiet} =
         request.data || {};
       if (!occurrenceId || !roleSlug) {
         throw new HttpsError(
@@ -1036,6 +1031,7 @@ exports.answerAssignment = onCall(
         occurrenceId: occurrenceId,
         roleSlug: roleSlug,
         slotId: slotId || null,
+        oneOffId: typeof oneOffId === "string" ? oneOffId : null,
         state: state,
         quiet: quiet,
         today: ac.churchToday(new Date()),
@@ -1080,9 +1076,7 @@ async function tradeMove(request, run) {
   }
 
   const db = admin.firestore();
-  const userSnap = await db.collection("users").doc(request.auth.uid).get();
-  const personId = userSnap.exists ?
-    (userSnap.data().personId || null) : null;
+  const {personId} = await linkedPerson.callerOf(db, request.auth.uid);
   if (!personId) {
     throw new HttpsError(
         "permission-denied", "Only a linked account can arrange a swap.");
@@ -1498,9 +1492,8 @@ exports.scoreTheme = onCall(
       const db = admin.firestore();
       const callerSnap =
         await db.collection("users").doc(request.auth.uid).get();
-      const level = callerSnap.exists &&
-          (callerSnap.data().permissionLevel || callerSnap.data().role);
-      if (!["editor", "elder", "admin", "super_admin"].includes(level)) {
+      const caller = callerSnap.exists ? callerSnap.data() : {};
+      if (!Access.readsAsEditor(caller)) {
         throw new HttpsError("permission-denied",
             "Editors only — scoring a theme calls a paid API.");
       }
@@ -1613,9 +1606,8 @@ exports.translateLiturgy = onCall(
       const db = admin.firestore();
       const callerSnap = await db.collection("users")
           .doc(request.auth.uid).get();
-      const level = callerSnap.exists &&
-          (callerSnap.data().permissionLevel || callerSnap.data().role);
-      if (!["editor", "elder", "admin", "super_admin"].includes(level)) {
+      const caller = callerSnap.exists ? callerSnap.data() : {};
+      if (!Access.readsAsEditor(caller)) {
         throw new HttpsError("permission-denied",
             "Editors only — translating an order can call a paid API.");
       }
@@ -1719,9 +1711,8 @@ exports.mcpCapabilities = onCall(
       const db = admin.firestore();
       const callerSnap = await db.collection("users")
           .doc(request.auth.uid).get();
-      const level = callerSnap.exists &&
-          (callerSnap.data().permissionLevel || callerSnap.data().role);
-      if (!["editor", "elder", "admin", "super_admin"].includes(level)) {
+      const caller = callerSnap.exists ? callerSnap.data() : {};
+      if (!Access.readsAsEditor(caller)) {
         throw new HttpsError("permission-denied", "Editors only.");
       }
 
@@ -1733,7 +1724,7 @@ exports.mcpCapabilities = onCall(
         siteUrl: MCP_ISSUER_URL.value(),
         // The manifest is the same whoever asks; this caller is only used
         // to decide which tools would be offered, and an editor sees all.
-        auth: {uid: request.auth.uid, permissionLevel: level},
+        auth: Object.assign({uid: request.auth.uid}, caller),
         geminiKey: () => "",
         fieldValues: {
           serverTimestamp: () => admin.firestore.FieldValue.serverTimestamp(),
@@ -1761,9 +1752,8 @@ exports.restoreGuidanceVersion = onCall(
       const db = admin.firestore();
       const callerSnap = await db.collection("users")
           .doc(request.auth.uid).get();
-      const level = callerSnap.exists &&
-          (callerSnap.data().permissionLevel || callerSnap.data().role);
-      if (!["editor", "elder", "admin", "super_admin"].includes(level)) {
+      const caller = callerSnap.exists ? callerSnap.data() : {};
+      if (!Access.readsAsEditor(caller)) {
         throw new HttpsError("permission-denied", "Editors only.");
       }
 
@@ -1842,6 +1832,11 @@ exports.mcp = onRequest(
           issuerUrl: MCP_ISSUER_URL.value(),
           webConfig: MCP_WEB_CONFIG,
           geminiKey: () => GEMINI_KEY.value(),
+          // Where an uploaded Resource's bytes land (MS-693). The default
+          // bucket, resolved here at request time rather than at load: the
+          // comment at the top of this file says why a bucket read during
+          // deploy analysis is a bucket that is not there yet.
+          bucket: admin.storage().bucket(),
           fieldValues: {
             serverTimestamp: () => admin.firestore.FieldValue.serverTimestamp(),
             deleteField: () => admin.firestore.FieldValue.delete(),
@@ -1993,7 +1988,7 @@ exports.syncPermissionLevelToMembershipStage = onDocumentWritten(
 
       const personId = after.personId;
       if (!personId) return; // Not linked to a person.
-      const level = after.permissionLevel || after.role;
+      const level = AccountLevels.accessRank(after);
       if (!isMemberOrHigher(level)) return; // Viewer/unknown: skip the read.
 
       const db = admin.firestore();
@@ -2065,16 +2060,16 @@ exports.syncMemberTagToRole = onDocumentWritten(
         const snap = await tx.get(userRef);
         if (!snap.exists) return null;
         const data = snap.data();
-        const permissionLevel = data.permissionLevel || data.role || "viewer";
         // Already member+ — never demote, and skip write to avoid a loop.
-        // accountLevelId and the permissions map count, so a Pastoral
-        // Assistant whose permissionLevel string is stale is not "promoted".
-        if (!shouldPromoteToMember(permissionLevel, data)) return null;
-        tx.update(userRef, {
-          permissionLevel: MEMBER_PERMISSION_LEVEL,
-          role: MEMBER_PERMISSION_LEVEL,
-        });
-        return permissionLevel;
+        // The account level and the permissions map are the rank, so a
+        // Pastoral Assistant is not "promoted" to member.
+        if (!shouldPromoteToMember(data)) return null;
+        const write = AccountLevels.userWriteFromLevel(
+            AccountLevels.accountLevelIdForPreset("member"),
+            {presetKey: "member", custom: false},
+        );
+        tx.update(userRef, write);
+        return AccountLevels.accessRank(data);
       });
       if (!promotedFrom) return;
       log(`Promoted user ${userId} from '${promotedFrom}' to ` +
@@ -2137,7 +2132,7 @@ async function reconcileElderTag(db, personId) {
   if (person.userId) {
     const userSnap = await db.collection("users").doc(person.userId).get();
     elder = userSnap.exists && isElderPermissionLevel(
-        userSnap.data().permissionLevel || userSnap.data().role);
+        AccountLevels.accessRank(userSnap.data()));
   }
 
   const has = hasElderTag(tags);
@@ -2198,7 +2193,8 @@ exports.syncElderRoleToTag = onDocumentWritten(
  * Permission Level of a Person's Linked User, denormalized onto
  * `people.accountRank` so the Trade picker can judge Event visibility
  * without reading other `users` docs (own-only). Matches server
- * `rankOf`: permissionLevel, then the legacy `role` fallback.
+ * `rankOf`: the rank derived from the saved permissions map, or from a
+ * builtin accountLevelId when no map is saved.
  *
  * Trigger: `users/{uid}` write — link, unlink, permission change, or
  * delete. Reconciles from the Person's live `userId`. Exact sync:
@@ -2340,6 +2336,8 @@ async function loadPrayerConfig(db) {
     templates: pr.resolveTemplates(data),
     push: pr.resolvePushWording(data),
     autoSendEnabled: !!data.autoSendEnabled,
+    includeAnswerLinkInSms: pr.prayerSmsIncludeAnswerLink(data),
+    includeReplyWebhookInSms: pr.prayerSmsIncludeReplyWebhook(data),
   };
 }
 
@@ -2380,9 +2378,11 @@ function notifierDeps(db) {
     loadTokens: (uid) => loadDeviceTokens(db, uid),
     loadTemplates: async () => {
       const loaded = await loadPrayerConfig(db);
+      const includeLink = loaded.includeAnswerLinkInSms;
       return {
-        text: pr.templatesWithAnswerLink(loaded.templates),
-        textFallback: pr.templatesWithAnswerLink(pr.DEFAULT_PRAYER_MESSAGES),
+        text: pr.preparePrayerSmsTextTemplates(loaded.templates, includeLink),
+        textFallback: pr.preparePrayerSmsTextTemplates(
+            pr.DEFAULT_PRAYER_MESSAGES, includeLink),
         push: loaded.push,
         pushFallback: pr.DEFAULT_PUSH_WORDING,
       };
@@ -2855,12 +2855,11 @@ exports.smsInbound = onRequest(
 );
 
 /**
- * Applies a pastoral-prayer subject's texted reply: fills that Sunday's
- * Prayer Request (once), generates a "Prayer Request" Shepherding Note,
- * and sends the thank-you. No date cutoff — a reply is accepted whenever
- * it arrives, as long as the request is still empty. A reply for an
- * already-filled request is ignored so a second reply can't duplicate
- * the note.
+ * Applies a pastoral-prayer subject's texted reply. The newest reply
+ * replaces a form answer or an earlier reply and updates the generated
+ * Shepherding Note in place. An elder-typed request is left alone. The
+ * thank-you goes out whenever the reply is stored, including a replacement.
+ * No date cutoff.
  * @param {Object} db Firestore instance.
  * @param {Object} args personId, serviceDate, and replyText.
  * @return {Promise<void>}
@@ -2935,6 +2934,13 @@ async function dispatchPrayerAsk(db, args) {
   const intent = pr.prayerNotifyRequest(kind);
   if (!intent) return {success: false, error: "Nothing to send."};
 
+  const cfg = await loadPrayerConfig(db);
+  const includeLinkInSms = typeof args.includeAnswerLinkInSms === "boolean" ?
+    args.includeAnswerLinkInSms : cfg.includeAnswerLinkInSms;
+  const includeReplyWebhook = typeof args.includeReplyWebhookInSms ===
+      "boolean" ?
+    args.includeReplyWebhookInSms : cfg.includeReplyWebhookInSms;
+
   const minted = await answerDoor.mintAnswerLink(db, {
     purpose: "prayer_request",
     personId,
@@ -2950,19 +2956,34 @@ async function dispatchPrayerAsk(db, args) {
     manual: !!args.manual,
     serviceDate,
     previousChannel: args.previousChannel || null,
-    url: minted.url,
+    url: includeLinkInSms ? minted.url : null,
     values: {name: pr.firstNameOf(personSnap.data().name)},
-    expectReply: true,
-    message: pr.messageWithLink(args.message),
+    expectReply: includeReplyWebhook,
+    message: pr.messageWithLink(args.message, includeLinkInSms),
   });
   if (!result.accepted) {
+    const detail = result.providerError ?
+      String(result.providerError) : "";
     return {
       success: false,
       unreachable: !!result.unreachable,
+      providerError: detail || null,
       error: result.unreachable ?
         "This person cannot be reached — no phone number and no app." :
-        "Send failed.",
+        (detail || "Send failed."),
     };
+  }
+
+  if (result.channel === "text" && result.textId) {
+    await recordOutbound(db, {
+      to: result.to || toE164US(personSnap.data().contact &&
+          personSnap.data().contact.phone),
+      body: result.textBody || "",
+      textId: result.textId,
+      purpose: "prayer_request",
+      personId,
+      serviceDate,
+    });
   }
 
   const today = pr.churchDateParts(new Date()).date;
@@ -3017,6 +3038,7 @@ async function processPrayerSubject(db, args) {
     initialSentDate: req.initialSentDate || null,
     reminderSent: !!req.reminderSent,
     reminderSentDate: req.reminderSentDate || null,
+    lastSendAttemptDate: req.lastSendAttemptDate || null,
     sentDays: req.sentDays || [],
     today,
     noticeDays: args.noticeDays,
@@ -3035,6 +3057,10 @@ async function processPrayerSubject(db, args) {
   if (!result.success) {
     log(`Prayer-request ${plan.action} send failed for ${personId}: ` +
         `${result.error}`);
+    if (!args.manual) {
+      await reqRef.set(
+          {serviceDate, lastSendAttemptDate: today}, {merge: true});
+    }
   } else {
     log(`Sent prayer-request ${plan.action} to ${personId} ` +
         `(service ${serviceDate}).`);
@@ -3043,7 +3069,7 @@ async function processPrayerSubject(db, args) {
 
 /**
  * Who a Sunday asks, and whether its order has turned asking on.
- * A failed order read falls back to the older male and female fields.
+ * A failed order read asks nobody until the catalog can be read again.
  * @param {Object} db Firestore instance.
  * @param {Object} service the service document
  * @param {Object} liturgy
@@ -3060,8 +3086,8 @@ async function prayerPlanForService(db, service, liturgy, catalog) {
     try {
       orders = await liturgyCatalog.loadLiturgyCatalog(db);
     } catch (err) {
-      log("Liturgy orders could not be read; using the Sunday's " +
-          "prayer fields. " + err);
+      log("Liturgy orders could not be read; no prayer subjects until " +
+          "they can. " + err);
       return pr.prayerNoticePlan({liturgy, elements: []});
     }
   }
@@ -3122,8 +3148,7 @@ exports.sendEventAnnouncementTells = onSchedule(
  * Hourly scheduled sender for pastoral-prayer Prayer Request texts.
  * A prayer on the Liturgy Order tells its people the number of days that
  * prayer sets, even when the older admin switch is off. A Sunday whose
- * order has no such prayer still follows that switch and the older male
- * and female fields.
+ * order has no such prayer still follows the automatic-sending switch.
  */
 exports.sendPrayerRequestTexts = onSchedule(
     {
@@ -3134,6 +3159,11 @@ exports.sendPrayerRequestTexts = onSchedule(
     },
     async () => {
       const db = admin.firestore();
+      if (!TEXTBELT_KEY.value()) {
+        log("sendPrayerRequestTexts: TEXTBELT_KEY is not configured; " +
+            "skipping this tick.");
+        return;
+      }
       const {templates, autoSendEnabled} = await loadPrayerConfig(db);
 
       const {date: today, hour: localHour} = pr.churchDateParts(new Date());
@@ -3293,55 +3323,14 @@ exports.convertServiceInvolvement = onSchedule(
           .where(si.DEFERRED_FLAG, "==", true)
           .get();
 
-      let written = 0;
-      let converted = 0;
-
-      for (const doc of snap.docs) {
-        // The document id IS the date. A Sunday still ahead keeps its flag and
-        // is picked up on the night it finally passes.
-        const records = si.conversion(doc.data(), doc.id, today);
-        if (!records.length) {
-          // Nobody to credit, but the date has passed and the debt is settled —
-          // otherwise an empty Sunday is re-read every night forever.
-          if (doc.id < today) {
-            await doc.ref.set({[si.DEFERRED_FLAG]: false}, {merge: true});
-          }
-          continue;
-        }
-
-        const batch = db.batch();
-        // `totalInvolvements` is a counter the People page and Analytics both
-        // sort by, and the editor used to keep it up as it wrote. Now that the
-        // editor defers, this job owes it — counted per person first, because
-        // one person can hold two Roles on the same Sunday.
-        const gained = new Map();
-
-        records.forEach((record) => {
-          const ref = db.collection("people").doc(record.personId)
-              .collection("involvement").doc(record.id);
-          batch.set(ref, {
-            serviceDate: record.serviceDate,
-            type: record.type,
-            seriesId: ac.SUNDAY_SERVICE_ID,
-            metadata: record.metadata || null,
-            convertedAt: admin.firestore.FieldValue.serverTimestamp(),
-          }, {merge: true});
-          gained.set(record.personId, (gained.get(record.personId) || 0) + 1);
-        });
-
-        gained.forEach((count, personId) => {
-          batch.update(db.collection("people").doc(personId), {
-            totalInvolvements: admin.firestore.FieldValue.increment(count),
-          });
-        });
-
-        // Cleared in the same batch as the writes, so a crash between the two
-        // cannot leave a Sunday paid twice or not at all.
-        batch.set(doc.ref, {[si.DEFERRED_FLAG]: false}, {merge: true});
-        await batch.commit();
-
-        written += records.length;
-        converted += 1;
+      // The document id IS the date. A Sunday still ahead keeps its flag and
+      // is picked up on the night it finally passes. One Sunday that fails is
+      // logged and left flagged; the rest still convert (MS-815).
+      const {written, converted, failed} = await siRun.payAll(
+          db, snap.docs, today, admin.firestore.FieldValue, log);
+      if (failed.length) {
+        log(`convertServiceInvolvement: ${failed.length} Service(s) failed ` +
+            "and stay flagged for tomorrow.");
       }
 
       log(`convertServiceInvolvement: wrote ${written} serve record(s) ` +
@@ -3463,67 +3452,29 @@ exports.notifyEldersOnPrayerComplete = onDocumentWritten(
         event.data.before.data() : null;
       const db = admin.firestore();
 
-      // Designated subjects for this service.
+      // Designated subjects for this service, grouped by the prayer that
+      // opted into Elder Digest (or the older male/female pair).
       const svcSnap = await db.collection("services").doc(serviceDate).get();
       if (!svcSnap.exists) return;
       const service = svcSnap.data() || {};
       const liturgy = service.liturgy || {};
-      const plan = await prayerPlanForService(db, service, liturgy);
-      const subjects = plan.subjects;
-      if (subjects.length === 0) return;
-
-      // Current request docs for each subject (the changed one uses the write's
-      // after-state; the others are unchanged by this event).
-      const reqSnaps = await Promise.all(subjects.map((s) =>
-        db.collection("people").doc(s.id)
-            .collection("prayer_requests").doc(serviceDate).get()));
-      const filledText = (i) => {
-        if (subjects[i].id === personId) {
-          return (after.prayerRequest || "").trim();
-        }
-        const snap = reqSnaps[i];
-        return ((snap.exists && snap.data().prayerRequest) || "").trim();
-      };
-
-      const subjectStates = subjects.map((s, i) => ({filled: !!filledText(i)}));
-      const wasCompleteBefore = subjects.every((s, i) =>
-        s.id === personId ?
-          !!(before && (before.prayerRequest || "").trim()) :
-          !!filledText(i));
-
-      if (!pr.elderDigestDecision({
-        subjectStates,
-        changedSource: after.prayerRequestSource || null,
-        wasCompleteBefore,
-      })) {
-        return;
-      }
-
-      // Idempotency lock: a deterministic marker doc, created atomically. If it
-      // already exists, another invocation has the digest.
-      const markerRef = db.collection(NOTIFICATIONS_COLLECTION)
-          .doc(`elder_digest_${serviceDate}`);
+      let catalog = null;
       try {
-        await markerRef.create({
-          direction: "outbound",
-          channel: "text",
-          purpose: "elder_digest",
-          serviceDate,
-          createdAt: admin.firestore.FieldValue.serverTimestamp(),
-        });
-      } catch (e) {
-        log(`Elder digest already handled for ${serviceDate}; skipping.`);
-        return;
+        catalog = await liturgyCatalog.loadLiturgyCatalog(db);
+      } catch (err) {
+        log("Elder digest: liturgy orders could not be read. " + err);
+        catalog = false;
       }
+      let elements = [];
+      if (catalog && catalog !== false) {
+        elements = LiturgyOrders.orderFor(service, catalog).elements || [];
+      }
+      const groups = pr.elderDigestGroups({liturgy, elements});
+      const touched = groups.filter((g) =>
+        g.subjects.some((s) => s.id === personId));
+      if (!touched.length) return;
 
-      // Render the digest from each subject's name + request.
-      const subjectLines = subjects.map((s, i) => ({
-        name: s.name || "", request: filledText(i),
-      }));
       const {templates} = await loadPrayerConfig(db);
-      const body = pr.renderElderDigest(templates.elderDigest, {
-        serviceDate, subjects: subjectLines,
-      });
 
       // Recipients: everyone with the "Elder" tag and a phone, deduped.
       const eldersSnap = await db.collection("people")
@@ -3536,27 +3487,83 @@ exports.notifyEldersOnPrayerComplete = onDocumentWritten(
         seen.add(to);
         recipients.push({personId: doc.id, to});
       }
-      if (recipients.length === 0) {
-        log(`Elder digest ${serviceDate}: no Elder-tagged recipients ` +
-            `with a phone.`);
-        return;
-      }
 
-      for (const r of recipients) {
-        try {
-          const result = await sendViaTextbelt({
-            to: r.to, body, withReplyWebhook: false,
-          });
-          if (result.success) {
-            await recordOutbound(db, {
-              to: r.to, body, textId: result.textId,
-              purpose: "elder_digest", personId: r.personId, serviceDate,
-            });
-          } else {
-            log(`Elder digest send failed for ${r.to}: ${result.error}`);
+      for (const group of touched) {
+        const subjects = group.subjects;
+        const reqSnaps = await Promise.all(subjects.map((s) =>
+          db.collection("people").doc(s.id)
+              .collection("prayer_requests").doc(serviceDate).get()));
+        const filledText = (i) => {
+          if (subjects[i].id === personId) {
+            return (after.prayerRequest || "").trim();
           }
+          const snap = reqSnaps[i];
+          return ((snap.exists && snap.data().prayerRequest) || "").trim();
+        };
+
+        const subjectStates = subjects.map((s, i) => (
+          {filled: !!filledText(i)}
+        ));
+        const wasCompleteBefore = subjects.every((s, i) =>
+          s.id === personId ?
+            !!(before && (before.prayerRequest || "").trim()) :
+            !!filledText(i));
+
+        if (!pr.elderDigestDecision({
+          subjectStates,
+          changedSource: after.prayerRequestSource || null,
+          wasCompleteBefore,
+        })) {
+          continue;
+        }
+
+        // Idempotency lock per prayer (or the legacy pair).
+        const markerRef = db.collection(NOTIFICATIONS_COLLECTION)
+            .doc(`elder_digest_${serviceDate}_${group.id}`);
+        try {
+          await markerRef.create({
+            direction: "outbound",
+            channel: "text",
+            purpose: "elder_digest",
+            serviceDate,
+            prayerElementId: group.id,
+            createdAt: admin.firestore.FieldValue.serverTimestamp(),
+          });
         } catch (e) {
-          log(`Elder digest send error for ${r.to}: ${e.message}`);
+          log(`Elder digest already handled for ${serviceDate} ` +
+              `(${group.id}); skipping.`);
+          continue;
+        }
+
+        if (recipients.length === 0) {
+          log(`Elder digest ${serviceDate}: no Elder-tagged recipients ` +
+              `with a phone.`);
+          continue;
+        }
+
+        const subjectLines = subjects.map((s, i) => ({
+          name: s.name || "", request: filledText(i),
+        }));
+        const body = pr.renderElderDigest(templates.elderDigest, {
+          serviceDate, subjects: subjectLines,
+        });
+
+        for (const r of recipients) {
+          try {
+            const result = await sendViaTextbelt({
+              to: r.to, body, withReplyWebhook: false,
+            });
+            if (result.success) {
+              await recordOutbound(db, {
+                to: r.to, body, textId: result.textId,
+                purpose: "elder_digest", personId: r.personId, serviceDate,
+              });
+            } else {
+              log(`Elder digest send failed for ${r.to}: ${result.error}`);
+            }
+          } catch (e) {
+            log(`Elder digest send error for ${r.to}: ${e.message}`);
+          }
         }
       }
       log(`Elder digest sent for ${serviceDate} to ` +
@@ -3589,16 +3596,15 @@ function callerAddressOf(request) {
  * with no token for their own open items.
  */
 exports.answerLink = onCall(
-    {cors: true, region: "us-central1", enforceAppCheck: false},
+    {cors: true, region: "us-central1", enforceAppCheck: false,
+      invoker: "public"},
     async (request) => {
       const db = admin.firestore();
       const data = request.data || {};
       let personId = null;
       if (request.auth) {
-        const userSnap = await db.collection("users")
-            .doc(request.auth.uid).get();
-        const user = userSnap.exists ? userSnap.data() : {};
-        personId = user.personId || null;
+        personId = (await linkedPerson.callerOf(db, request.auth.uid))
+            .personId;
       }
       return answerDoor.handleAnswerLink(db, {
         op: data.op,
@@ -3647,12 +3653,6 @@ exports.answerLink = onCall(
  * Every judgement is in forms-public.js and forms-core.js, both pure and tested
  * without an emulator. This reads, asks, and writes.
  */
-// The two ladders, restated because the rules language cannot export anything
-// — the same trade forms-public.js already accepts. ⚠ An admin is NOT an
-// elder: isElder() in firestore.rules has never said so.
-const EDITOR_RANKS = ["editor", "admin", "elder", "super_admin"];
-const ELDER_RANKS = ["elder", "super_admin"];
-
 // Deleting a Form Template, and the answers it gathered (MS-406).
 //
 // ⚠ WHY THIS IS NOT A BATCH IN THE BROWSER. It was, and it could not work:
@@ -3679,10 +3679,7 @@ exports.deleteFormTemplate = onCall(
 
       const userSnap = await db.collection("users").doc(request.auth.uid).get();
       const user = userSnap.exists ? userSnap.data() : {};
-      const rank = user.permissionLevel || user.role || null;
-      const pastoralAssistant = rank === "pastoral_assistant" ||
-          user.pastoralAssistant === true;
-      if (!EDITOR_RANKS.includes(rank) && !pastoralAssistant) {
+      if (!Access.readsAsEditor(user)) {
         return {ok: false, message: "Only an editor can delete a form."};
       }
 
@@ -3696,8 +3693,7 @@ exports.deleteFormTemplate = onCall(
       // A form shut to elders is deleted by an elder and nobody else (MS-404).
       // The rules say so for the record; this door has to say so too, because
       // it writes past them.
-      if (FormsCore.isElderOnly(form) && !ELDER_RANKS.includes(rank) &&
-          !pastoralAssistant) {
+      if (FormsCore.isElderOnly(form) && !Access.readsAsElder(user)) {
         return {ok: false, message: "There is no form here."};
       }
 
@@ -3740,7 +3736,8 @@ exports.publicForm = onCall(
     // collects tokens whenever `mode` in public/app-check-config.js is
     // monitor or enforce (test/app-check-agreement.test.js). The door
     // itself is app-check-door.js, keyed on PUBLIC_FORM_APP_CHECK_MODE.
-    {cors: true, region: "us-central1", enforceAppCheck: false},
+    {cors: true, region: "us-central1", enforceAppCheck: false,
+      invoker: "public"},
     async (request) => {
       const db = admin.firestore();
       // `files` is question id → {name, contentType, size, dataBase64}. It
@@ -3780,15 +3777,9 @@ exports.publicForm = onCall(
       let rank = null;
       let personId = null;
       if (request.auth) {
-        const userSnap = await db.collection("users")
-            .doc(request.auth.uid).get();
-        const user = userSnap.exists ? userSnap.data() : {};
-        rank = user.permissionLevel || user.role || null;
-        if (user.pastoralAssistant === true &&
-            !["elder", "super_admin", "pastoral_assistant"].includes(rank)) {
-          rank = "pastoral_assistant";
-        }
-        personId = user.personId || null;
+        const caller = await linkedPerson.callerOf(db, request.auth.uid);
+        rank = AccountLevels.accessRank(caller.user);
+        personId = caller.personId;
       }
       const caller = {signedIn: !!request.auth, rank: rank};
       const today = ac.churchToday(new Date());
@@ -3814,15 +3805,8 @@ exports.publicForm = onCall(
         if (wantsPeople) {
           const peopleSnap = await db.collection("people")
               .orderBy("name", "asc").get();
-          const directory = peopleSnap.docs.map((doc) => {
-            const d = doc.data() || {};
-            return {
-              id: doc.id,
-              name: d.name || "Unnamed",
-              isMember: d.isMember === true || d.membershipStage === "member",
-              tagIds: d.tagIds || [],
-            };
-          });
+          const directory = peopleSnap.docs.map((doc) =>
+            FormsCore.directoryPerson(doc.id, doc.data() || {}));
           served.people = fp.pickerChoices(form, directory);
         }
         // Whether to draw the "add them to the directory" row. The page is
@@ -3865,14 +3849,11 @@ exports.publicForm = onCall(
           createdAt: now,
           updatedAt: now,
         });
-        // Shaped like a row of `served.people`, because that is the list the
-        // picker searches and the answer that follows must be an ordinary pick.
+        // Only an id and a name, the same shape `pickerChoices` sends. The
+        // answer that follows is an ordinary pick.
         return {
           ok: true,
-          person: {
-            id: ref.id, name: proposal.person.name,
-            isMember: false, tagIds: [],
-          },
+          person: {id: ref.id, name: proposal.person.name},
         };
       }
 

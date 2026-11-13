@@ -217,7 +217,7 @@ document.addEventListener('alpine:init', () => {
             auth.onAuthStateChanged(async user => {
                 if (!user) { window.location.href = 'login.html'; return; }
                 const userData = await getUserData(user.uid);
-                this.currentPermissionLevel = (userData && (userData.permissionLevel || userData.role)) || 'viewer';
+                this.currentPermissionLevel = (window.AccessCore ? AccessCore.permissionLevelOf(userData) : 'viewer');
                 Object.assign(this, AccessCore.pageFlags(userData));
                 if (!this.canReadElder) {
                     window.location.href = 'index.html';
@@ -727,7 +727,6 @@ document.addEventListener('alpine:init', () => {
             this.saveStatus = 'saving';
             const saving = CareListCore.saveEdits(db, firebase.firestore, this.docId, Object.assign({}, edits, {
                 byName: this.myName || this.currentUserName,
-                oldShape: session.oldShape(),
             })).then(() => {
                 session.markNormalised();
                 this.saveStatus = session.hasUnsaved() ? 'unsaved' : 'saved';

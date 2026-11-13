@@ -73,10 +73,12 @@ test('a cell left under a column that was removed is not on the profile (MS-430)
     assert.deepStrictEqual(out.notes.map(n => n.subject), ['Needs']);
 });
 
-test('a Care List from before columns shows its cell as Notes', () => {
+test('a normalised Care List column shows as its column name on the profile', () => {
     const out = Core.combineProfile({
         personId: BOB,
-        careListDocs: [careList('cl1', { [BOB]: TEXT }, { careListColumns: undefined })],
+        careListDocs: [careList('cl1', { [BOB]: { col_default: TEXT } }, {
+            careListColumns: [{ id: 'col_default', name: 'Notes' }],
+        })],
     });
     assert.deepStrictEqual(out.notes.map(n => n.subject), ['Notes']);
 });

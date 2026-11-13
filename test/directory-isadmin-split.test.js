@@ -4,6 +4,13 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const Access = require('../public/access-core.js');
+const Levels = require('../public/account-levels-core.js');
+
+function account(preset, extra) {
+    const id = Levels.BUILTIN_LEVEL_IDS[preset];
+    if (!id) return Object.assign({ accountLevelId: null, permissions: {} }, extra || {});
+    return Object.assign({}, Levels.userWriteFromLevel(id), extra || {});
+}
 
 // MS-542 / MS-583 — directory hide chrome asks canDecide; hidden
 // people/tags still lift for a Pastoral Assistant via canReadElder.
@@ -61,25 +68,36 @@ test('directory hide chrome is canDecide, not the read-elder alias', () => {
 });
 
 test('canReadElder is the View-as-Member read lift; canDecide follows AccessCore', () => {
+    const acting = getter('actingAccount');
+    assert.match(acting, /viewAsMember/);
+    assert.match(acting, /return 'member'/);
     const readLift = getter('canReadElder');
-    assert.match(readLift, /AccessCore\.readsAsElder/);
-    assert.match(readLift, /viewAsMember/);
-    assert.match(readLift, /pastoralAssistant/);
+    assert.match(readLift, /AccessCore\.readsAsElder\(this\.actingAccount\)/);
+    assert.doesNotMatch(readLift, /viewAsMember/);
+    assert.doesNotMatch(readLift, /pastoralAssistant/);
     const decide = getter('canDecide');
-    assert.match(decide, /AccessCore\.canDecide/);
-    assert.match(decide, /viewAsMember/);
+    assert.match(decide, /AccessCore\.canDecide\(this\.actingAccount\)/);
+    assert.doesNotMatch(decide, /viewAsMember/);
     assert.doesNotMatch(decide, /readsAsElder/);
     assert.doesNotMatch(decide, /AccessCore\.isAnElder/);
 });
 
-test('an editor-level PA reads hidden directory vocab and can decide hide flags', () => {
-    const memberPa = Access.pageFlags({ permissionLevel: 'member', pastoralAssistant: true });
-    assert.equal(memberPa.canReadElder, true);
-    assert.equal(memberPa.canDecide, true);
-    const editorPa = Access.pageFlags({ permissionLevel: 'editor', pastoralAssistant: true });
-    assert.equal(editorPa.canReadElder, true);
-    assert.equal(editorPa.canDecide, true);
-    const elder = Access.pageFlags({ permissionLevel: 'elder' });
+test('a Pastoral Assistant reads hidden directory vocab and can decide hide flags', () => {
+    const flag = Access.pageFlags({ permissionLevel: 'member', pastoralAssistant: true });
+    assert.equal(flag.canReadElder, false);
+    assert.equal(flag.canDecide, false);
+    const editorFlag = Access.pageFlags({ permissionLevel: 'editor', pastoralAssistant: true });
+    assert.equal(editorFlag.canReadElder, false);
+    assert.equal(editorFlag.canDecide, false);
+    const pa = Access.pageFlags(account('pastoral_assistant'));
+    assert.equal(pa.canReadElder, true);
+    assert.equal(pa.canDecide, true);
+    assert.equal(pa.canWriteEditor, true);
+    assert.equal(pa.canWriteRecord, true);
+    assert.equal(Access.isAnElder(account('pastoral_assistant')), false);
+    const elder = Access.pageFlags(account('elder'));
     assert.equal(elder.canReadElder, true);
     assert.equal(elder.canDecide, true);
+    assert.equal(Access.readsAsElder('member'), false);
+    assert.equal(Access.canDecide('member'), false);
 });

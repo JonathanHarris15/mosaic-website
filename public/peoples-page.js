@@ -102,7 +102,7 @@ document.addEventListener('alpine:init', () => {
                 Object.assign(this, flags);
                 this.currentUserUid = user.uid;
                 this.currentUserName = (userData && (userData.displayName || userData.name)) || user.email || '';
-                if (!['member', 'editor', 'elder', 'admin', 'super_admin'].includes(this.currentPermissionLevel)
+                if (!AccessCore.readsAsMember(this.account || this.currentPermissionLevel)
                     && !this.canReadElder) {
                     alert('Permission denied.');
                     window.location.href = 'index.html';
@@ -128,29 +128,32 @@ document.addEventListener('alpine:init', () => {
             return (this.isSuperAdmin && this.viewAsMember) ? 'member' : this.currentPermissionLevel;
         },
 
+        // The account the page acts as. View as Member is the member preset.
+        // Otherwise the saved account, so a custom map is not collapsed to its
+        // rank label. A bare rank label is only the fallback when no account
+        // was resolved.
+        get actingAccount() {
+            if (this.viewAsMember && this.isSuperAdmin) return 'member';
+            return this.account || this.currentPermissionLevel;
+        },
+
         // Hidden people/tags follow reads-as-elder (PA included). Honours View
         // as Member. This is a read lift, not a write power — hide toggles
         // use canDecide.
         get canReadElder() {
-            return AccessCore.readsAsElder({
-                permissionLevel: this.effectivePermissionLevel,
-                pastoralAssistant: this.viewAsMember ? false : this.pastoralAssistant,
-            });
+            return AccessCore.readsAsElder(this.actingAccount);
         },
 
         // Hide-vocab writes follow AccessCore.canDecide (MS-594: PA included).
         // Honours View as Member.
         get canDecide() {
-            return AccessCore.canDecide({
-                permissionLevel: this.effectivePermissionLevel,
-                pastoralAssistant: this.viewAsMember ? false : this.pastoralAssistant,
-            });
+            return AccessCore.canDecide(this.actingAccount);
         },
 
         // Members get a read-only view of the directory; editors and above can modify
-        // records and see the Tags Manager. The grant adds nothing here.
+        // records and see the Tags Manager.
         get canEdit() {
-            return AccessCore.writesAsEditor(this.effectivePermissionLevel);
+            return AccessCore.writesAsEditor(this.actingAccount);
         },
 
         toggleEditMode() {

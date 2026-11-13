@@ -34,10 +34,12 @@ const COVER_STORE = read('public', 'cover-store.js');
 // ── The server no longer takes the holder's word for it ──────────────────────
 
 test('the holder of a place is read from the roster, never sent by the caller', () => {
-    assert.match(TRADE_WRITES, /async function currentHolderOf\(db, ref\)/,
+    assert.match(TRADE_WRITES, /async function placeOf\(db, ref\)/,
         'nothing reads who is actually on the place');
-    assert.match(TRADE_WRITES, /const onIt = await currentHolderOf\(db, s\.assignment\)/,
+    assert.match(TRADE_WRITES, /const row = await placeOf\(db, s\.assignment\)/,
         'an uninvited offer does not resolve the holder');
+    assert.match(TRADE_WRITES, /holderId = row\.personId;/,
+        'the holder is not taken from the roster row');
 });
 
 test('the callable no longer accepts a holderId at all', () => {
@@ -54,7 +56,9 @@ test('the callable no longer accepts a holderId at all', () => {
 });
 
 test('an offer against a place nobody is on is refused', () => {
-    assert.match(TRADE_WRITES, /return refuse\("not-found", "Nobody is on that place now\."\)/,
+    // MS-816: an empty place, a held one and a quiet one all get the same
+    // answer, so the answer says nothing about who is on it.
+    assert.match(TRADE_WRITES, /"That place is not open for cover\.", "notOpen"\)/,
         'an offer against an empty place opens a Trade against nobody');
 });
 

@@ -112,9 +112,9 @@ test('serving in another Event series does not count — fairness is per series'
     assert.equal(Fairness.loadOf(mine, dates, intensityOf).alice || 0, 0);
 });
 
-test('a record written before seriesId existed reads as the Sunday Service', () => {
+test('a record without seriesId does not count toward Sunday fairness', () => {
     const history = [{ personId: 'alice', type: 'setup', serviceDate: '2026-07-26' }];
-    assert.equal(EventsCore.forSeries(history, 'sunday_service').length, 1);
+    assert.equal(EventsCore.forSeries(history, 'sunday_service').length, 0);
 });
 
 // ── Recency ──────────────────────────────────────────────────────────────────

@@ -129,8 +129,6 @@ window.RelationshipsTab = () => ({
     // The live "Reads as" line under the type form. Driven off `typeForm` — the
     // shape being built right now — not off saved data, so it updates as you type.
     previewSentence(form) {
-        const holder = this.labelFor(form, 'holder');
-        const counterpart = this.labelFor(form, 'counterpart');
         const one = form.label || 'Label';
 
         if (form.kind === 'group') {

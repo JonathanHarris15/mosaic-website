@@ -2,7 +2,6 @@ const { test } = require('node:test');
 const assert = require('node:assert');
 
 const eventTell = require('../functions/event-tell.js');
-const Tell = require('../public/event-tell-core.js');
 const Ann = require('../public/event-announcement-core.js');
 
 test('jobMayRun is false outside 8am–8pm church-local', () => {

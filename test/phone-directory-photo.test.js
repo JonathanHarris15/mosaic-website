@@ -8,17 +8,24 @@ const path = require('node:path');
 // same upload and clear the computer directory already uses.
 
 require('../public/access-core.js');
+const Levels = require('../public/account-levels-core.js');
 require('../public/phone-directory-edit.js');
 const Photo = require('../public/person-photo-core.js');
 global.PersonPhotoCore = Photo;
 const Plan = require('../public/phone-directory-photo.js');
 
-const editor = { permissionLevel: 'editor', personId: 'me' };
-const admin = { permissionLevel: 'admin', personId: 'me' };
-const elder = { permissionLevel: 'elder', personId: 'me' };
-const superAdmin = { permissionLevel: 'super_admin', personId: 'me' };
-const member = { permissionLevel: 'member', personId: 'me' };
-const assistant = { permissionLevel: 'member', pastoralAssistant: true, personId: 'me' };
+function account(preset, extra) {
+    const id = Levels.BUILTIN_LEVEL_IDS[preset];
+    if (!id) return Object.assign({ accountLevelId: null, permissions: {} }, extra || {});
+    return Object.assign({}, Levels.userWriteFromLevel(id), extra || {});
+}
+
+const editor = account('editor', { personId: 'me' });
+const admin = account('admin', { personId: 'me' });
+const elder = account('elder', { personId: 'me' });
+const superAdmin = account('super_admin', { personId: 'me' });
+const member = account('member', { personId: 'me' });
+const assistant = account('pastoral_assistant', { personId: 'me' });
 
 const ada = { id: 'ada', name: 'Ada Lovelace', photoUrl: null, photoCrop: null };
 const framed = {
@@ -63,14 +70,16 @@ test('a member is not offered a photo control, including on their own page', () 
 
 test('a Pastoral Assistant is offered a photo control in Edit Mode', () => {
     assert.equal(Plan.offerControls(assistant, true), true);
-    assert.equal(Plan.offerControls({ permissionLevel: 'pastoral_assistant' }, true), true);
+    assert.equal(Plan.offerControls('pastoral_assistant', true), true);
+    assert.equal(Plan.offerControls({ permissionLevel: 'pastoral_assistant' }, true), false);
+    assert.equal(Plan.offerControls({ permissionLevel: 'member', pastoralAssistant: true }, true), false);
     assert.equal(Plan.planChosenFile(assistant, ada, true, jpeg).write, true);
 });
 
 test('an editor, admin, elder, or super admin is offered a photo control only in Edit Mode', () => {
     for (const user of [editor, admin, elder, superAdmin]) {
-        assert.equal(Plan.offerControls(user, true), true, user.permissionLevel);
-        assert.equal(Plan.offerControls(user, false), false, user.permissionLevel);
+        assert.equal(Plan.offerControls(user, true), true, user.accountLevelId);
+        assert.equal(Plan.offerControls(user, false), false, user.accountLevelId);
     }
 });
 

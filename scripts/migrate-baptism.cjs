@@ -51,7 +51,16 @@ async function main() {
     const servicesSnap = await db.collection('services').get();
     for (const doc of servicesSnap.docs) {
         const date = doc.id;
-        const bap = doc.data().liturgy && doc.data().liturgy.baptism;
+        const data = doc.data();
+        const liturgyBap = data.liturgy && data.liturgy.baptism;
+        let bap = null;
+        let clearTopLevelBaptism = false;
+        if (typeof liturgyBap === 'string') {
+            bap = liturgyBap;
+        } else if (liturgyBap === undefined && typeof data.baptism === 'string') {
+            bap = data.baptism;
+            clearTopLevelBaptism = true;
+        }
         if (typeof bap !== 'string') continue;            // already migrated (array) or absent
         const parsed = parseBaptismNames(bap);
         if (!parsed.candidates.length && !parsed.needsReview) continue;  // empty/placeholder
@@ -67,7 +76,7 @@ async function main() {
             else if (matches.length === 0) refs.push({ name, id: null, action: 'create' });
             else { ambiguous = true; review.push({ date, value: bap, reason: `"${name}" matches ${matches.length} existing people` }); }
         }
-        if (!ambiguous) plan.push({ date, value: bap, refs });
+        if (!ambiguous) plan.push({ date, value: bap, refs, clearTopLevelBaptism });
     }
 
     console.log(`Services to migrate: ${plan.length}`);
@@ -108,7 +117,11 @@ async function main() {
             }
             finalRefs.push({ name: r.name, id });
         }
-        batch.update(db.collection('services').doc(item.date), { 'liturgy.baptism': finalRefs });
+        const servicePatch = { 'liturgy.baptism': finalRefs };
+        if (item.clearTopLevelBaptism) {
+            servicePatch.baptism = admin.firestore.FieldValue.delete();
+        }
+        batch.update(db.collection('services').doc(item.date), servicePatch);
         await batch.commit();
         services++;
     }

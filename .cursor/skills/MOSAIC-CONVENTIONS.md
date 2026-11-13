@@ -5,7 +5,7 @@ Repo-specific rules that adapt [mattpocock/skills](https://github.com/mattpocock
 ## Target workflow
 
 ```
-grill-with-docs → to-spec (or to-prd via plan-ticket) → to-tickets / to-issues → implement (+ tdd / diagnosing-bugs) → pr / code-review → jev smoke test (user-visible only)
+grill-with-docs → to-spec (or to-prd via plan-ticket) → to-tickets / to-issues → implement (+ tdd / diagnosing-bugs) → pr / code-review → adversarial review (fresh subagent, `Adversarial review: PASS`) → jev smoke test (user-visible only) → merge on green CI
 ```
 
 **UI work** is gated by [ui-prototype-first](../rules/ui-prototype-first.mdc): standalone HTML in `docs/design/prototypes/`, draft PR with htmlpreview link, stop for Jonathan's approval before landing in `public/`.
@@ -31,7 +31,7 @@ Facts (code, docs, Jira fields) are still looked up, never invented.
 
 ## PRs, merge, deploy
 
-- **Merge:** Coordinating agent (**Mosaic Dev**) merges on **green CI** (`npm test`, `npm run lint --prefix functions`). Skills must **not** tell agents to wait for Jonathan to merge.
+- **Merge:** Coordinating agent (**Mosaic Dev**) merges on **green CI** (`npm test`, `npm run lint --prefix functions`) after a new subagent's pull request comment `Adversarial review: PASS` for that head ([code-review](code-review/SKILL.md)). Skills must **not** tell agents to wait for Jonathan to merge.
 - **PR body:** Use `.github/PULL_REQUEST_TEMPLATE.md` and the [`pr`](pr/SKILL.md) skill. User-visible changes: **Smoke test** section per [jev-smoke-test](jev-smoke-test/SKILL.md).
 - **Deploy:** Agents **never** `firebase deploy` from the VM. Church deploy is GitHub Actions `.github/workflows/firebase-deploy.yml` on `main`. Ghost sandbox: `ghost-main` only (`docs/ops/ghost-main.md`).
 

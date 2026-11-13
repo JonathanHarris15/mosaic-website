@@ -91,8 +91,9 @@
 
         .dash-seal { width: 32px; height: 32px; flex: 0 0 auto; object-fit: contain; }
 
-        /* The window stays put. This page is the one that scrolls, and only
-           when the column is taller than the screen. */
+        /* The window stays put. This Sunday keeps its natural height and
+           stays on screen. Your Places is what scrolls when the tiles do
+           not fit under the card (MS-807). */
         html { height: 100%; overflow: hidden; background: var(--background); }
         body.m-page--app { height: 100dvh; max-height: 100dvh; overflow: hidden; }
 
@@ -100,23 +101,8 @@
             position: relative; z-index: 1;
             display: flex; flex-direction: column; gap: var(--space-md);
             flex: 1 1 auto; min-height: 0; width: 100%;
-            padding: var(--space-sm) var(--space-margin) var(--space-lg);
-            overflow-x: hidden; overflow-y: auto;
-            overscroll-behavior: contain;
-            scrollbar-width: thin;
-            scrollbar-color: var(--outline-variant) transparent;
-        }
-        .dash-main::-webkit-scrollbar { width: 10px; height: 10px; }
-        .dash-main::-webkit-scrollbar-track { background: transparent; }
-        .dash-main::-webkit-scrollbar-thumb {
-            background: var(--outline-variant);
-            border: 3px solid transparent;
-            border-radius: var(--radius-full);
-            background-clip: padding-box;
-        }
-        .dash-main::-webkit-scrollbar-thumb:hover {
-            background: var(--outline);
-            background-clip: padding-box;
+            padding: var(--space-sm) var(--space-margin) 0;
+            overflow: hidden;
         }
 
         /* The seal's rings, on the window itself, so the page's margin does
@@ -170,6 +156,11 @@
 
         .dash-sunday {
             display: grid;
+            /* overflow:hidden (the rounded corners) makes this item's
+               automatic minimum size 0, so the default flex-shrink clips
+               the go-to-This-Sunday control. Do not let it shrink. */
+            flex: 0 0 auto;
+            min-height: min-content;
             grid-template-columns: minmax(0, 1fr);
             background: var(--surface-container-lowest);
             border: 1px solid var(--outline-variant);
@@ -261,6 +252,32 @@
             .dash-sunday__theme--desk { display: none; }
             .dash-sunday__theme--phone:not([hidden]) { display: block; }
             .dash-sunday__warn:not([hidden]) { display: flex; }
+        }
+
+        /* Places, the lines under them, and the phone's way back. This
+           region yields: it scrolls, and the Sunday card above does not. */
+        .dash-rest {
+            flex: 1 1 auto; min-height: 0;
+            display: flex; flex-direction: column; gap: var(--space-md);
+            margin-left: calc(var(--space-margin) * -1);
+            margin-right: calc(var(--space-margin) * -1);
+            padding: 0 var(--space-margin) var(--space-lg);
+            overflow-x: hidden; overflow-y: auto;
+            overscroll-behavior: contain;
+            scrollbar-width: thin;
+            scrollbar-color: var(--outline-variant) transparent;
+        }
+        .dash-rest::-webkit-scrollbar { width: 10px; height: 10px; }
+        .dash-rest::-webkit-scrollbar-track { background: transparent; }
+        .dash-rest::-webkit-scrollbar-thumb {
+            background: var(--outline-variant);
+            border: 3px solid transparent;
+            border-radius: var(--radius-full);
+            background-clip: padding-box;
+        }
+        .dash-rest::-webkit-scrollbar-thumb:hover {
+            background: var(--outline);
+            background-clip: padding-box;
         }
 
         .dash-places-head {
@@ -407,6 +424,7 @@
     <script src="commitments-core.js"></script>
     <script src="liturgy-order-core.js"></script>
     <script src="liturgy-order-store.js"></script>
+    <script src="service-dotted-keys-core.js"></script>
     <script src="home-dashboard-core.js"></script>
     <script src="trades-store.js"></script>
     <script src="trades-view.js"></script>
@@ -496,6 +514,7 @@
              Sunday warning itself now lives in the card above. -->
         <div id="service-notice"></div>
 
+        <div class="dash-rest">
         <div class="dash-places-head">
             <span class="m-label" id="dash-places-label">Your places</span>
             <span class="dash-drag-hint" hidden id="dash-caption">
@@ -572,6 +591,7 @@
             <span class="material-symbols-outlined text-[18px]">smartphone</span>
             <span class="font-label-md text-label-md">Switch to the mobile app</span>
         </a>
+        </div>
     </main>
     <script>
 
@@ -764,7 +784,7 @@
             }
 
             const svc = HD.normalizeService(opts.svc);
-            const view = HD.glance(svc);
+            const view = HD.glance(svc, opts.catalog);
             const ready = HD.readiness(svc, opts.catalog);
             setHiddenText(desk, view.theme);
             setHiddenText(phone, [view.theme, view.sermon].filter(Boolean).join(' · '));
@@ -905,7 +925,7 @@
                         if (typeof query.select === 'function') {
                             query = query.select(
                                 'serviceLeaderId', 'musicLeaderId', 'preacherId',
-                                'prayerPraiseId', 'prayerConfessionId', 'musicHelpers', 'date'
+                                'carriedBy', 'musicHelpers', 'date'
                             );
                             const snap = await query.get();
                             services = snap.docs.map(function (d) {
@@ -1011,13 +1031,16 @@
             // Who the drawer says you are. Stays null when nobody is signed in:
             // the drawer still lists the pages a visitor may open.
             let who = null;
+            let account = (typeof DashboardNav !== 'undefined')
+                ? DashboardNav.accountOf(null)
+                : { permissionLevel: 'viewer', pastoralAssistant: false };
             if (user) {
                 let userData = null;
                 try {
                     userData = await getUserData(user.uid);
                     if (userData) {
-                        permissionLevel = userData.permissionLevel || userData.role || 'viewer';
-                        pastoralAssistant = userData.pastoralAssistant === true;
+                        permissionLevel = (window.AccessCore ? AccessCore.permissionLevelOf(userData) : 'viewer');
+                        pastoralAssistant = !!(window.AccessCore && AccessCore.isPastoralAssistant(userData));
                         savedCardOrder = Array.isArray(userData.dashboardCardOrder) ? userData.dashboardCardOrder : null;
                         personId = userData.personId || null;
                     }
@@ -1025,9 +1048,9 @@
                     console.error("Error fetching user data:", e);
                 }
                 const grid = document.getElementById('nav-cards-grid');
-                const account = (typeof AccessCore !== 'undefined')
-                    ? AccessCore.accountOf({ permissionLevel, pastoralAssistant })
-                    : { permissionLevel, pastoralAssistant: false };
+                account = (typeof AccessCore !== 'undefined')
+                    ? AccessCore.accountOf(userData)
+                    : { permissionLevel: 'viewer', pastoralAssistant: false };
 
                 if (typeof DrawerWho !== 'undefined') {
                     who = await DrawerWho.fromSession(user, userData, db);
@@ -1049,14 +1072,13 @@
             }
             refreshPlaceCount();
 
-            // The drawer, built from the tiles the grid is now showing (MS-691),
-            // and after the saved arrangement has been applied so it opens in
-            // the reader's own order. Nothing here decides who may see what: the
-            // gates above already did, and this mirrors their answer.
-            if (typeof DesktopDrawer !== 'undefined') {
+            // The same drawer list every other page builds from dashboard-nav.js
+            // (MS-697), after the saved card order is applied so it opens in
+            // the reader's own order.
+            if (typeof DesktopDrawer !== 'undefined' && typeof DashboardNav !== 'undefined') {
                 DesktopDrawer.mount({
                     toggle: document.getElementById('drawer-toggle'),
-                    grid: document.getElementById('nav-cards-grid'),
+                    entries: DashboardNav.drawerTiles(account, savedCardOrder),
                     who,
                     currentHref: 'index.html',
                     behind: [document.querySelector('main'), document.querySelector('.m-header')],

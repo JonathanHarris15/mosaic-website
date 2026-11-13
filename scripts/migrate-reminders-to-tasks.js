@@ -101,19 +101,35 @@ function isMigrated(reminderId, existingTasks) {
 
 module.exports = { REMINDERS, TASKS, dayOf, timeOf, taskFrom, isMigrated };
 
+function committing(argv) {
+    return argv.includes('--commit');
+}
+
+function willWrite(argv) {
+    return committing(argv) && argv.includes('--i-mean-prod');
+}
+
 if (require.main === module) {
+    const path = require('path');
+    const argv = process.argv;
+    const projectId = require('./firebase-project').requireProject(argv);
+    const COMMIT = willWrite(argv);
+    if (committing(argv) && !COMMIT) {
+        throw new Error('--commit against the church project also needs --i-mean-prod.');
+    }
+    const DRY_RUN = !COMMIT;
+
+    const project = require('./firebase-project').loadProject(path.join(__dirname, '..'), projectId);
     const admin = require('firebase-admin');
-    const { serviceAccount } = require('./service-account.js');
-
-    const FIREBASE_PROJECT_ID = 'mosaic-hymn-database';
-    const BATCH_SIZE = 400;
-    const DRY_RUN = process.argv.includes('--dry-run');
-
-    admin.initializeApp({
-        credential: admin.credential.cert(serviceAccount()),
-        projectId: FIREBASE_PROJECT_ID,
-    });
+    if (!admin.apps.length) {
+        admin.initializeApp({
+            credential: admin.credential.cert(require(require('./service-account').serviceAccountPath())),
+            projectId,
+            storageBucket: project.storageBucket,
+        });
+    }
     const db = admin.firestore();
+    const BATCH_SIZE = 400;
 
     (async () => {
         console.log('Bringing Follow-up Reminders across as Tasks' + (DRY_RUN ? ' (dry run)' : ''));

@@ -97,12 +97,25 @@ async function record(deps, row) {
 }
 
 /**
+ * Textbelt (or sendText) failure as a log-safe string.
+ * @param {?Object} result sendText outcome
+ * @return {?string}
+ */
+function providerErrorMessage(result) {
+  if (!result || !result.error) return null;
+  const err = result.error;
+  if (typeof err === "string") return err;
+  if (err && typeof err.message === "string") return err.message;
+  return String(err);
+}
+
+/**
  * Send the text and record that outcome.
  * @param {Object} deps
  * @param {Object} request
  * @param {Object} person
  * @param {Object} words
- * @return {Promise<Object>}
+ * @return {Promise<Object>} channel, accepted, textId, providerError, textBody
  */
 async function deliverText(deps, request, person, words) {
   let result;
@@ -116,6 +129,7 @@ async function deliverText(deps, request, person, words) {
     result = {accepted: false, error: err};
   }
   const accepted = !!(result && result.accepted);
+  const providerError = accepted ? null : providerErrorMessage(result);
   await record(deps, {
     personId: request.personId,
     channel: "text",
@@ -127,6 +141,7 @@ async function deliverText(deps, request, person, words) {
     to: person.phone,
     body: words.text,
     textId: accepted && result.textId ? String(result.textId) : null,
+    providerError: providerError,
   });
   return {
     sent: accepted,
@@ -134,6 +149,9 @@ async function deliverText(deps, request, person, words) {
     accepted: accepted,
     textId: accepted ? result.textId : null,
     quotaRemaining: result && result.quotaRemaining,
+    providerError: providerError,
+    textBody: words.text,
+    to: person.phone,
   };
 }
 

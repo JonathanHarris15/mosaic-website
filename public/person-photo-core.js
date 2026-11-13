@@ -117,12 +117,6 @@
         const Access = (typeof AccessCore !== 'undefined') ? AccessCore
             : (typeof require === 'function' ? require('./access-core.js') : null);
         if (Access && Access.writesAsEditor(permissionLevel)) return true;
-        const level = permissionLevel && typeof permissionLevel === 'object'
-            ? (permissionLevel.permissionLevel || permissionLevel.role || '')
-            : permissionLevel;
-        if (['editor', 'elder', 'admin', 'super_admin', 'pastoral_assistant'].indexOf(level) !== -1) {
-            return true;
-        }
         return !!myPersonId && myPersonId === personId;
     }
 

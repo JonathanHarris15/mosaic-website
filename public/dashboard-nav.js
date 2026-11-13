@@ -36,10 +36,17 @@
             label: 'Membership Directory', desc: 'Who is in the congregation, and how to reach them.',
             insertAfter: 'hymn-directory',
             visible: function (account) {
-                const level = account.permissionLevel;
                 const Access = accessCore();
-                return ['member', 'editor', 'elder', 'admin', 'super_admin'].includes(level)
-                    || (Access && Access.readsAsElder(account));
+                return !!(Access && Access.readsAsMember(account));
+            },
+        },
+        {
+            key: 'resources', domId: 'resources-card', href: 'resources.html', symbol: 'folder_open',
+            label: 'Resources', desc: 'Studies, manuscripts, and church files',
+            insertAfter: 'directory',
+            visible: function (account) {
+                const Access = accessCore();
+                return !!(Access && Access.readsAsMember(account));
             },
         },
         {
@@ -87,13 +94,16 @@
             symbol: 'admin_panel_settings',
             label: 'Admin Dashboard', desc: 'SMS and the system tools behind the app.',
             visible: function (account) {
-                return ['admin', 'super_admin'].includes(account.permissionLevel);
+                const Access = accessCore();
+                return !!(Access && Access.accessesAdminDashboard(account));
             },
         },
     ]);
 
     const DRAWER_HREFS = new Set(
-        BASE_TILES.concat(GATED_TILES).map(function (t) { return t.href; })
+        BASE_TILES.concat(GATED_TILES)
+            .filter(function (t) { return t.drawer !== false; })
+            .map(function (t) { return t.href; })
     );
     DRAWER_HREFS.add('index.html');
 
@@ -139,21 +149,19 @@
         if (Access && Access.accountOf) {
             return Access.accountOf(user);
         }
-        return {
-            permissionLevel: user.permissionLevel || user.role || 'viewer',
-            pastoralAssistant: user.pastoralAssistant === true,
-        };
+        return { permissionLevel: 'viewer', pastoralAssistant: false };
     }
 
     /** Tiles this account may see, in the dashboard's default arrangement. */
     function visibleTiles(account) {
         const tiles = BASE_TILES.map(function (t) {
-            return { key: t.key, href: t.href, symbol: t.symbol, label: t.label };
+            return { key: t.key, href: t.href, symbol: t.symbol, label: t.label, drawer: t.drawer !== false };
         });
         GATED_TILES.forEach(function (def) {
             if (!def.visible(account)) return;
             const tile = {
                 key: def.key, href: def.href, symbol: def.symbol, label: def.label,
+                drawer: def.drawer !== false,
             };
             if (def.insertAfter) {
                 const at = tiles.findIndex(function (t) { return t.key === def.insertAfter; });
@@ -180,6 +188,16 @@
 
     function orderedTiles(account, savedOrder) {
         return applyOrder(visibleTiles(account), savedOrder);
+    }
+
+    // What the desktop drawer lists. The dashboard shows every tile; the
+    // drawer shows the standing destinations, and a tile that opted out
+    // (MS-693) is reached from the dashboard and left by its back arrow.
+    // Keeping both off one list is what stops a page appearing in the drawer
+    // while classifyPage() hands it a back arrow.
+    function drawerTiles(account, savedOrder) {
+        return orderedTiles(account, savedOrder)
+            .filter(function (t) { return t.drawer !== false; });
     }
 
     function isDrawerDestination(page) {
@@ -230,6 +248,106 @@
     }
 
     /** Inject gated cards the account has unlocked — same gates as visibleTiles. */
+    const MOBILE_HOME = Object.freeze({
+        key: 'home', label: 'Home', icon: 'house', symbol: 'home', route: 'home',
+    });
+
+    // Lucide icon + in-app route for each drawer tile. The phone drawer and the
+    // shell drawer read these; the hrefs and gates live on the tiles above.
+    const MOBILE_META = Object.freeze({
+        'hymn-directory': { icon: 'book-open', route: 'hymnDirectory' },
+        calendar: { icon: 'calendar-days', route: 'events' },
+        'service-calendar': { icon: 'church', route: 'calendar' },
+        directory: { icon: 'users', route: 'people' },
+        resources: { icon: 'folder-open', route: 'resources' },
+        shepherding: { icon: 'shield', route: 'shepherd' },
+        'mcp-manager': { icon: 'bot', route: 'mcpManager' },
+        'roles-manager': { icon: 'hand-heart', route: 'rolesManager' },
+        forms: { icon: 'clipboard-list', route: 'forms' },
+        printables: { icon: 'printer', route: 'printables' },
+        'admin-dashboard': { icon: 'settings-2', route: 'admin' },
+    });
+
+    const MOBILE_SHELL_PAGES = Object.freeze({
+        profile: 'profile.html',
+        events: 'calendar.html',
+        rolesManager: 'roles-manager.html',
+        forms: 'forms.html',
+        admin: 'admin-dashboard.html',
+        shepherdTasks: 'shepherding-tasks.html',
+        hymnDirectory: 'hymns.html',
+        resources: 'resources.html',
+        printables: 'printables.html',
+        mcpManager: 'mcp-manager.html',
+    });
+
+    function levelsCore() {
+        if (typeof window === 'undefined' && typeof require === 'function') {
+            return require('./account-levels-core.js');
+        }
+        return global.AccountLevelsCore;
+    }
+
+    function tileByKey(key) {
+        return BASE_TILES.concat(GATED_TILES).find(function (t) { return t.key === key; });
+    }
+
+    /** Normalize mobile `canSee` callers (string rank, account object, flags). */
+    function normalizeDrawerUser(user) {
+        if (!user) return null;
+        if (typeof user === 'string') {
+            const Levels = levelsCore();
+            const id = Levels && Levels.BUILTIN_LEVEL_IDS[user];
+            if (id) return accountOf(Levels.userWriteFromLevel(id));
+            return accountOf({
+                permissionLevel: user,
+                pastoralAssistant: user === 'pastoral_assistant',
+            });
+        }
+        return accountOf(user);
+    }
+
+    function canSeeDrawerKey(key, user) {
+        if (key === 'home') return true;
+        const def = tileByKey(key);
+        if (!def) return false;
+        if (!def.visible) return true;
+        if (!user) return false;
+        return def.visible(normalizeDrawerUser(user));
+    }
+
+    function catalogAccountSeeAll() {
+        const Levels = levelsCore();
+        if (Levels && Levels.BUILTIN_LEVEL_IDS.super_admin) {
+            return accountOf(Levels.userWriteFromLevel(Levels.BUILTIN_LEVEL_IDS.super_admin));
+        }
+        return accountOf({ permissionLevel: 'super_admin' });
+    }
+
+    function mobileDrawerDestinations() {
+        const tiles = drawerTiles(catalogAccountSeeAll(), null);
+        return [MOBILE_HOME].concat(tiles.map(function (t) {
+            const meta = MOBILE_META[t.key];
+            if (!meta) {
+                throw new Error('MOBILE_META missing drawer tile: ' + t.key);
+            }
+            return {
+                key: t.key,
+                label: t.label,
+                icon: meta.icon,
+                symbol: t.symbol,
+                route: meta.route,
+            };
+        }));
+    }
+
+    function mobileRouteHref(route) {
+        if (MOBILE_SHELL_PAGES[route]) {
+            return MOBILE_SHELL_PAGES[route] + '?shell=mobile';
+        }
+        return 'mobile.html#/' + route;
+    }
+
     function injectGatedCards(grid, account) {
         if (!grid || !account) return;
         GATED_TILES.forEach(function (def) {
@@ -256,14 +374,22 @@
         GATED_TILES,
         DRAWER_HREFS,
         PARENT_BY_PAGE,
+        MOBILE_HOME,
+        MOBILE_META,
+        MOBILE_SHELL_PAGES,
         normalizePage,
         accountOf,
         visibleTiles,
         applyOrder,
         orderedTiles,
+        drawerTiles,
         isDrawerDestination,
         classifyPage,
         tileForPage,
+        normalizeDrawerUser,
+        canSeeDrawerKey,
+        mobileDrawerDestinations,
+        mobileRouteHref,
         createNavCardElement,
         injectGatedCards,
     };

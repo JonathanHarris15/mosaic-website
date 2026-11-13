@@ -13,3 +13,22 @@ test('the Elements tree can fold a parent so its children sit underneath it', ()
     assert.match(js, /treeCollapsed/, 'the fold is session state, not a fact about the page');
     assert.match(js, /if \(!folded\) kids\.forEach/, 'a folded parent does not draw its children');
 });
+
+test('the Elements tree shows only the selected page; pages live in the filmstrip (MS-760)', () => {
+    assert.match(html, /pe-pages/, 'the pages filmstrip is in the chrome');
+    assert.match(html, /id="pe-pages-strip"/, 'the strip is drawn by hand');
+    assert.match(js, /renderPagesStrip/, 'the filmstrip is rebuilt with the canvas');
+    assert.match(js, /currentPage/, 'the tree is keyed off the selection');
+    assert.match(js, /Elements of the selected page only/, 'page rows left the tree');
+    assert.doesNotMatch(js, /pe-tree__page/, 'page chrome is not drawn inside the elements tree');
+    assert.match(js, /Overflow run/, 'continuation runs are labelled in the filmstrip');
+    assert.match(js, /canInsertAfter/, 'insert respects overflow runs');
+    assert.match(js, /movePageRun/, 'reorder moves a whole run');
+    assert.match(html, /\.pe-pages__run/, 'the run rail is styled');
+    assert.match(js, /nearestPageReorderSlot/, 'a page drag picks the gap under the pointer');
+    assert.match(js, /pageReorderTarget/, 'the drop lands before the page after that gap');
+    assert.match(html, /\.pe-pages__insert\.is-drop/, 'the gap draws a line');
+    assert.match(html, /100cqw/, 'the thumbnail scales to the card');
+    assert.doesNotMatch(html, /aspect-ratio:\s*1\s*\/\s*1\.294/, 'thumbnails are not forced into a letter frame');
+    assert.doesNotMatch(js, /reorderPageBefore\(ui\.pageDrag\.pageId, page\.id\)/, 'dropping does not target the page under the pointer');
+});

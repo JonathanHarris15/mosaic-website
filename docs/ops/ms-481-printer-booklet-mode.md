@@ -32,12 +32,18 @@ Folio print pads every Printable, because the fold needs four pages.
 ## Operator steps — folio (same as the service guide)
 
 1. Open the Printable (editor File menu, or the view-only page) and
-   choose **Print folio**.
-2. The dialog's paper is one landscape sheet per pair of pages
+   choose **Print folio** (book icon / **Folio**, not the printer
+   **Print** control).
+2. **Fill the folio fold** shows every page. Click a page to set the
+   brush, then click a gap to place a copy; × drops a page from this
+   print only. The side rail counts insertions left to the next
+   multiple of 4. Changes are print-only; they are not saved on the
+   printable.
+3. The dialog's paper is one landscape sheet per pair of pages
    (letter landscape for a half-letter Printable). Print double-sided
    the same way the service guide is printed.
-3. Leave **Booklet** / **Saddle Stitch** off. Fold the stack.
-4. Print one proof and check page order before the Sunday run.
+4. Leave **Booklet** / **Saddle Stitch** off. Fold the stack.
+5. Print one proof and check page order before the Sunday run.
 
 ## Operator steps — flat stack (copier booklet mode)
 
@@ -58,11 +64,12 @@ copier is already in booklet mode — either one imposes twice.
 
 ## What Mosaic does not do
 
-- No reordering on the flat **Print** path or the filed PDF snapshot
-- No change to ADR-0057 snapshots (the filed PDF is still the
-  frozen copy of live pages; Sunday booklets stay padded, flat)
+- No reordering on the flat **Print** path or the flat PDF snapshot
+  filed from **Print** / the event Files tab
 - No auto-clear of the MS-401 HITL gate (MS-454). A real Sunday
   booklet still has to be printed and handed out.
 
-Folio print is the software imposition path, and only when someone
-chooses **Print folio**.
+Folio print is the software imposition path. From the fill-in page,
+**Folio** always opens the pad first; **Save PDF to event files** on
+that pad files a folio-imposed PDF of that stack (MS-763), not a
+flat padded stack. The event Files tab snapshot button stays flat.

@@ -63,7 +63,7 @@ test('a save is what the session says was typed into, and a failure hands it bac
     for (const src of [WEB, PHONE]) {
         assert.match(src, /\.takeSave\(/);
         assert.match(src, /\.saveFailed\(/);
-        assert.match(src, /oldShape:\s*session\.oldShape\(\)/, 'an old-shaped list is normalised by the save');
+        assert.doesNotMatch(src, /oldShape:\s*session\.oldShape\(\)/, 'runtime saves do not carry import-shape flags');
     }
 });
 

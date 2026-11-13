@@ -597,7 +597,6 @@ async function writeCareListCell(
       value: NoteMarkdownCore.fromMarkdown(String(markdown || "")),
     }],
     byName: actor.name,
-    oldShape: CareListCore.isOldShape(data),
     extra: Actor.provenance(),
   });
 

@@ -98,6 +98,23 @@ test('a linked user with no token is a text', async () => {
     assert.strictEqual(calls.logs.length, 1);
 });
 
+test('a rejected text logs the provider error on the notification row', async () => {
+    const {deps, calls} = harness({
+        loadPerson: async () => ({uid: null, phone: '+15551212', firstName: 'Jane'}),
+        sendText: async () => ({
+            accepted: false,
+            error: 'Out of quota',
+        }),
+    });
+    const result = await tellPerson(deps, base);
+    assert.strictEqual(result.channel, 'text');
+    assert.strictEqual(result.accepted, false);
+    assert.strictEqual(result.providerError, 'Out of quota');
+    assert.strictEqual(calls.logs.length, 1);
+    assert.strictEqual(calls.logs[0].providerError, 'Out of quota');
+    assert.strictEqual(calls.logs[0].textId, null);
+});
+
 test('a rejected token is deleted and the text goes out in the same run', async () => {
     const {deps, calls} = harness({
         sendPush: async (msg) => {

@@ -107,7 +107,8 @@
                 if (parsed?.kind === 'note' && parsed.personId) {
                     return `<a class="mention-chip" href="shepherding-profile.html?id=${encodeURIComponent(parsed.personId)}${crumb}">@${label}</a>`;
                 }
-                if (parsed?.kind === 'elder_document') {
+                const docKind = parsed?.kind === 'meeting' ? 'elder_document' : parsed?.kind;
+                if (docKind === 'elder_document') {
                     const docTypes = (options && options.docTypeById) || {};
                     const page = docTypes[parsed.id] === 'care-list' ? 'shepherding-care-list.html' : 'shepherding-document.html';
                     return `<a class="mention-chip" href="${page}?id=${encodeURIComponent(parsed.id)}">@${label}</a>`;

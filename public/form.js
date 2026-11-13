@@ -72,10 +72,7 @@ function formPage() {
         // again, which is the same as not having it. The rules are what
         // actually refuse; this decides whether the switch is drawn.
         get elderOnlySetting() {
-            return FormsCore.elderOnlyFor({
-                permissionLevel: this.currentPermissionLevel,
-                pastoralAssistant: this.pastoralAssistant,
-            });
+            return FormsCore.elderOnlyFor(this.account || this.currentPermissionLevel);
         },
 
         // A personal shepherding document (MS-405): an interview ABOUT

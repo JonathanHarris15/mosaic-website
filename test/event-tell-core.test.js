@@ -4,10 +4,6 @@ const assert = require('node:assert');
 const Tell = require('../public/event-tell-core.js');
 const Ann = require('../public/event-announcement-core.js');
 
-function partsAt(date, hour, minute) {
-    return { date, hour, minute };
-}
-
 test('a one-off with two future dates yields two moments', () => {
     const moments = Tell.upcomingTellMoments({
         eventKind: 'one-off',

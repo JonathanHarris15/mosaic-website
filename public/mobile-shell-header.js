@@ -63,8 +63,8 @@
             var d = (doc.exists && doc.data()) || {};
             var flags = window.AccessCore ? window.AccessCore.pageFlags(d) : null;
             var account = flags ? flags.account : {
-              permissionLevel: d.permissionLevel || d.role || "viewer",
-              pastoralAssistant: d.pastoralAssistant === true,
+              permissionLevel: (window.AccessCore ? AccessCore.permissionLevelOf(d) : "viewer"),
+              pastoralAssistant: false,
             };
             var who = {
               // Same fallback chain as the app's own profile loader, so the two

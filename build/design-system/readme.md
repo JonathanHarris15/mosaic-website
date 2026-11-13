@@ -19,7 +19,7 @@ That means the tokens here are the tokens the app renders, and a component here 
 ### Sources
 
 - **GitHub:** [`JonathanHarris15/mosaic-website`](https://github.com/JonathanHarris15/mosaic-website)
-  - `tailwind.config.js` — the source of truth for every token. (`public/mosaic-theme.js` was the old runtime config and is superseded; anything still citing it is out of date.)
+  - `tailwind.config.js` — the source of truth for every token (`npm run build:tokens` → `public/mosaic.css` and `public/mobile/tokens.css`).
   - `build/design-components.mjs` — the source of truth for every component.
   - `public/components-demo.html` — the gallery, the repo's own copy of what is in `components/`.
   - `CONTEXT.md` — the domain model (Services, Hymns, Shepherding, Elder Documents, Service Guides).

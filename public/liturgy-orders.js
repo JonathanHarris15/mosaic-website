@@ -98,6 +98,14 @@ function liturgyOrdersPage() {
         kinds: Core.KINDS,
         primitives: Core.PRIMITIVES,
         _sortable: null,
+        // Service Guide Printable linked on the open order (MS-762). Names
+        // come from the library so the draft can show what is linked.
+        printablesById: {},
+        linkingPrintable: false,
+        libraryLoading: false,
+        libraryPrintables: [],
+        libraryFolders: [],
+        printableError: '',
 
         get backHref() {
             return this.date ? 'service-builder.html?date=' + encodeURIComponent(this.date) : 'service-calendar.html';
@@ -139,6 +147,17 @@ function liturgyOrdersPage() {
             const inOrder = new Set(this.selectedOrder.elementIds);
             return this.catalog.elements.filter(el => !inOrder.has(el.id));
         },
+        get linkedPrintableId() {
+            return (this.selectedOrder && this.selectedOrder.printableId) || '';
+        },
+        get linkedPrintable() {
+            const id = this.linkedPrintableId;
+            return id ? (this.printablesById[id] || { id: id, name: id }) : null;
+        },
+        get linkablePrintables() {
+            const linked = this.linkedPrintableId;
+            return (this.libraryPrintables || []).filter(p => p && p.template && p.id !== linked);
+        },
 
         kindLabel(kind) { return Core.KIND_LABELS[kind] || kind; },
         tileLabel(kind) {
@@ -164,6 +183,7 @@ function liturgyOrdersPage() {
                 const days = (Array.isArray(el.noticeDays) ? el.noticeDays : []).slice().sort((a, b) => b - a);
                 let line = count + ' request' + (count === 1 ? '' : 's');
                 line += days.length ? ' · days ' + days.join(', ') : ' · no days';
+                if (el.elderDigest !== false) line += ' · elder digest';
                 parts.push(line);
             }
             return parts.join(' · ');
@@ -200,6 +220,25 @@ function liturgyOrdersPage() {
             await this.load();
         },
 
+        async refreshPrintableNames() {
+            const ids = [];
+            (this.catalog.orders || []).forEach(o => {
+                if (o && o.printableId) ids.push(o.printableId);
+            });
+            if (!ids.length || !window.PrintableStore) {
+                this.printablesById = {};
+                return;
+            }
+            try {
+                const list = await PrintableStore.loadLinked(db, ids);
+                const map = {};
+                (list || []).forEach(p => { if (p && p.id) map[p.id] = p; });
+                this.printablesById = map;
+            } catch (e) {
+                console.warn('Linked printables could not be named', e);
+            }
+        },
+
         async load() {
             this.loading = true;
             try {
@@ -210,6 +249,7 @@ function liturgyOrdersPage() {
                 if (!Core.orderById(this.catalog, this.selectedOrderId)) this.selectedOrderId = Core.STANDARD_ORDER_ID;
                 this.orderName = this.selectedOrder.name;
                 this.problem = '';
+                await this.refreshPrintableNames();
             } catch (e) {
                 console.error('Liturgy orders did not load', e);
                 const catalog = Core.standardCatalog();
@@ -250,24 +290,88 @@ function liturgyOrdersPage() {
             this.selectedElementId = id;
         },
 
-        // An empty order, named so it does not collide with one already open,
-        // then the name field is ready to replace "New order".
-        addOrder() {
+        // Name a new order so it does not collide with one already open.
+        _freshOrderName(base) {
             const names = new Set(this.orders.map(o => o.name));
-            let name = 'New order';
-            for (let n = 2; names.has(name); n += 1) name = 'New order ' + n;
-            let made = null;
-            if (!this._apply(cat => {
-                made = Core.addOrder(cat, { name: name });
-                return made.catalog;
-            })) return;
-            this.selectOrder(made.order.id);
+            let name = base;
+            for (let n = 2; names.has(name); n += 1) name = base + ' ' + n;
+            return name;
+        },
+
+        _focusOrderName() {
             this.$nextTick(() => {
                 const input = document.getElementById('order-name');
                 if (!input) return;
                 input.focus();
                 input.select();
             });
+        },
+
+        // An empty order, named so it does not collide with one already open,
+        // then the name field is ready to replace "New order".
+        addOrder() {
+            const name = this._freshOrderName('New order');
+            let made = null;
+            if (!this._apply(cat => {
+                made = Core.addOrder(cat, { name: name });
+                return made.catalog;
+            })) return;
+            this.selectOrder(made.order.id);
+            this._focusOrderName();
+        },
+
+        // A draft copy of the open order: same sequence and element ids, so a
+        // Sunday that switches onto it keeps those slots. Not live until Save.
+        duplicateOrder() {
+            const source = this.selectedOrder;
+            if (!source) return;
+            const name = this._freshOrderName(source.name + ' copy');
+            let made = null;
+            if (!this._apply(cat => {
+                made = Core.addOrder(cat, { name: name, copyFrom: source.id });
+                return made.catalog;
+            })) return;
+            this.selectOrder(made.order.id);
+            this._focusOrderName();
+        },
+
+        // Link / clear the Service Guide Printable on this order (draft until Save).
+        async startLinkPrintable() {
+            if (!this.editing || !window.PrintableStore) return;
+            this.linkingPrintable = true;
+            this.libraryLoading = true;
+            this.printableError = '';
+            try {
+                const [printables, folders] = await Promise.all([
+                    PrintableStore.listPrintables(db),
+                    PrintableStore.listFolders(db).catch(() => []),
+                ]);
+                this.libraryPrintables = printables || [];
+                this.libraryFolders = folders || [];
+            } catch (e) {
+                this.printableError = 'The library did not load. Try again.';
+                this.linkingPrintable = false;
+            } finally {
+                this.libraryLoading = false;
+            }
+        },
+
+        printablePath(p) {
+            if (!window.FilingCore) return 'Printables';
+            const crumbs = FilingCore.breadcrumbFor(this.libraryFolders, p && p.folderId);
+            return crumbs.length ? crumbs.map(c => c.name).join(' / ') : 'Printables';
+        },
+
+        linkPrintable(p) {
+            if (!this.editing || !p || !p.id) return;
+            if (!this._apply(cat => Core.setOrderPrintable(cat, this.selectedOrderId, p.id))) return;
+            this.printablesById = Object.assign({}, this.printablesById, { [p.id]: p });
+            this.linkingPrintable = false;
+        },
+
+        clearPrintable() {
+            if (!this.editing) return;
+            this._apply(cat => Core.setOrderPrintable(cat, this.selectedOrderId, ''));
         },
 
         renameOrder() {
@@ -455,7 +559,12 @@ function liturgyOrdersPage() {
         },
         toggleRequests(el, on) {
             const patch = { requests: on ? { people: [{ who: 'either' }] } : null };
-            if (on) patch.noticeDays = Core.DEFAULT_NOTICE_LIST.slice();
+            if (on) {
+                patch.noticeDays = Core.DEFAULT_NOTICE_LIST.slice();
+                patch.elderDigest = true;
+            } else {
+                patch.elderDigest = false;
+            }
             this.updateElement(el.id, patch);
         },
         addPerson(el) {

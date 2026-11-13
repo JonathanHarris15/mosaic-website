@@ -27,20 +27,78 @@
 (function (global) {
     'use strict';
 
+    const Liturgy = (typeof require !== 'undefined') ?
+        require('./liturgy-order-core.js') :
+        (global && global.LiturgyOrderCore);
+
+    const CANONICAL_PRAYER_SLOTS = Object.freeze([
+        { elementId: 'prayerOfPraise', prayerType: 'praise' },
+        { elementId: 'prayerOfConfession', prayerType: 'confession' },
+    ]);
+
+    function catalogFrom(catalog) {
+        return Liturgy ? Liturgy.catalogFrom(catalog) : { elements: [], orders: [] };
+    }
+
+    function carrierAt(service, elementId) {
+        const carried = (service && service.carriedBy) || {};
+        const ref = carried[elementId];
+        if (!ref || typeof ref !== 'object') return { id: null, name: '' };
+        return { id: ref.id || null, name: String(ref.name || '').trim() };
+    }
+
+    function prayerTypeForElement(el) {
+        if (!el || el.kind !== 'prayer') return null;
+        const id = String(el.id || '');
+        const name = String(el.name || '').toLowerCase();
+        if (id === 'prayerOfConfession' || name.includes('confession')) return 'confession';
+        if (id === 'prayerOfPraise' || name.includes('praise')) return 'praise';
+        return null;
+    }
+
+    /** Prayer leaders from `carriedBy` only (MS-771: no legacy top-level fields). */
+    function prayerCarriedByInvolvement(service, catalog) {
+        const doc = service || {};
+        const records = [];
+        const pushCarrier = (elementId, prayerType) => {
+            const carrier = carrierAt(doc, elementId);
+            if (!carrier.id) return;
+            records.push({
+                personId: carrier.id,
+                type: 'prayer',
+                metadata: { prayer_type: prayerType },
+            });
+        };
+        if (Liturgy) {
+            const cat = catalogFrom(catalog);
+            const order = Liturgy.orderFor(doc, cat);
+            Liturgy.elementsOf(order, cat).forEach((el) => {
+                if (!el || el.kind !== 'prayer' || !el.prayedByOther) return;
+                const prayerType = prayerTypeForElement(el);
+                if (!prayerType) return;
+                pushCarrier(el.id, prayerType);
+            });
+        }
+        CANONICAL_PRAYER_SLOTS.forEach((slot) => {
+            pushCarrier(slot.elementId, slot.prayerType);
+        });
+        const seen = new Set();
+        return records.filter((rec) => {
+            const key = rec.metadata.prayer_type + ':' + rec.personId;
+            if (seen.has(key)) return false;
+            seen.add(key);
+            return true;
+        });
+    }
+
     // Field → Role slug. The id field is what makes somebody a Person the app can
     // credit; the name beside it may be a visiting speaker typed in by hand, who
     // is nobody to credit.
     //
-    // `prayerPraiseId` and `prayerConfessionId` both carry the `prayer` slug —
-    // one Role, two places in the service — so they are told apart by metadata.
-    // Anything keyed only by date + slug + person would collide on the Sunday one
-    // person does both.
     const SERVING_FIELDS = Object.freeze([
         { idField: 'serviceLeaderId', slug: 'service_leader' },
         { idField: 'musicLeaderId', slug: 'worship_leader' },
         { idField: 'preacherId', slug: 'preacher' },
-        { idField: 'prayerPraiseId', slug: 'prayer', metadata: { prayer_type: 'praise' } },
-        { idField: 'prayerConfessionId', slug: 'prayer', metadata: { prayer_type: 'confession' } },
         { idField: 'elementsId', slug: 'elements' },
         { idField: 'otherId', slug: 'other' },
         // Music helpers are a list of { name, id }, not a single field.
@@ -52,7 +110,7 @@
     // the printed liturgy, so they are not in `RolesCore.LITURGICAL_SLUGS` and
     // must not be tidied into it.
     const SERVING_SLUGS = Object.freeze(
-        [...new Set(SERVING_FIELDS.map(f => f.slug))]
+        [...new Set([...SERVING_FIELDS.map(f => f.slug), 'prayer'])]
     );
 
     const isDateStr = v => typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v);
@@ -62,7 +120,7 @@
     // The full set of Involvement records a stored Service should produce, in
     // field order. A name with no id is not a Person and is skipped — the same
     // rule `EventsOccurrenceCore.liturgicalHolders` applies, for the same reason.
-    function servingInvolvement(service) {
+    function servingInvolvement(service, catalog) {
         const doc = service || {};
         const records = [];
 
@@ -77,6 +135,8 @@
                 records.push(record);
             });
         });
+
+        prayerCarriedByInvolvement(doc, catalog).forEach((rec) => records.push(rec));
 
         return records;
     }
@@ -173,6 +233,7 @@
     const ServiceInvolvementCore = {
         SERVING_FIELDS,
         SERVING_SLUGS,
+        prayerCarriedByInvolvement,
         servingInvolvement,
         involvementId,
         hasPassed,

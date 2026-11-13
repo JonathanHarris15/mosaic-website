@@ -71,12 +71,14 @@ const MODULES = [
     // emits a Sunday in its order, and the Printables catalog reads a
     // Sunday's fields, rows and hymns off its elements.
     'liturgy-order-core.js',
+    'service-involvement-core.js',
     // The translator between a filled order and any other order, including a
     // bulletin that is not an order yet. The callable and the pages share it.
     'liturgy-translate-core.js',
     'liturgy-save-core.js',
     'mcp-guidance-core.js',
     'service-note-core.js',
+    'service-dotted-keys-core.js',
     'service-read-core.js',
     'mosaic-identity.js',
     'service-authorship.js',
@@ -128,8 +130,8 @@ const MODULES = [
     // guidance file for it.
     'shepherding-guidance.js',
     // MS-588. Per-Sunday booklet text (prayer-country facts, Mosaic Kids,
-    // announcements). printable-data-core.js reads it for the sunday_typed
-    // source, so the copy has to travel with the catalog.
+    // announcements). printable-data-core.js reads it to turn an occurrence
+    // fill-in into announcement rows and Mosaic Kids questions.
     'sunday-typed-core.js',
     // MS-622. Which printed event announcements belong on a Sunday. The
     // booklet resolver calls it, so the assistant and the page agree.
@@ -158,6 +160,15 @@ const MODULES = [
     // writing a cell has to follow exactly the page's rules, or its write lands
     // somewhere the page does not read — or wipes what the page wrote.
     'care-list-core.js',
+    // MS-693. The Resources library. Where a thing is filed is FilingCore's
+    // answer on the page and has to be the same answer here — "may this
+    // folder go inside that one", "what is under this folder" — and
+    // resources-core.js carries the rest: the size cap, where the bytes go,
+    // and the pin rank a drag produces. An assistant tidying the shelf and a
+    // person dragging it write the same numbers only because this is one
+    // copy. FilingCore first: resources-core requires it.
+    'filing-core.js',
+    'resources-core.js',
 ];
 
 const BANNER = [

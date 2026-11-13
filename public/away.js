@@ -1,11 +1,19 @@
 // Away — the screen where a Person says which whole days they will not be here
 // (MS-188). Reached from the Calendar, on a desktop and on a phone.
 //
-// THE GRID IS THE INPUT, ON EVERY SIZE. No date fields anywhere: first tap sets
-// the first day, second tap the last, a tap before the first day starts again
-// from there. Quick choices ("this weekend", "a week") were designed and
-// dropped — they competed with the grid for the same tap and made the common
-// case look like a form.
+// THE GRID IS THE INPUT, ON EVERY SIZE, AND IT WORKS IN DAYS. Tap a day to mark
+// it away, tap it again to clear it. Press and drag across days to mark (or
+// clear) the whole run — what the drag does is set by the day it starts on.
+// Each change saves the moment the finger lifts; there is no "add" button and
+// no list of ranges to manage, because the calendar itself is the record.
+//
+// It used to be "first tap the first day, second tap the last, then press the
+// button", with every saved range listed back underneath. That made a person
+// manage a collection of ranges when all they meant was "these are the days".
+//
+// Quick choices ("this weekend", "a week") were designed and dropped — they
+// competed with the grid for the same tap and made the common case look like a
+// form.
 //
 // TWO LAYOUTS, ONE STATE, ONE RAIL. The desktop shows two months side by side
 // with a summary rail beside them; the phone shows one month with the summary
@@ -20,8 +28,8 @@
 // One month that answers to a thumb beats four you have to go looking through.
 //
 // NOTHING HERE IS A REQUEST. There is no submit, no pending, no approval. The
-// person says it and it is true, which is why the button reads "I'm away these
-// days" and why nothing on the screen ever says "unavailable".
+// person colours the day in and it is true, which is why nothing on the screen
+// ever says "unavailable".
 
 (function () {
     'use strict';
@@ -73,7 +81,6 @@
     window.awayPage = function awayPage() {
         return {
             loading: true,
-            saving: false,
             error: '',
 
             // WHO IS LOOKING, and WHOSE DAYS ARE ON SCREEN. Almost always the
@@ -99,8 +106,15 @@
             places: [],
             roleDefinitions: [],
 
-            selection: Object.assign({}, Core.EMPTY_SELECTION),
-            anchor: null,           // { year, monthIndex } — the first month shown
+            // The press in hand: { from, to, on }. `on` is whether it marks or
+            // clears, settled by the day it started on. Null when no finger or
+            // mouse button is down on the calendar.
+            drag: null,
+            // Paints still being written, in order. Each waits for the one
+            // before it, so two quick taps cannot land out of order.
+            queue: Promise.resolve(),
+            inFlight: 0,
+            anchor: null,          // { year, monthIndex } — the first month shown
             monthsShown: window.MOSAIC_SHELL === 'mobile' ? PHONE_MONTHS : DESKTOP_MONTHS,
             // How much rail the desktop has drawn to slide along. Grown, never
             // shortened, and never grown backwards.
@@ -109,7 +123,6 @@
             railShift: 0,
             // Where a finger went down on the rail, while it is still down.
             swipe: null,
-            showPast: false,
 
             weekdays: Core.WEEKDAYS,
 
@@ -138,13 +151,13 @@
                         if (!user) { this.personId = null; return resolve(null); }
                         const Cache = window.MosaicLocalCache;
                         const known = Cache && Cache.readIdentity(user.uid);
-                        if (known && known.permissionLevel) {
+                        if (known && (known.permissions || known.accountLevelId)) {
                             this.personId = known.personId || null;
                             this.account = {
-                                permissionLevel: known.permissionLevel,
-                                pastoralAssistant: known.pastoralAssistant === true,
+                                accountLevelId: known.accountLevelId || null,
+                                permissions: known.permissions || null,
                             };
-                            return resolve(known.permissionLevel);
+                            return resolve(AccessCore.permissionLevelOf(this.account));
                         }
                         try {
                             const data = await getUserData(user.uid);
@@ -154,7 +167,8 @@
                             if (Cache) Cache.writeIdentity(user.uid, {
                                 personId: this.personId,
                                 permissionLevel: flags.currentPermissionLevel,
-                                pastoralAssistant: flags.pastoralAssistant,
+                                accountLevelId: flags.account.accountLevelId,
+                                permissions: flags.account.permissions,
                             });
                             resolve(flags.currentPermissionLevel);
                         } catch (e) {
@@ -203,14 +217,14 @@
                 }
             },
 
-            // Switching whose days are on screen throws the half-made selection
-            // away on purpose: a range tapped out against Sarah's calendar is not
-            // a range anybody meant against Bob's.
+            // Switching whose days are on screen drops any drag in hand: a run
+            // started against Sarah's calendar is not one anybody meant against
+            // Bob's. Paints already let go of still land on Sarah — each one
+            // carries the person it was made against.
             async setSubject(personId) {
                 if (!personId || personId === this.subjectId) return;
                 this.subjectId = personId;
-                this.clearSelection();
-                this.showPast = false;
+                this.cancelDrag();
                 await this.load();
             },
 
@@ -271,8 +285,8 @@
 
             gridOptions() {
                 return {
-                    selection: this.selection,
-                    stretches: this.stretches,
+                    drag: this.drag,
+                    stretches: this.shownStretches,
                     places: this.places,
                     today: this.today,
                 };
@@ -321,110 +335,157 @@
                 return index >= this.railIndex && index < this.railIndex + this.monthsShown;
             },
 
-            get prompt() { return Core.prompt(this.selection); },
-            get sentence() { return Core.sentence(this.selection); },
+            get prompt() { return Core.prompt(this.drag); },
+            get sentence() { return Core.sentence(this.shownStretches, this.today, this.drag); },
 
-            // ⚠ CHECKED THE MOMENT IT CAN BE SAVED, not once the range is
-            // settled. A single day is addable one tap in — the sentence even
-            // offers it — so gating the clash on a *finished* range meant
-            // somebody could tap one day, press the button, and never be told
-            // they were serving on it. That defeats the point of the screen:
-            // being told while you are still thinking about it is the whole
-            // reason the message exists.
-            get clashes() {
-                if (!this.selectionMade) return [];
-                return Core.clashesIn(this.places, this.selection.start, this.selection.end);
+            // The diary as it is about to be: what is stored, with the drag in
+            // hand already painted on. The grid, the clash and the sentence all
+            // read this, so the calendar answers the finger while it moves and
+            // a clash shows BEFORE it is let go — being told while you are still
+            // choosing is the whole reason the message exists.
+            get shownStretches() {
+                if (!this.drag) return this.stretches;
+                return Core.paintDays(this.stretches, this.drag.from, this.drag.to, this.drag.on).stretches;
             },
 
-            // Everything on record, PLUS whatever is being chosen right now — one
-            // list, because from the person's side they are the same fact: a
-            // place of theirs on a day they are away.
-            get conflictStretches() {
-                const list = this.stretches.slice();
-                if (this.selectionMade) {
-                    list.push({ start: this.selection.start, end: this.selection.end });
-                }
-                return list;
-            },
-
-            // ⚠ NOT GATED ON THE SELECTION. A conflict locked in a fortnight ago
-            // is still theirs to sort out, and a screen that only mentions it
-            // while they happen to be mid-selection is a screen that lets them
+            // ⚠ NOT GATED ON A DRAG. A conflict saved a fortnight ago is still
+            // theirs to sort out, and a screen that only mentions it while they
+            // happen to be touching the calendar is a screen that lets them
             // forget it. It stands until one side of it moves.
-            get conflicts() { return Core.conflictsIn(this.places, this.conflictStretches); },
+            get conflicts() { return Core.conflictsIn(this.places, this.shownStretches); },
 
             get hasClash() { return this.conflicts.length > 0; },
             get clashHeading() { return Core.conflictHeading(this.conflicts.length); },
 
-            // WARN EARLY, REASSURE LATE — and the asymmetry is deliberate. A
-            // clash shows as soon as the selection could be saved, because it is
-            // the thing they need to know. The all-clear still waits for a
-            // settled range: said one tap into an intended fortnight it would
-            // answer a question about a single day nobody meant, and then flip
-            // the moment the range closed. Silence is honest; premature
-            // reassurance that later reverses is not.
-            get allClear() { return this.rangeReady && !this.hasClash; },
+            // REASSURE ONLY ONCE THE FINGER IS UP. Mid-drag the run is still
+            // changing, and an all-clear that flips as it grows is noise.
+            get allClear() {
+                return !this.drag && !this.hasClash && Core.daysAhead(this.stretches, this.today) > 0;
+            },
 
-            get allClearLineText() {
+            get allClearLine() {
                 return this.isMine
                     ? "Nothing of yours falls on a day you're away."
                     : "Nothing of theirs falls on a day they're away.";
             },
 
-            get rangeReady() {
-                return !!this.selection.start && !!this.selection.end
-                    && this.selection.awaiting === 'start';
+            get saving() { return this.inFlight > 0; },
+
+            // ── Painting ─────────────────────────────────────────────────────
+            //
+            // press → dragTo → release is the whole gesture, in days. The DOM
+            // handlers below only translate pointer events into these, so the
+            // behaviour can be tested without a browser.
+
+            // ⚠ NOTHING BEFORE TODAY. Away is a thing you say before
+            // (ADR-0023 §4). The rail starts at this month, so its first days
+            // are already behind you — and a day marked there showed on the
+            // calendar while the sentence, counting from today, said "No days
+            // marked yet". A press there does nothing, and a drag that runs
+            // back into them stops at today.
+            press(iso) {
+                if (!iso || !this.subjectId || iso < this.today) return;
+                this.drag = { from: iso, to: iso, on: !Core.isAwayOn(this.stretches, iso) };
             },
 
-            // A selection exists as soon as one day has been tapped — the first
-            // tap sets both ends. `canAdd` and the clash check MUST agree on
-            // this: anything the button will save has to have been checked.
-            get selectionMade() { return !!this.selection.start && !!this.selection.end; },
-
-            // The single day is offerable one tap in: "away Saturday" should not
-            // need the same day tapped twice.
-            get canAdd() { return this.selectionMade; },
-
-            // Lives here rather than in the markup because the desktop and the
-            // phone both draw this button, and a promise made in two places is a
-            // promise that eventually gets made two different ways. It is not
-            // "Submit" and never becomes "Requested".
-            get addLabel() { return this.addLabelFor; },
-
-            get upcomingStretches() {
-                return Core.upcoming(this.stretches, this.today)
-                    .map(s => Core.stretchRow(s, this.places))
-                    .filter(Boolean);
+            dragTo(iso) {
+                if (!this.drag || !iso) return;
+                const to = iso < this.today ? this.today : iso;
+                if (to === this.drag.to) return;
+                this.drag = Object.assign({}, this.drag, { to: to });
             },
 
-            get pastStretches() {
-                return Core.past(this.stretches, this.today)
-                    .map(s => Core.stretchRow(s, this.places))
-                    .filter(Boolean);
+            release() {
+                const d = this.drag;
+                if (!d) return;
+                this.drag = null;
+                return this.paint(d.from, d.to, d.on);
             },
 
-            get recordCount() {
-                const n = this.upcomingStretches.length;
-                if (!n) return 'None yet';
-                return n === 1 ? 'One' : Core.inWords(n);
+            cancelDrag() { this.drag = null; },
+
+            // A tap with nothing dragged is still a press and a release — the
+            // same path, a run of one day.
+            toggle(iso) {
+                this.press(iso);
+                return this.release();
             },
 
-            get pastLabel() {
-                const n = this.pastStretches.length;
-                if (!n) return '';
-                return (this.showPast ? 'Hide' : 'Show') + ' ' +
-                    (n === 1 ? 'one that has passed' : Core.inWords(n).toLowerCase() + ' that have passed');
+            // ── Pointer and keyboard ─────────────────────────────────────────
+            //
+            // POINTER EVENTS, NOT CLICKS, so a mouse and a finger behave the same
+            // way. The press is taken on the day; the move and the lift are
+            // listened for on the window, and the day under the pointer is found
+            // by position. A finger's events keep going to the day it went down
+            // on however far it travels, so the target of a move says nothing
+            // about where the finger now is.
+            //
+            // The day grid carries `touch-action: none`, so on a phone a drag
+            // across days paints rather than scrolling the page. Swiping months
+            // still works from the month name and the weekday row, and the
+            // arrows are always there.
+
+            pointerDown(event, iso) {
+                if (event && event.button !== undefined && event.button !== 0) return;
+                // Keep the lift coming back here even if the mouse leaves the
+                // window mid-drag; without it the drag is left hanging open.
+                try {
+                    if (event && event.target && event.target.setPointerCapture) {
+                        event.target.setPointerCapture(event.pointerId);
+                    }
+                } catch (e) { /* not every browser lets you, and nothing needs it to */ }
+                this.press(iso);
             },
 
-            // ── Choosing ─────────────────────────────────────────────────────
-
-            tap(iso) {
-                if (!iso) return;
-                this.selection = Core.nextSelection(this.selection, iso);
+            pointerMove(event) {
+                if (!this.drag || !event || typeof document.elementFromPoint !== 'function') return;
+                const el = document.elementFromPoint(event.clientX, event.clientY);
+                const day = el && el.closest && el.closest('[data-day]');
+                if (day) this.dragTo(day.getAttribute('data-day'));
             },
 
-            clearSelection() {
-                this.selection = Object.assign({}, Core.EMPTY_SELECTION);
+            // A pointer press already did the work, and its click follows it.
+            // Only a click from the KEYBOARD (Enter or Space on a focused day,
+            // which reports no clicks counted) toggles here.
+            keyed(event, iso) {
+                if (event && event.detail === 0) return this.toggle(iso);
+            },
+
+            // Mark or clear a run, now on screen and then in the database.
+            // Drawn first, so the calendar never waits on the network; written
+            // in order behind anything still going.
+            paint(from, to, on) {
+                const subjectId = this.subjectId;
+                if (!subjectId) return;
+                // The AUTHOR, never the subject. Marking somebody else's days
+                // stamps the editor, so it reads "Ann marked Sarah away" rather
+                // than putting a claim in Sarah's mouth.
+                const author = { personId: this.personId, uid: (auth.currentUser || {}).uid, name: this.personName };
+
+                const plan = Core.paintDays(this.stretches, from, to, on, author);
+                if (!plan.set.length && !plan.remove.length) return;
+                this.stretches = plan.stretches;
+                this.error = '';
+                this.inFlight += 1;
+
+                this.queue = this.queue.then(async () => {
+                    try {
+                        const saved = await Store.paintDays(db, subjectId, { from: from, to: to, on: on }, author);
+                        // Only once nothing else is queued: an earlier answer
+                        // would redraw over a later tap that is still on its way.
+                        if (this.inFlight === 1 && this.subjectId === subjectId) this.stretches = saved;
+                    } catch (e) {
+                        console.error('Away save failed:', e);
+                        this.error = friendlyError(e);
+                        // Show what is really stored rather than what was hoped.
+                        try {
+                            if (this.subjectId === subjectId) this.stretches = await Store.loadStretches(db, subjectId);
+                        } catch (_) { /* the error already says so */ }
+                    } finally {
+                        this.inFlight -= 1;
+                    }
+                });
+                return this.queue;
             },
 
             async prevMonths() {
@@ -497,6 +558,9 @@
             // own tap slop, so a swipe never also lands on the day it started on.
 
             swipeFrom(event) {
+                // A finger that went down on a day is painting, not paging.
+                // The press lands first, so the drag is already set by now.
+                if (this.drag) { this.swipe = null; return; }
                 const touch = event && event.changedTouches && event.changedTouches[0];
                 this.swipe = touch ? { x: touch.clientX, y: touch.clientY } : null;
             },
@@ -517,80 +581,38 @@
                 if (dx < 0) this.nextMonths(); else this.prevMonths();
             },
 
-            togglePast() { this.showPast = !this.showPast; },
-
-            // ── Saying it ────────────────────────────────────────────────────
-
-            async add() {
-                if (!this.canAdd || this.saving) return;
-                this.saving = true;
-                this.error = '';
-                try {
-                    this.stretches = await Store.addStretch(
-                        db,
-                        this.subjectId,
-                        { start: this.selection.start, end: this.selection.end },
-                        // The AUTHOR, never the subject. Entering somebody else's
-                        // days stamps the editor, so it reads "Ann marked Sarah
-                        // away" rather than putting a claim in Sarah's mouth.
-                        { personId: this.personId, uid: (auth.currentUser || {}).uid, name: this.personName }
-                    );
-                    this.clearSelection();
-                    // The days just claimed may reach past what was read for,
-                    // and the rows underneath report what is inside each one.
-                    await this.loadPlaces();
-                } catch (e) {
-                    console.error('Away save failed:', e);
-                    this.error = friendlyError(e);
-                } finally {
-                    this.saving = false;
-                }
-            },
-
-            async remove(id) {
-                if (this.saving) return;
-                this.saving = true;
-                this.error = '';
-                try {
-                    // An editor may remove anybody's, including one the person
-                    // entered themselves — somebody whose plans changed will tell
-                    // whoever they told the first time.
-                    await Store.removeStretch(db, this.subjectId, id);
-                    this.stretches = Core.removeStretch(this.stretches, id);
-                } catch (e) {
-                    console.error('Away removal failed:', e);
-                    this.error = friendlyError(e);
-                } finally {
-                    this.saving = false;
-                }
-            },
-
             // ── Drawing a day ────────────────────────────────────────────────
             //
             // One place decides what a cell looks like, so the two layouts cannot
             // drift. Tailwind classes rather than the design file's raw CSS vars,
             // matching every other page here.
+            //
+            // Away is solid navy. A day the drag in hand is marking shows a shade
+            // lighter until the finger lifts; a day it is clearing shows struck
+            // through, so a run being cleared is still visible as one.
 
             cellClass(c) {
                 if (!c.inMonth) return 'invisible';
-                if (c.isStart || c.isEnd) return 'bg-primary text-on-primary font-bold';
-                if (c.inRange) return 'bg-surface-container-high text-on-surface';
-                if (c.onRecord) return 'bg-secondary-container text-on-secondary-container font-semibold';
+                // Gone: faded, and still showing whether you were away.
+                if (c.past) return c.away ? 'bg-primary/30 text-on-primary' : 'text-outline opacity-50';
+                if (c.pending === 'on') return 'bg-primary/75 text-on-primary font-bold';
+                if (c.pending === 'off') return 'bg-surface-container-high text-outline line-through';
+                if (c.away) return 'bg-primary text-on-primary font-bold';
                 return 'text-on-surface hover:bg-surface-container-low';
             },
 
-            // Square the middle of a range so it reads as one block rather than a
+            // Square the inside of a run so it reads as one block rather than a
             // row of separate days.
             cellRadius(c) {
-                if (c.isStart && c.isEnd) return 'rounded-[10px]';
-                if (c.isStart) return 'rounded-l-[10px]';
-                if (c.isEnd) return 'rounded-r-[10px]';
-                if (c.inRange) return 'rounded-none';
-                return 'rounded-[10px]';
+                if (!c.away) return 'rounded-[10px]';
+                if (c.runStart && c.runEnd) return 'rounded-[10px]';
+                if (c.runStart) return 'rounded-l-[10px] rounded-r-none';
+                if (c.runEnd) return 'rounded-r-[10px] rounded-l-none';
+                return 'rounded-none';
             },
 
-            // Sand for a place you hold; amber once it is inside the range you
-            // are choosing — the same dot, saying "this one is now your problem".
+            // Sand for a place you hold; amber on a day you are away — the same
+            // dot, saying "this one is now your problem".
             dotClass(c) {
                 if (c.dotTone === 'warning') return 'bg-warning';
                 if (c.dotTone === 'sand') return 'bg-sand';
@@ -621,15 +643,17 @@
 
             get intro() {
                 return this.isMine
-                    ? "Whole days you won't be here. Nothing is put on you on these days. "
-                        + "Nobody approves it — you say it and it's true."
-                    : 'Whole days ' + this.subjectName + " won't be here. Nothing is put on them on "
-                        + 'these days. Recorded in your name, so it reads as you saying it for them.';
+                    ? "Tap the days you won't be here — tap again to clear one, or drag across several. "
+                        + "Nothing is put on you on these days. Nobody approves it — you say it and it's true."
+                    : 'Tap the days ' + this.subjectName + " won't be here — tap again to clear one, or drag "
+                        + 'across several. Recorded in your name, so it reads as you saying it for them.';
             },
 
-            get addLabelFor() {
+            // Whether the last change is stored yet. Quiet, because saving is
+            // not something the person did — it is something that happens.
+            get saveState() {
                 if (this.saving) return 'Saving…';
-                return this.isMine ? "I'm away these days" : this.subjectName + ' is away these days';
+                return '';
             },
 
             get clashLead() {
@@ -638,14 +662,6 @@
                         + 'Find someone to swap with before you go.'
                     : 'These places are still theirs — recording this does not take them off '
                         + this.subjectName + '. Somebody has to hand them on.';
-            },
-
-            get allClearLine() { return this.allClearLineText; },
-
-            get emptyLine() {
-                return this.isMine
-                    ? "You haven't told the church about any days yet. Tap the first day you're away on the calendar."
-                    : 'Nothing on record for ' + this.subjectName + ' yet.';
             },
 
             get calendarHref() {

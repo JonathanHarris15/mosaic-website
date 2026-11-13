@@ -2,6 +2,13 @@ const { test } = require('node:test');
 const assert = require('node:assert');
 
 const Kiosk = require('../public/kiosk-core.js');
+const Levels = require('../public/account-levels-core.js');
+
+function account(preset, extra) {
+    const id = Levels.BUILTIN_LEVEL_IDS[preset];
+    if (!id) return Object.assign({ accountLevelId: null, permissions: {} }, extra || {});
+    return Object.assign({}, Levels.userWriteFromLevel(id), extra || {});
+}
 
 test('isKiosk is its own check, not a rank on the ladder', () => {
     assert.strictEqual(Kiosk.isKiosk('kiosk'), true);
@@ -12,27 +19,32 @@ test('isKiosk is its own check, not a rank on the ladder', () => {
 });
 
 test('a kiosk on any ordinary page is sent to the kiosk landing page', () => {
-    const data = { permissionLevel: 'kiosk' };
+    const data = account('kiosk');
     assert.strictEqual(Kiosk.kioskGateDestination(data, '/peoples-page.html'), 'kiosk.html');
     assert.strictEqual(Kiosk.kioskGateDestination(data, 'index.html'), 'kiosk.html');
     assert.strictEqual(Kiosk.kioskGateDestination(data, 'calendar-event.html?id=x'), 'kiosk.html');
+    assert.strictEqual(Kiosk.kioskGateDestination({ accountLevelId: 'level_kiosk' }, 'index.html'), 'kiosk.html');
 });
 
 test('a kiosk may stay on the kiosk page and on login', () => {
-    const data = { permissionLevel: 'kiosk' };
+    const data = account('kiosk');
     assert.strictEqual(Kiosk.kioskGateDestination(data, 'kiosk.html'), null);
     assert.strictEqual(Kiosk.kioskGateDestination(data, '/kiosk.html'), null);
     assert.strictEqual(Kiosk.kioskGateDestination(data, 'login.html'), null);
 });
 
 test('a non-kiosk on the kiosk page is sent home', () => {
-    assert.strictEqual(Kiosk.kioskGateDestination({ permissionLevel: 'editor' }, 'kiosk.html'), 'index.html');
-    assert.strictEqual(Kiosk.kioskGateDestination({ permissionLevel: 'viewer' }, 'index.html'), null);
+    assert.strictEqual(Kiosk.kioskGateDestination(account('editor'), 'kiosk.html'), 'index.html');
+    assert.strictEqual(Kiosk.kioskGateDestination(account('viewer'), 'index.html'), null);
+    assert.strictEqual(Kiosk.kioskGateDestination({ permissionLevel: 'kiosk' }, 'kiosk.html'), 'index.html');
+    assert.strictEqual(Kiosk.isKioskAccount({ permissionLevel: 'kiosk' }), false);
 });
 
 test('signing in as a kiosk lands on the kiosk page, not the dashboard', () => {
-    assert.strictEqual(Kiosk.landingPageFor({ permissionLevel: 'kiosk' }), 'kiosk.html');
-    assert.strictEqual(Kiosk.landingPageFor({ permissionLevel: 'editor' }), 'index.html');
+    assert.strictEqual(Kiosk.landingPageFor(account('kiosk')), 'kiosk.html');
+    assert.strictEqual(Kiosk.landingPageFor({ accountLevelId: 'level_kiosk' }), 'kiosk.html');
+    assert.strictEqual(Kiosk.landingPageFor(account('editor')), 'index.html');
+    assert.strictEqual(Kiosk.landingPageFor({ permissionLevel: 'kiosk' }), 'index.html');
 });
 
 test('the event list is today first, then whatever is coming', () => {

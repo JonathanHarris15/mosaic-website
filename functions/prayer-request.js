@@ -24,6 +24,25 @@ const INITIAL_DAYS_OUT = 5;
 const REMINDER_DAYS_OUT = 3;
 
 /**
+ * Church setting on app_config/prayer_request_sms (MS-768). Default false: SMS
+ * is reply-to-this-message only (no https in the body; Textbelt URL stopgap).
+ * When true, the send path **adds** the minted Answer URL **alongside** the
+ * same reply instructions in the template — it does not replace texting back.
+ * Inbound reply (`prayerRequestSource: reply`) and Answer form (`form`) write
+ * the same request doc, note, and digest. The newest submission wins
+ * (2026-10-27). An elder-typed request is not a member channel and stays.
+ */
+const PRAYER_SMS_INCLUDE_ANSWER_LINK_FIELD = "includeAnswerLinkInSms";
+
+/**
+ * Church setting on app_config/prayer_request_sms. Default false:
+ * pastoral-prayer SMS sends omit Textbelt replyWebhookUrl so unverified API
+ * keys can deliver (Textbelt treats reply webhooks as a URL feature). When
+ * true, inbound SMS replies route through smsInbound again.
+ */
+const PRAYER_SMS_INCLUDE_REPLY_WEBHOOK_FIELD = "includeReplyWebhookInSms";
+
+/**
  * Canonical default Prayer Request message templates. {name} is replaced with
  * the subject's first name when sent. These are the server-side fallback when
  * app_config/prayer_request_sms has no (or a blank) value for a kind. KEEP IN
@@ -120,6 +139,41 @@ function resolveTemplates(config) {
 }
 
 /**
+ * Whether pastoral-prayer SMS bodies should include the Answer URL. Off unless
+ * the church explicitly sets includeAnswerLinkInSms on prayer_request_sms.
+ * @param {?Object} config app_config/prayer_request_sms, or null.
+ * @return {boolean}
+ */
+function prayerSmsIncludeAnswerLink(config) {
+  const data = config || {};
+  return data[PRAYER_SMS_INCLUDE_ANSWER_LINK_FIELD] === true;
+}
+
+/**
+ * Whether pastoral-prayer SMS should attach Textbelt replyWebhookUrl.
+ * Off unless the church sets includeReplyWebhookInSms on prayer_request_sms.
+ * @param {?Object} config app_config/prayer_request_sms, or null.
+ * @return {boolean}
+ */
+function prayerSmsIncludeReplyWebhook(config) {
+  const data = config || {};
+  return data[PRAYER_SMS_INCLUDE_REPLY_WEBHOOK_FIELD] === true;
+}
+
+/**
+ * Remove {link} and the wording that only makes sense with a URL in the SMS.
+ * @param {?string} text
+ * @return {string}
+ */
+function stripAnswerLinkFromPrayerText(text) {
+  let s = String(text == null ? "" : text);
+  s = s.split("{link}").join("");
+  s = s.replace(/,?\s*or answer here:\s*/gi, "");
+  s = s.replace(/\s{2,}/g, " ");
+  return s.trimEnd();
+}
+
+/**
  * Push title and body per purpose. A blank field uses that field's default,
  * so a half-filled config still renders a complete lock screen.
  * @param {?Object} config app_config/prayer_request_sms, or null.
@@ -148,15 +202,21 @@ function resolvePushWording(config) {
  * @param {string} firstName
  * @param {{initial: string, reminder: string, thankyou: string}} [templates]
  * @param {?string} [answerLink] substituted for {link} on initial/reminder
+ * @param {boolean} [includeLinkInSms] when false, strip link wording (default)
  * @return {string}
  */
-function renderPrayerRequestMessage(kind, firstName, templates, answerLink) {
+function renderPrayerRequestMessage(
+    kind, firstName, templates, answerLink, includeLinkInSms) {
   let tpl = (templates && templates[kind]) ||
     DEFAULT_PRAYER_MESSAGES[kind] || "";
   const name = (typeof firstName === "string" && firstName.trim()) ?
     firstName.trim() : "there";
-  const link = typeof answerLink === "string" ? answerLink.trim() : "";
-  if (link && (kind === "initial" || kind === "reminder")) {
+  const includeLink = includeLinkInSms === true;
+  let link = typeof answerLink === "string" ? answerLink.trim() : "";
+  if (!includeLink) {
+    tpl = stripAnswerLinkFromPrayerText(tpl);
+    link = "";
+  } else if (link && (kind === "initial" || kind === "reminder")) {
     tpl = ensureAnswerLinkInTemplate(tpl, link);
   }
   return tpl.split("{name}").join(name).split("{link}").join(link);
@@ -198,6 +258,26 @@ function templatesWithAnswerLink(templates) {
 }
 
 /**
+ * Prayer-request SMS templates for the send path: either link slots for MS-247
+ * or reply-only wording with no URL placeholder.
+ * @param {?Object} templates resolved initial/reminder/thankyou
+ * @param {boolean} includeLinkInSms
+ * @return {Object}
+ */
+function preparePrayerSmsTextTemplates(templates, includeLinkInSms) {
+  const t = templates || {};
+  if (includeLinkInSms === true) {
+    return templatesWithAnswerLink(t);
+  }
+  const stripKind = (kind) => stripAnswerLinkFromPrayerText(
+      typeof t[kind] === "string" ? t[kind] : "");
+  return Object.assign({}, t, {
+    initial: stripKind("initial"),
+    reminder: stripKind("reminder"),
+  });
+}
+
+/**
  * The church-local date (YYYY-MM-DD) and hour (0-23) for an instant.
  * Defined on the notification core; this name stays for existing callers.
  * @param {Date} now
@@ -223,19 +303,16 @@ function daysUntil(serviceDate, todayDate) {
 }
 
 /**
- * Whether personId is pastoral prayer on this service's liturgy.
- * @param {?Object} liturgy
+ * Whether personId is named on a requesting prayer for this Sunday.
+ * @param {?Object} liturgy unused; kept so callers need not change shape
  * @param {?string} personId
- * @param {?Array<string>} subjectIds people the order names, when known
+ * @param {?Array<string>} subjectIds people the order names
  * @return {boolean}
  */
 function isPastoralPrayerSubject(liturgy, personId, subjectIds) {
   if (!personId) return false;
-  if (Array.isArray(subjectIds)) return subjectIds.indexOf(personId) !== -1;
-  if (!liturgy) return false;
-  const male = liturgy.prayerMale && liturgy.prayerMale.id;
-  const female = liturgy.prayerFemale && liturgy.prayerFemale.id;
-  return personId === male || personId === female;
+  if (!Array.isArray(subjectIds)) return false;
+  return subjectIds.indexOf(personId) !== -1;
 }
 
 /**
@@ -298,15 +375,19 @@ function proseOf(element) {
 }
 
 /**
- * A custom message still carries the answer link.
+ * Liturgy-order prose for an ask. Adds {link} only when links are enabled.
  * @param {?string} text
+ * @param {boolean} [includeLinkInSms]
  * @return {string}
  */
-function messageWithLink(text) {
+function messageWithLink(text, includeLinkInSms) {
   const raw = typeof text === "string" ? text.trim() : "";
   if (!raw) return "";
-  if (raw.includes("{link}")) return raw;
-  return `${raw}\n{link}`;
+  if (includeLinkInSms === true) {
+    if (raw.includes("{link}")) return raw;
+    return `${raw}\n{link}`;
+  }
+  return stripAnswerLinkFromPrayerText(raw);
 }
 
 /**
@@ -321,9 +402,8 @@ function reminderDaysFor(noticeDays) {
 }
 
 /**
- * Everyone a Sunday's pastoral prayer asks, from a prayer that sends
- * requests and from the older male and female fields. One person is one
- * row. A prayer's own days win over the older fields.
+ * Everyone a Sunday's requesting prayers ask. One person is one row. A
+ * prayer's own days and prose win when the same person is named twice.
  * @param {Object} args
  * @param {?Object} args.liturgy
  * @param {Array} [args.elements] the Sunday's order
@@ -334,7 +414,7 @@ function pastoralSubjects(args) {
   const liturgy = (args && args.liturgy) || {};
   const elements = (args && args.elements) || [];
   const byId = new Map();
-  const consider = (person, noticeList, fromElement, prose) => {
+  const consider = (person, noticeList, prose) => {
     if (!person || !person.id) return;
     const list = Array.isArray(noticeList) ? noticeList : [];
     const days = list.length ? list[0] : 0;
@@ -348,47 +428,25 @@ function pastoralSubjects(args) {
         noticeList: list.slice(),
         message: words.message || "",
         response: words.response || "",
-        fromElement: !!fromElement,
+        fromElement: true,
       });
       return;
     }
-    if (fromElement && !prev.fromElement) {
-      prev.noticeDays = days;
-      prev.noticeList = list.slice();
-      prev.message = words.message || "";
-      prev.response = words.response || "";
-      prev.fromElement = true;
-      if (person.name) prev.name = person.name;
-    } else if (fromElement && days > prev.noticeDays) {
+    if (days > prev.noticeDays) {
       prev.noticeDays = days;
       prev.noticeList = list.slice();
       if (words.message) prev.message = words.message;
       if (words.response) prev.response = words.response;
     }
+    if (person.name) prev.name = person.name;
   };
-  const prayers = elements.filter((el) =>
-    el && el.kind === "prayer" && el.requests);
-  prayers.forEach((el) => {
-    const value = liturgy[el.id];
-    const named = Array.isArray(value) ? value : [];
-    const words = proseOf(el);
-    named.forEach((person) =>
-      consider(person, noticeListOf(el), true, words));
-  });
-  let legacyList = null;
-  prayers.forEach((el) => {
-    const list = noticeListOf(el);
-    if (!list.length) return;
-    if (!legacyList || list[0] > legacyList[0]) legacyList = list;
-  });
-  if (!legacyList) {
-    legacyList = noticeListOf({
-      requests: {count: 1}, noticeDays: INITIAL_DAYS_OUT,
-    });
-  }
-  const quiet = {message: "", response: ""};
-  consider(liturgy.prayerMale, legacyList, false, quiet);
-  consider(liturgy.prayerFemale, legacyList, false, quiet);
+  elements.filter((el) => el && el.kind === "prayer" && el.requests)
+      .forEach((el) => {
+        const value = liturgy[el.id];
+        const named = Array.isArray(value) ? value : [];
+        const words = proseOf(el);
+        named.forEach((person) => consider(person, noticeListOf(el), words));
+      });
   return Array.from(byId.values());
 }
 
@@ -423,7 +481,8 @@ function serviceDateHasEnded(todayDate, serviceDate) {
  * @param {string} state.personId
  * @param {string} state.serviceDate
  * @param {string} state.todayDate church-local today
- * @param {?Object} state.liturgy prayerMale / prayerFemale
+ * @param {?Object} state.liturgy unused when subjectIds is set
+ * @param {?Array<string>} state.subjectIds people named on requesting prayers
  * @param {boolean} state.viaAnswerLink
  * @param {?string} state.initialSentDate
  * @return {boolean}
@@ -624,7 +683,8 @@ function prayerAskPlan(state) {
   const days = list.filter((n) => Number(n) > 0);
   if (!days.length) return {action: "none", day: null};
   const sent = sentNoticeDays(s, days);
-  const last = s.reminderSentDate || s.initialSentDate || null;
+  const last = s.reminderSentDate || s.initialSentDate ||
+    s.lastSendAttemptDate || null;
   if (last && last === s.today) return {action: "none", day: null};
   const due = days.filter((d) => s.daysUntilService <= d && !sent.has(d));
   if (!due.length) return {action: "none", day: null};
@@ -734,6 +794,57 @@ function elderDigestDecision({
   return changedSource === "reply" || changedSource === "form";
 }
 
+/**
+ * Which subject sets may fire an Elder Digest. Each requesting prayer with
+ * elderDigest on is its own group.
+ * @param {Object} args
+ * @param {?Object} args.liturgy
+ * @param {Array} [args.elements]
+ * @return {Array<{id: string, subjects: Array<{id: string, name: string}>}>}
+ */
+function elderDigestGroups(args) {
+  const liturgy = (args && args.liturgy) || {};
+  const elements = (args && args.elements) || [];
+  return elements.filter((el) =>
+    el && el.kind === "prayer" && el.requests && el.elderDigest !== false)
+      .map((el) => {
+        const named = Array.isArray(liturgy[el.id]) ? liturgy[el.id] : [];
+        const subjects = named
+            .filter((p) => p && p.id)
+            .map((p) => ({id: p.id, name: p.name || ""}));
+        return {id: el.id, subjects};
+      })
+      .filter((g) => g.subjects.length > 0);
+}
+
+/**
+ * Calendar dates (YYYY-MM-DD) when ask texts are scheduled for a Sunday,
+ * derived from that prayer's notice-day list. Sorted soonest first.
+ * @param {string} serviceDate
+ * @param {Array<number>|number|null} noticeDays
+ * @return {Array<string>}
+ */
+function scheduledTextDates(serviceDate, noticeDays) {
+  const [y, m, d] = String(serviceDate || "").split("-").map(Number);
+  if (!y || !m || !d) return [];
+  let list = [];
+  if (Array.isArray(noticeDays)) {
+    list = noticeDays.map(Number).filter((n) => Number.isFinite(n) && n > 0);
+  } else {
+    const n = Number(noticeDays);
+    if (Number.isFinite(n) && n > 0) list = [n];
+  }
+  const uniq = Array.from(new Set(list)).sort((a, b) => b - a);
+  return uniq.map((n) => {
+    const dt = new Date(Date.UTC(y, m - 1, d));
+    dt.setUTCDate(dt.getUTCDate() - n);
+    const yy = dt.getUTCFullYear();
+    const mm = String(dt.getUTCMonth() + 1).padStart(2, "0");
+    const dd = String(dt.getUTCDate()).padStart(2, "0");
+    return `${yy}-${mm}-${dd}`;
+  });
+}
+
 const DIGEST_MONTHS = [
   "January", "February", "March", "April", "May", "June",
   "July", "August", "September", "October", "November", "December",
@@ -787,11 +898,17 @@ if (typeof module !== "undefined" && module.exports) {
     PRAYER_ANSWER_PRIVACY_LINE,
     pushConfigKey,
     firstNameOf,
+    PRAYER_SMS_INCLUDE_ANSWER_LINK_FIELD,
+    PRAYER_SMS_INCLUDE_REPLY_WEBHOOK_FIELD,
     resolveTemplates,
     resolvePushWording,
+    prayerSmsIncludeAnswerLink,
+    prayerSmsIncludeReplyWebhook,
+    stripAnswerLinkFromPrayerText,
     renderPrayerRequestMessage,
     ensureAnswerLinkInTemplate,
     templatesWithAnswerLink,
+    preparePrayerSmsTextTemplates,
     churchDateParts,
     daysUntil,
     isPastoralPrayerSubject,
@@ -813,6 +930,8 @@ if (typeof module !== "undefined" && module.exports) {
     tiptapFromText,
     buildPrayerRequestNote,
     elderDigestDecision,
+    elderDigestGroups,
+    scheduledTextDates,
     formatServiceDate,
     renderElderDigest,
   };

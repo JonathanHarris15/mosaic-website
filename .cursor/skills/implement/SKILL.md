@@ -65,11 +65,13 @@ If a test that was passing before this work began is now failing: **stop** and f
 
 ## Phase 5: Review
 
-Run **`/code-review`** (alias `/review`) on the change. Upstream runs **Standards** and **Spec** in parallel; on Mosaic also check domain vocabulary in `CONTEXT.md` when judging Spec and naming.
+Dispatch a **new subagent** that did not write these commits. It follows [`code-review`](../code-review/SKILL.md) (alias `/review`): Standards and Spec in parallel, then the adversarial review. On Mosaic, Spec and naming use domain vocabulary in `CONTEXT.md`.
 
 The fixed point is the merge-base with main — the whole of this ticket's work, not the last commit. Pass the issue key / PRD so the Spec axis measures against real acceptance criteria.
 
-Address what it surfaces before shipping. Wrong domain terms in `CONTEXT.md` are blocking. If you disagree with a finding, say why rather than quietly skipping it.
+The adversarial review posts a pull request comment. The first line is `Adversarial review: PASS` or `Adversarial review: FAIL`. The second line is the full head sha. A verdict in chat, before the pull request exists, does not authorize merge. Post the comment once the pull request is open, on the head you will merge.
+
+A FAIL comment returns the hits to the author. Fix them, then dispatch another new subagent. The sha on the PASS comment matches the head you will merge. Wrong domain terms in `CONTEXT.md` are blocking. If you disagree with a finding, say why rather than quietly skipping it.
 
 ## Phase 6: Grow
 
@@ -84,7 +86,7 @@ Once tests pass and no regressions remain:
 1. **Commit** with the project's commit style, referencing the issue key so JIRA↔GitHub links it.
 2. **Open a PR** with the issue key in the title (e.g. `MS-124: …`). Use [`/pr`](../pr/SKILL.md) and `.github/PULL_REQUEST_TEMPLATE.md`. User-visible changes: complete **Smoke test** per [jev-smoke-test](../jev-smoke-test/SKILL.md).
 3. **Transition to In Review** once the PR is ready. **Never transition to `Done`.** Jonathan moves tickets to `Done` after review.
-4. **Merge on green CI** when you are the coordinating agent (Mosaic Dev): `npm test` and `npm run lint --prefix functions` must pass. Do **not** wait for Jonathan to merge. Do **not** `firebase deploy` from the agent VM.
+4. **Merge on green CI** after the adversarial PASS. You are the coordinating agent (Mosaic Dev). `npm test` and `npm run lint --prefix functions` pass, and the pull request has a comment whose first line is `Adversarial review: PASS` and whose sha is the head being merged ([`code-review`](../code-review/SKILL.md)). Do **not** wait for Jonathan to merge. Do **not** `firebase deploy` from the agent VM.
 5. **Loop.** If the ticket has more unfinished sub-tasks, pick the next unblocked one from Phase 1 (ticket stays `In Progress`). When every sub-task is Done, transition the **ticket** to `In Review` and stop.
 
 Report at the end: issue key(s), statuses (expect **`In Review`**), branch/PR, merge result, and what's next.
@@ -127,7 +129,7 @@ For each ticket in turn:
 2. Build it with the normal discipline — Phases 1→6. Tests still come first, regressions still
    stop you, `CONTEXT.md` still grows. **Batch does not mean sloppy.** What batch removes is the
    conversation, not the standard.
-3. Run `/code-review` on that ticket's commit range, and fix what it surfaces before moving on.
+3. Fix adversarial hits you can see in that ticket's diff before moving on. A new subagent posts `Adversarial review: PASS` on the batch pull request before merge (Phase 7, [`code-review`](../code-review/SKILL.md)).
 4. **Commit once**, message led by the issue key, so the ticket is one revertible unit.
 5. Transition it to In Review and post a one-line comment saying it is in the batch branch.
 6. Full test suite before the next ticket starts. A batch that breaks on ticket two and keeps

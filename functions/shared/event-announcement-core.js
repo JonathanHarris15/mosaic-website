@@ -208,7 +208,7 @@
     // value that flag replaced. Same two questions ShepherdingCore asks.
     function isInactiveMembership(membership) {
         if (!membership) return false;
-        return !!membership.inactive || membership.status === 'inactive';
+        return !!membership.inactive;
     }
 
     function carriesEvery(person, tagIds) {

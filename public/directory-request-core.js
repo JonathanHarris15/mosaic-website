@@ -80,11 +80,8 @@
 
     function canResolve(permissionLevel) {
         const Access = access();
-        if (Access) return Access.writesAsEditor(permissionLevel);
-        const level = permissionLevel && typeof permissionLevel === 'object'
-            ? (permissionLevel.permissionLevel || permissionLevel.role)
-            : permissionLevel;
-        return RESOLVER_LEVELS.indexOf(level) !== -1;
+        if (!Access) return false;
+        return Access.writesAsEditor(permissionLevel);
     }
 
     // May this User raise this kind of request? A link request needs them NOT to

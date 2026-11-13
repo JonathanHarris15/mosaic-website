@@ -18,47 +18,57 @@
  * for people with no history left and normalizes '0000-00-00' to null — the two
  * cases that quietly hold a member out of the rotation.
  *
- * Usage: node scripts/sync-pastoral-prayer-dates.js [--dry-run]
+ * Dry-run by default. Prod requires --project mosaic-hymn-database --i-mean-prod.
+ *
+ *   node scripts/sync-pastoral-prayer-dates.js \
+ *       --project mosaic-hymn-database --i-mean-prod
+ *   node scripts/sync-pastoral-prayer-dates.js \
+ *       --project mosaic-hymn-database --i-mean-prod --commit
  */
 
-const admin = require('firebase-admin');
-const path = require('path');
-const fs = require('fs');
-
-const FIREBASE_PROJECT_ID = 'mosaic-hymn-database';
-
-// Find the key by shape, not by name. The older scripts hardcode a filename,
-// and every one of them breaks the day the key is rotated.
-function resolveServiceAccount() {
-    const root = path.join(__dirname, '..');
-    const match = fs.readdirSync(root).find(
-        f => f.startsWith('mosaic-hymn-database-firebase-adminsdk') && f.endsWith('.json')
-    );
-    if (!match) throw new Error('No mosaic-hymn-database-firebase-adminsdk-*.json found in project root.');
-    return require(path.join(root, match));
-}
-
-require('./firebase-project').requireProject(process.argv, {
-    hardcoded: 'mosaic-hymn-database',
-});
-admin.initializeApp({
-    credential: admin.credential.cert(resolveServiceAccount()),
-    projectId: FIREBASE_PROJECT_ID
-});
-
-const db = admin.firestore();
-
-// The same rules the app runs on, so the repair and the live writes can never
-// disagree about what a stored date means.
+const SyncCore = require('../public/sync-pastoral-prayer-dates-core.js');
+const { serviceAccount } = require('./service-account.js');
 const { normalizeDate, latestDate, HISTORY_COLLECTION } =
     require('../public/pastoral-prayer-core.js');
 
-const APPLY = !process.argv.includes('--dry-run');
+const BATCH_SIZE = 400;
 
-async function run() {
+/**
+ * @param {string[]} argv
+ * @return {boolean}
+ */
+function committing(argv) {
+    return argv.includes('--commit');
+}
+
+/**
+ * @param {string[]} argv
+ * @return {boolean}
+ */
+function willWrite(argv) {
+    return committing(argv) && argv.includes('--i-mean-prod');
+}
+
+async function main() {
+    const argv = process.argv;
+    const projectId = require('./firebase-project').requireProject(argv);
+    const APPLY = willWrite(argv);
+    if (committing(argv) && !APPLY) {
+        throw new Error('--commit against the church project also needs --i-mean-prod.');
+    }
+
+    const admin = require('firebase-admin');
+    if (!admin.apps.length) {
+        admin.initializeApp({
+            credential: admin.credential.cert(serviceAccount()),
+            projectId,
+        });
+    }
+
+    const db = admin.firestore();
+
     console.log(`Rebuilding lastPastoralPrayerDate from history${APPLY ? '' : ' (dry run)'}...`);
 
-    // 1. Every history date, per person.
     const historySnap = await db.collectionGroup(HISTORY_COLLECTION).get();
     const datesByPerson = {};
     historySnap.forEach(doc => {
@@ -70,17 +80,14 @@ async function run() {
     console.log(`Read ${historySnap.size} history records for ` +
         `${Object.keys(datesByPerson).length} people.`);
 
-    // 2. Compare against every Person — including those with no history, whose
-    // field has to be cleared rather than left standing.
     const peopleSnap = await db.collection('people').get();
     const corrections = [];
     peopleSnap.forEach(doc => {
         const stored = doc.data().lastPastoralPrayerDate;
-        const truth = latestDate(datesByPerson[doc.id] || []);
-        const alreadyRight = stored === truth || (truth === null && stored === undefined);
-        if (!alreadyRight) {
-            corrections.push({ ref: doc.ref, name: doc.data().name, stored, truth });
-        }
+        const historyDates = datesByPerson[doc.id] || [];
+        if (!SyncCore.needsCacheCorrection(stored, historyDates)) return;
+        const truth = latestDate(historyDates);
+        corrections.push({ ref: doc.ref, name: doc.data().name, stored, truth });
     });
 
     console.log(`${peopleSnap.size} people checked, ${corrections.length} out of step.`);
@@ -90,11 +97,9 @@ async function run() {
 
     if (!APPLY) {
         console.log('Dry run — nothing written.');
-        process.exit(0);
+        return;
     }
 
-    // 3. Write.
-    const BATCH_SIZE = 400;
     for (let i = 0; i < corrections.length; i += BATCH_SIZE) {
         const batch = db.batch();
         corrections.slice(i, i + BATCH_SIZE).forEach(c => {
@@ -105,10 +110,9 @@ async function run() {
     }
 
     console.log('Done.');
-    process.exit(0);
 }
 
-run().catch(err => {
+main().then(() => process.exit(0)).catch(err => {
     console.error(err);
     process.exit(1);
 });

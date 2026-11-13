@@ -1,0 +1,176 @@
+[
+  {
+    "summary": "Forms person pickers read fields the directory does not store",
+    "description": "Context: A form question scoped to members, non-members, or a tag builds its directory from people.isMember, people.membershipStage, and people.tagIds. Person documents store membership.stage, membership.inactive, and tags. Ordinary writes never set the three fields the picker reads, so member scope matches nobody, non-member scope matches everybody, and tag scope matches nobody. The MCP people list in functions/shepherding-read.js is a different mapping and is not this bug.\n\nFiles: functions/index.js (publicForm directory build and the in-memory person pushed by addPerson), functions/forms-public.js (personInScope), public/shepherding-form-document.js (loadDirectory, personChoices, createPerson).\n\nFirestore: reads people.isMember, people.membershipStage, people.tagIds. Stored shape is people.membership.stage and people.tags. ShepherdingCore.carriesMemberTag is the member test the directory already uses.\n\nProd: unverified whether any person doc has the phantom fields. The writers found do not set them.\n\nDone: the directory DTO is built from membership and tags. Phantom reads are gone. A behavior test offers a stage-Member person for scope member, withholds them for non_member, and offers a person for a tag they actually carry, with isMember absent on the document.",
+    "risk": "high",
+    "rank": 1
+  },
+  {
+    "summary": "Account doors disagree across rules, Storage, and rankOf",
+    "description": "Context: users/{uid} still carries four generations of access: role, permissionLevel, the pastoralAssistant boolean, and accountLevelId plus a permissions map. Firestore rules trust the stored rung (role only when permissionLevel is absent) and, when a map exists, the map keys, while isPastoralAssistant() is also true for the boolean. Storage rules take the higher of the stored rung, accountLevelId, and a rung inferred from the map. The client canonicalizes in account-levels-core.js and auth.js then overwrites the session. functions/trade-writes.js rankOf reads permissionLevel or role only. Unticking a key can change Firestore and leave trades and the session on another rung. Writers still copy permissionLevel onto role.\n\nFiles: firestore.rules (permissionLevel, editsWith, isPastoralAssistant, usesPermissionMap), storage.rules (permissionLevelAccount), public/account-levels-core.js, public/access-core.js, public/auth.js, functions/trade-writes.js rankOf, functions/index.js createUser, and the pages that still read permissionLevel or role directly (dashboard-nav.js, commitments.js, cover.js, auto-assign.js, calendar.js, away.js, and the same pattern elsewhere).\n\nFirestore: users.role, users.permissionLevel, users.pastoralAssistant, users.accountLevelId, users.permissions.\n\nProd: docs/ops/ms-725-editor-calendar-key-backfill.md scanned all 18 user docs on 2026-10-09, so maps and rungs both exist. Whether any account is role-only, or pastoralAssistant true without the pastoral_assistant rung, is unverified since that audit.\n\nDone: one resolver is what Firestore rules, Storage rules, rankOf, and the client use. role is no longer written or read once every account has permissionLevel. The pastoralAssistant boolean is no longer read once every such account uses the rung. A behavior test refuses calendar.events.edit when the saved map turns it off, keeps an editor with no map working, and gives the boolean grant and the pastoral_assistant rung the same doors.",
+    "risk": "high",
+    "rank": 2
+  },
+  {
+    "summary": "Sunday booklet text still lives in three stores",
+    "description": "Context: The same Sunday blank can live in services/{date}.typedContent, in the week's guide (v2 values or legacy elements), and in event_occurrences printableInputs. Printable wires that used to be sunday_typed are rewritten on load to event_field ids prefixed legacy_. An empty occurrence slot still reads through typed content, and typed content still fills gaps from the guide, so clearing a blank in the new store can print the old one.\n\nFiles: public/sunday-typed-core.js (fromService), public/printable-live.js (legacyTypedFallback), public/printable-legacy-migrate-core.js, public/printable-data-core.js (sunday_typed resolver), public/service-builder.js (typedContent save), public/printable-view.js, public/calendar-event.js. Synced copies under functions/shared/ for the printable and typed-content modules.\n\nFirestore: services.typedContent, services.guide.values, services.guide.elements, services.guide.format; event_occurrences.printableInputs; printables binds sunday_typed or event_field plus legacy_* inputs.\n\nProd: unverified. No prod-ops script copies typedContent onto occurrence fill-ins.\n\nDone: occurrence fill-ins are the only write. The read-through stays until a prod pass has copied old weeks, then sunday_typed resolution and the guide fallback in fromService are deleted. A behavior test prints a week that has only typedContent, a week that has only occurrence fill-ins, and a week whose occurrence value is blank and stays blank.",
+    "risk": "high",
+    "rank": 3
+  },
+  {
+    "summary": "The old service-guide editor still ships beside Printables",
+    "description": "Context: Desktop Services opens the Printable named on the liturgy order and does not fall back to the guide editor. The per-week guide is still stored and the editor still ships. Mobile's Service Guide shortcut is service-guide-editor.html. Legacy weeks are guide.elements; v2 weeks are format v2 with a snapshot and values. ADR 0008 left legacy weeks readable and unmigrated. The legacy generator still treats hasBaptism as the baptism switch.\n\nFiles: public/guide-store.js (isV2Guide, isLegacyGuide), public/service-guide-editor.js, public/service-guide.js, public/service-calendar.js (navigateToGuide), public/mobile/app.js, public/dashboard-nav.js.\n\nFirestore: services/{date}.guide; guide_templates, page_templates, style_presets, guide_assets.\n\nProd: unverified how many weeks are still elements or format v2.\n\nDone: remaining weeks are either rebuilt onto the order's Printable or accepted as frozen history that nothing writes. service-guide.html and service-guide-editor.html are gone from mobile and from direct use. A behavior test shows the Services button opening the order's Printable, and a legacy elements blob no longer changing that Printable.",
+    "risk": "med",
+    "rank": 4
+  },
+  {
+    "summary": "Sunday guides link from the order and from the series",
+    "description": "Context: liturgy_orders.printableId is the Service Guide for every Sunday on that order. events.printables is the list of Printables linked to an event series. The Services button reads only the order field, so a booklet linked on the Sunday series does not enable the button, and a booklet linked on the order may be absent from the event's handout list.\n\nFiles: public/liturgy-order-core.js (serviceGuideTarget, setOrderPrintable), public/service-calendar.js, public/service-builder.js, public/printable-store.js (linkToSeries), public/calendar-event.js, public/recurring-events.js, public/printable-core.js (linkPrintable, unlinkPrintable).\n\nFirestore: liturgy_orders/{id}.printableId; events/{seriesId}.printables.\n\nProd: unverified whether events/sunday_service and the Standard order name the same Printable.\n\nDone: the order field is the Service Guide and the series array is other handouts, and both screens say so. A behavior test leaves the Services button off when the Printable is only on the series, and turns it on from the order without requiring the series array.",
+    "risk": "med",
+    "rank": 5
+  },
+  {
+    "summary": "Liturgy orders still join the loose elements collection",
+    "description": "Context: ADR 0080 stores each order's elements on the order. Load still reads liturgy_elements and, when an order has no elements array, joins elementIds to those loose docs. Save writes elements and elementIds and deletes loose docs it loaded. An order nobody has re-saved still depends on the second collection. The rules still allow world read and editor write on liturgy_elements.\n\nFiles: public/liturgy-order-core.js (normaliseOrder), public/liturgy-order-store.js (load, planSave), firestore.rules match /liturgy_elements/{elementId}.\n\nFirestore: liturgy_orders.elements, liturgy_orders.elementIds, liturgy_elements/{elementId}.\n\nProd: unverified.\n\nDone: a prod pass inlines every order and deletes liturgy_elements. The join and the rules block are gone. elementIds is removed in the same change as the last reader that needs it. A behavior test loads an order that has elements and no loose docs to the same sequence the join used to build.",
+    "risk": "med",
+    "rank": 6
+  },
+  {
+    "summary": "Service reads still fold dotted liturgy keys",
+    "description": "Context: Older service saves stored literal keys such as liturgy.sermon. Current saves nest the object. Every service reader folds dotted keys, and nested values win when both exist. The fold is copied in five modules, so one of them can drift and show an empty slot.\n\nFiles: public/service-read-core.js (normalizeServiceDoc), public/service-builder.js (normalizeDottedKeys), public/service-calendar.js (normalizeServiceDoc), public/guide-store.js (normalizeServiceData), public/printable-data-core.js (normaliseService), plus synced functions/shared copies.\n\nFirestore: services/{date} keys containing a dot, versus nested liturgy, notes, and the same pattern for other dotted paths.\n\nProd: unverified.\n\nDone: one normalizer. A prod rewrite moves dotted keys into nested objects and deletes the flat keys. A behavior test covers dotted only, nested only, and both, with nested winning.",
+    "risk": "med",
+    "rank": 7
+  },
+  {
+    "summary": "Serve rows with no seriesId miss Firestore queries",
+    "description": "Context: Involvement written before seriesId existed reads as Sunday Service in memory (events-core.js seriesIdOf), which is what keeps fairness from dropping historic serves. Queries that filter where seriesId equals a value cannot apply that fallback, so auto-assign and the calendar under-count those rows. Separately, involvement ids used to be random; involvementId is now deterministic, and Sundays without involvementDeferred are never reconverted, so duplicate rows can remain.\n\nFiles: public/events-core.js (seriesIdOf, forSeries, stampSeries), public/events-store.js, public/auto-assign.js, public/calendar-event.js, public/recurring-events.js, public/service-involvement-core.js (involvementId), scripts/backfill-involvement-series.js. Synced functions/shared/events-core.js and functions/service-involvement.js.\n\nFirestore: people/{personId}/involvement.seriesId; services/{date}.involvementDeferred.\n\nProd: unverified. The backfill is not on the prod-ops allowlist.\n\nDone: the series backfill has run and a count of missing seriesId is zero. seriesIdOf remains only as a guard until that count is zero. Duplicate random-id rows for pre-flag Sundays are deduped. A behavior test includes a row with no seriesId in the Sunday fairness query the same way seriesIdOf includes it in memory.",
+    "risk": "med",
+    "rank": 8
+  },
+  {
+    "summary": "Unstamped occurrences stay invisible to a visibility restamp",
+    "description": "Context: An event occurrence with no visibility field matches no read rule (stampedVisibility answers none). It is invisible on every surface. restampSeriesVisibility queries by visibility, so it cannot find the row it would repair. New creates stamp visibility.\n\nFiles: public/events-store.js (restampSeriesVisibility), firestore.rules, storage.rules (stampedVisibility), scripts/backfill-occurrence-visibility.js.\n\nFirestore: event_occurrences/{id}.visibility.\n\nProd: unverified. The backfill is not on the prod-ops allowlist and has to run with admin credentials.\n\nDone: the admin backfill reports zero unstamped occurrences. A behavior test on the script finds a document without visibility and stamps it from the series.",
+    "risk": "med",
+    "rank": 9
+  },
+  {
+    "summary": "A stale backfill can restore deleted prayer-leader fields",
+    "description": "Context: The Order of Service reads prayer leaders from carriedBy only (MS-771). Prod delete run 39514997653 found 28 of 209 services and 70 legacy fields; dry-run 39515062649 a minute later found zero. scripts/backfill-service-roles.js still writes prayerPraiseId, prayerPraiseName, prayerConfessionId, and prayerConfessionName from involvement, and it is not on the prod-ops allowlist. The duplicate-person merge planner still lists the id fields, so a merge would repoint them if they returned.\n\nFiles: public/service-involvement-core.js, public/service-read-core.js, public/events-occurrence-core.js (runtime, carriedBy only), public/legacy-oos-migrate-core.js, scripts/migrate-legacy-oos-prayer-carriers.js, scripts/delete-legacy-oos-prayer-fields.js, scripts/backfill-service-roles.js, public/merge-duplicate-person-core.js.\n\nFirestore: services prayerPraiseId, prayerPraiseName, prayerConfessionId, prayerConfessionName, versus carriedBy.{elementId}.\n\nProd: top-level fields were absent at the 2026-10-20 dry-run. A later run of the stale backfill would put them back. That has not been re-checked since.\n\nDone: backfill-service-roles.js is deleted or retargeted at carriedBy and the current leader fields. The four prayer keys are gone from the merge planner. Migrate and delete scripts stay until another dry-run is still zero, then go with their tests. A behavior test shows a service save writes carriedBy and does not write the four top-level keys.",
+    "risk": "med",
+    "rank": 10
+  },
+  {
+    "summary": "The old households collection is still readable and writable",
+    "description": "Context: ADR 0075 groups the kiosk from families. household-core.js derives households and its header says the old collection is no longer read. firestore.rules still let any signed-in account read households and let a kiosk or editor write one. Printable fetch still downloads the collection; householdsOf ignores it and uses families. The merge planner still walks households for person ids.\n\nFiles: public/household-core.js, public/printable-data-store.js, public/printable-data-core.js (householdsOf), firestore.rules match /households/{householdId}, public/merge-duplicate-person-core.js.\n\nFirestore: households (name, memberIds, and the rest of the minted shape) versus families (husbandId, wifeId, childIds, anniversary).\n\nProd: unverified whether any households documents remain.\n\nDone: the printable fetch is gone, leftover docs are deleted after a count, and the rules block and merge entry are gone. A behavior test builds a printable household list from families and shows a households doc in the bundle does not change it.",
+    "risk": "med",
+    "rank": 11
+  },
+  {
+    "summary": "Inactive still matches legacy membership.status",
+    "description": "Context: The Membership Track stores stage and inactive (ADR 0012). isInactiveMembership is still true when membership.status is inactive. Directory tabs, roles, announcements, people pickers, and printables share that predicate. The migration script leaves status on the document. Membership Tags projected from the stage are the current design and stay.\n\nFiles: public/shepherding-core.js (isInactiveMembership, membershipFromLegacyStatus), public/roles-core.js, public/event-announcement-core.js, public/people-picker-core.js, public/printable-data-core.js, synced functions/shared copies, scripts/migrate-membership-track.js.\n\nFirestore: people.membership.status, people.membership.stage, people.membership.inactive, people.tags.\n\nProd: unverified today. The migration script's header says status was empty for almost everyone when it was written.\n\nDone: inactive is backfilled from status inactive, and the status comparisons are deleted. A behavior test treats inactive true and status inactive as inactive before the cleanup, and only the flag after it.",
+    "risk": "med",
+    "rank": 12
+  },
+  {
+    "summary": "Care lists still accept the pre-column body",
+    "description": "Context: A care list from before columns stores one TipTap doc per person. Readers treat a cell whose type is doc as the Notes column. Save rewrites it to careListColumns and careListData. Until every document is rewritten, web, phone, and the functions copy all understand both shapes.\n\nFiles: public/care-list-core.js (isOldShape, normaliseStored, saveEdits), functions/shared/care-list-core.js, public/shepherding-core.js (careListNotesFor), public/shepherding-care-list.js, public/mobile/screens-carelist.js, functions/shepherding-payload-writes.js.\n\nFirestore: elder_documents with docType care-list: careListColumns, careListData.{personId}.\n\nProd: unverified.\n\nDone: a batch normalise has rewritten every care-list document. isOldShape remains only for import. A behavior test reads a bare doc as the Notes column and round-trips it as column cells after normalise.",
+    "risk": "med",
+    "rank": 13
+  },
+  {
+    "summary": "The Elder tag still follows the raw permission string",
+    "description": "Context: The Elder tag is projected from permissionLevel or role equal to elder. A custom level whose map counts as an elder, and a pastoral assistant, do not follow that test. Pickers, the relations graph, and digests that trust the tag then disagree with the account screen. This depends on the account-resolver ticket.\n\nFiles: public/shepherding-core.js (isElderUser, applyElderTag), functions/index.js (reconcileElderTag), public/relations-graph-core.js.\n\nFirestore: people.tags containing Elder; users.permissionLevel, users.role, users.permissions.\n\nProd: unverified.\n\nDone: the tag uses the same elder test as the account screen, and a pastoral assistant stays untagged. A behavior test gives the tag to permission level elder, withholds it from pastoral_assistant, and matches a custom map that counts as elder to the account screen.",
+    "risk": "med",
+    "rank": 14
+  },
+  {
+    "summary": "people.accountRank copies the raw permission string",
+    "description": "Context: people.accountRank exists so a surface that can read People and not other users can see rank. The trigger comment in functions/index.js says the trade picker uses it. No public reader of accountRank turned up, and rankOf still loads users. The projection copies permissionLevel or role and skips the pastoral-assistant grant and the permissions map, so the field can disagree with the client and with Storage even if a caller starts reading it.\n\nFiles: functions/account-rank-sync.js (rankFromUser), functions/index.js (syncAccountRankToPerson, reconcileAccountRank), scripts/backfill-account-rank.js, functions/trade-writes.js (rankOf).\n\nFirestore: people.accountRank; people.userId and users.personId.\n\nProd: unverified whether every linked person has accountRank. The trigger comment says existing links need the one-shot backfill.\n\nDone: rankOf and the projection use the canonical account resolver, or the field stops being written if nothing may read it. A behavior test shows a map change moving accountRank and rankOf to the same rung.",
+    "risk": "med",
+    "rank": 15
+  },
+  {
+    "summary": "Prayer rotation still sorts the 0000-00-00 sentinel",
+    "description": "Context: pastoral_prayer_history is the record (ADR 0022). lastPastoralPrayerDate is a cache. Older writes stored 0000-00-00 for never. The Order of Service prayer picker sorts the raw cache and treats a missing date as that sentinel. PastoralPrayerCore.normalizeDate and analytics.js already fold the sentinel to empty. The picker does not, so a sentinel and a real date can interleave.\n\nFiles: public/service-builder.js (prayerChoices), public/pastoral-prayer-core.js, public/analytics.js, scripts/sync-pastoral-prayer-dates.js, scripts/init-member-prayer-dates.js.\n\nFirestore: people.lastPastoralPrayerDate; people/{id}/pastoral_prayer_history/{serviceDate}.\n\nProd: unverified whether any person still has the sentinel.\n\nDone: the picker uses normalizeDate. The sync script has made the cache match history. A behavior test sorts a sentinel with people who have never been prayed for, and sorts a real date after them.",
+    "risk": "med",
+    "rank": 16
+  },
+  {
+    "summary": "shepherding_reminders remains in the rules",
+    "description": "Context: Tasks replaced follow-up reminders (MS-79, ADR 0060). The app reads and writes shepherding_tasks and shepherding_task_occurrences. The rules still allow elders to read and write shepherding_reminders so a migration can be checked. No app reader of the old collection turned up. If the migration never ran, those reminders are invisible on the tasks page.\n\nFiles: scripts/migrate-reminders-to-tasks.js, firestore.rules match /shepherding_reminders/{reminderId}, public/shepherding-tasks.js.\n\nFirestore: shepherding_reminders/{id}; shepherding_tasks/{id}; shepherding_task_occurrences/{id}.\n\nProd: unverified. The migrate script is not on the prod-ops allowlist.\n\nDone: a dry-run of the migrate script has been reviewed and applied if it copies anything. The collection and the rules block are gone. A behavior test on the script turns one reminder into one task and does not duplicate it on a second run.",
+    "risk": "med",
+    "rank": 17
+  },
+  {
+    "summary": "Old meeting mentions render as dead chips",
+    "description": "Context: Cross-references used to use kind meeting. They now use elder_document or elder_folder. The renderer links person, note, elder_document, and elder_folder. Any other kind, including meeting, becomes a dim chip with no href. Writers only emit the new kinds.\n\nFiles: public/tiptap-render.js, public/shepherding-profile.js (writers).\n\nFirestore: TipTap contentJson on people/{id}/shepherding_notes and on elder_documents. No separate collection.\n\nProd: unverified. Note JSON was not scanned.\n\nDone: a prod pass rewrites kind meeting to elder_document where the id still exists, or the renderer aliases meeting to elder_document. A behavior test renders a meeting mention to the same href as elder_document for that id.",
+    "risk": "med",
+    "rank": 18
+  },
+  {
+    "summary": "Booklet last names ignore remembered name parts",
+    "description": "Context: A person's name is the full name plus optional nameParts (ADR 0069, ADR 0074). The kiosk household title uses rememberedLastName, which prefers nameParts. Printable person rows still take the last word of people.name. ADR 0074 left booklets on that last word. Once parts exist, a suffixed name can title the household from the remembered last name and the booklet from the last word. partsToRemember parses the full name when parts are absent. lastNameOf is for a draft row, not a second stored person field.\n\nFiles: public/person-name.js, public/household-core.js, public/printable-data-core.js, scripts/backfill-name-parts.js.\n\nFirestore: people.name, people.nameParts (firstName, lastName, suffix, noLastName).\n\nProd: unverified. The backfill is not on the prod-ops allowlist. ADR 0074 says it is dry-run until someone applies it.\n\nDone: either printables use nameParts.lastName when it is present, with a behavior test for a suffix, or the booklet rule is recorded beside ADR 0074 and the last-word path stays on purpose. The name-parts backfill has been applied so directory blanks are filled.",
+    "risk": "low",
+    "rank": 19
+  },
+  {
+    "summary": "Per-date occurrenceRoleSlugs are read and never written",
+    "description": "Context: Roles for every date of a series live on events.roleSlugs. occurrenceRoleSlugs on the occurrence is an older per-date list. CONTEXT.md says it is read and no longer written. roleSlugsHere still concatenates it onto the series list, so a stale value still draws a role card. No writer in public/ turned up outside tests.\n\nFiles: public/calendar-event.js (roleSlugsHere), public/calendar-view.js.\n\nFirestore: event_occurrences.occurrenceRoleSlugs; events.roleSlugs.\n\nProd: unverified.\n\nDone: a prod pass strips the field, then the read is deleted. A behavior test shows a date with only series roleSlugs, and shows a leftover occurrenceRoleSlugs value adding no card after the strip.",
+    "risk": "low",
+    "rank": 20
+  },
+  {
+    "summary": "Baptism candidates still accept a free-text string",
+    "description": "Context: ADR 0006 stores baptism candidates as {id, name} refs. coerceBaptismCandidates and baptismCandidateNames still accept an array, a liturgy.baptism string, or a top-level baptism string. A string becomes one candidate with id null, so it displays and is not a Person.\n\nFiles: public/service-builder.js (coerceBaptismCandidates), public/service-calendar.js (baptismCandidateNames), scripts/migrate-baptism.cjs.\n\nFirestore: services/{date}.liturgy.baptism and a legacy top-level baptism.\n\nProd: unverified. The baptism script is not on the prod-ops allowlist.\n\nDone: remaining strings are person refs or a single {name, id: null} entry, and the string branch is deleted. A behavior test covers array, string, and absent.",
+    "risk": "low",
+    "rank": 21
+  },
+  {
+    "summary": "Irregular Sundays are still read beside liturgy orders",
+    "description": "Context: ADR 0080 stopped creating irregular Sundays and kept old ones readable. isIrregular plus irregularElements is a second liturgy shape on the same service document as liturgyOrderId, liturgy.{elementId}, and liturgyLeftovers. The MCP read still returns irregularElements.\n\nFiles: public/service-read-core.js, public/service-builder.js, public/service-calendar.js, functions/shared/liturgy-translate-core.js.\n\nFirestore: services.isIrregular, services.irregularElements, services.liturgyLeftovers, services.liturgyOrderId.\n\nProd: unverified.\n\nDone: when a count of irregular Sundays is zero, the read-only branch is deleted. Until then a behavior test shows a service with isIrregular still returning irregularElements, and a new save not setting the flag. An optional prod pass maps each irregular Sunday onto an order first.",
+    "risk": "low",
+    "rank": 22
+  },
+  {
+    "summary": "Relationship types still accept the directional flag",
+    "description": "Context: ADR 0014 replaced {name, directional} with kind, priority, and labels. Every read migrates a type that has no kind. The relations graph still treats directional as the ancestor of priority when kind is absent. The backfill is what deletes directional from Firestore.\n\nFiles: public/relationship-core.js (needsMigration, migrateTypeDoc), public/relations-graph-core.js (typeIsPrioritized), scripts/backfill-relationship-types.js.\n\nFirestore: relationship_types.directional, relationship_types.kind, relationship_types.priority.\n\nProd: unverified.\n\nDone: the backfill has run. needsMigration and the directional branch are deleted. A behavior test reads directional true with no kind as a priority pairwise type, and leaves a doc that already has kind unchanged.",
+    "risk": "low",
+    "rank": 23
+  },
+  {
+    "summary": "Shepherding notes still fall back to plain content",
+    "description": "Context: New notes store TipTap contentJson and a plain content string. The profile editor and renderer open contentJson or else content. The MCP list preview uses content only, so a note whose plain string was never filled previews empty when the body is only JSON.\n\nFiles: public/shepherding-profile.js (initEditor, renderNoteHtml), functions/shepherding-read.js (list preview versus getNote), functions/shepherding-writes.js, public/mobile/data.js.\n\nFirestore: people/{personId}/shepherding_notes/{noteId}.content and .contentJson.\n\nProd: unverified how many notes lack contentJson.\n\nDone: content is backfilled from contentJson for previews, and contentJson is backfilled from plain content where the JSON is missing. The list preview uses the same plain text as the editor. A behavior test opens a note that has only content, and previews a note that has only contentJson.",
+    "risk": "low",
+    "rank": 24
+  },
+  {
+    "summary": "elder_meetings stays in the rules with no app reader",
+    "description": "Context: Meeting minutes are elder_documents (ADR 0015). elder_meetings is still elder-readable and elder-writable in the rules. The duplicate-person merge planner still names the collection. No app reader or writer turned up outside rules, the merge list, and tests.\n\nFiles: firestore.rules match /elder_meetings/{meetingId}, public/merge-duplicate-person-core.js.\n\nFirestore: elder_meetings/{id}; elder_documents/{id}.\n\nProd: unverified whether any meeting docs remain.\n\nDone: a count shows the collection empty, or each old id exists as an elder document. The rules block and the merge entry are gone.",
+    "risk": "low",
+    "rank": 25
+  },
+  {
+    "summary": "sms_messages is a copy source the merge script still names",
+    "description": "Context: Notifications replaced sms_messages (ADR 0036). Runtime send and receive uses notifications. sms_messages is not in firestore.rules. The copy script does not delete the source. The duplicate-person merge still lists sms_messages as a legacy person-ref collection. The admin dashboard still names it. docs/ops/ms-189-remaining.md says not to delete the collection from an agent run.\n\nFiles: functions/notification-migration.js, scripts/migrate-sms-messages-to-notifications.js, scripts/merge-duplicate-person.js (LEGACY_PERSON_REF_COLLECTIONS), public/admin-dashboard.html, test/notification-migration.test.js.\n\nFirestore: notifications/{id}. sms_messages is outside the rules file.\n\nProd: unverified whether the old collection still has rows.\n\nDone: the copy has been confirmed, the collection is archived, and the merge list and admin copy no longer name it. The existing test keeps the runtime on notifications; extend it so the merge planner no longer names sms_messages.",
+    "risk": "low",
+    "rank": 26
+  },
+  {
+    "summary": "Printables still adopt the old page-number wire",
+    "description": "Context: A page number used to be a text bind whose source was insert_page_number. adoptPageNumber turns that bind into node.pageNumber and can strip the wire in memory. Stored printables can still have the wire until they are saved again.\n\nFiles: public/printable-core.js (legacyPageNumber, adoptPageNumber, stripLegacyPageNumber) and functions/shared/printable-core.js.\n\nFirestore: printables/{id} page nodes, bind.text.source or bind.class.source equal to insert_page_number, versus pageNumber.\n\nProd: unverified.\n\nDone: stored printables are rewritten, then legacyPageNumber is deleted. A behavior test prints the same number from a node that has only the old bind and a node that has pageNumber.",
+    "risk": "low",
+    "rank": 27
+  },
+  {
+    "summary": "Hymn sheet pages still accept a string or an object",
+    "description": "Context: pageUrl accepts a string URL or an object with url or src. MS-769 moved Firestore URLs under hymn-sheets/. Commit run 39455246579 found 113 hymns with legacy URLs and said root objects were not deleted. Dry-run 39455459052 found zero legacy URLs. Orphan bytes may still sit at the bucket root. ADR 0073's rule that a hymn with no default flag prints the first version is current and stays.\n\nFiles: public/hymn-versions.js (pageUrl), public/hymn-sheets-core.js, scripts/migrate-hymn-sheets-prefix.js.\n\nFirestore: hymns/{id}.versions[].pages[], versions[].default.\n\nProd: Firestore URLs point at hymn-sheets/ as of the 2026-10-20 dry-run. Root blobs unverified. Whether pages are strings or objects is unverified.\n\nDone: every page is one shape and pageUrl only reads that shape. Root objects are deleted only when no hymn URL still points at them. A behavior test resolves a string page and an object page, and drops a blank slot.",
+    "risk": "low",
+    "rank": 28
+  },
+  {
+    "summary": "Auto-assign drafts still read the old away key",
+    "description": "Context: Auto-assign drafts in browser storage renamed the absence bag from away to out. The pack writes out and reads out or away so a draft saved before the rename still loads. This is not Firestore.\n\nFiles: public/auto-assign-saved-core.js.\n\nFirestore: none.\n\nProd: any browser that still has the old key is unverified.\n\nDone: the away read is gone once drafts have been resaved. A behavior test restores a packed draft that has away and no out to the same absences.",
+    "risk": "low",
+    "rank": 29
+  }
+]

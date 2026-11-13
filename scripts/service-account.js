@@ -28,7 +28,7 @@ function assertKeyProject(file, projectId) {
     try {
         key = JSON.parse(fs.readFileSync(file, 'utf8'));
     } catch (err) {
-        throw new Error(`Could not read service account key ${file}: ${err.message}`);
+        throw new Error(`Could not read service account key ${file}: ${err.message}`, { cause: err });
     }
     if (key.project_id && key.project_id !== projectId) {
         throw new Error(`Service account is for ${key.project_id}, not ${projectId}.`);

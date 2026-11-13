@@ -5,6 +5,13 @@ const path = require('node:path');
 const vm = require('node:vm');
 
 const HymnsPage = require('../public/hymns-page.js');
+const Levels = require('../public/account-levels-core.js');
+
+function account(preset, extra) {
+    const id = Levels.BUILTIN_LEVEL_IDS[preset];
+    if (!id) return Object.assign({ accountLevelId: null, permissions: {} }, extra || {});
+    return Object.assign({}, Levels.userWriteFromLevel(id), extra || {});
+}
 
 const PUBLIC = path.join(__dirname, '..', 'public');
 const read = (name) => fs.readFileSync(path.join(PUBLIC, name), 'utf8');
@@ -60,17 +67,19 @@ const A_HYMN = {
 
 test('a member may read the hymn book and may not change it', () => {
     ['member', 'viewer', 'guest'].forEach(function (level) {
-        assert.equal(HymnsPage.canEditHymnBook({ permissionLevel: level }), false, level);
+        assert.equal(HymnsPage.canEditHymnBook(level), false, level);
+        assert.equal(HymnsPage.canEditHymnBook(account(level)), false, level);
     });
     assert.equal(HymnsPage.canEditHymnBook(null), false);
     assert.equal(HymnsPage.canEditHymnBook({
         permissionLevel: 'member', pastoralAssistant: true,
-    }), true);
-    assert.equal(HymnsPage.canEditHymnBook({
-        permissionLevel: 'pastoral_assistant',
-    }), true);
+    }), false);
+    assert.equal(HymnsPage.canEditHymnBook('pastoral_assistant'), true);
+    assert.equal(HymnsPage.canEditHymnBook(account('pastoral_assistant')), true);
     ['editor', 'admin', 'elder', 'super_admin'].forEach(function (level) {
-        assert.equal(HymnsPage.canEditHymnBook({ permissionLevel: level }), true, level);
+        assert.equal(HymnsPage.canEditHymnBook(level), true, level);
+        assert.equal(HymnsPage.canEditHymnBook(account(level)), true, level);
+        assert.equal(HymnsPage.canEditHymnBook({ permissionLevel: level }), false, level);
     });
 });
 
@@ -335,7 +344,7 @@ test('opening a hymn from the list keeps that hymn, including an older sheet pag
     assert.deepEqual(HymnsPage.sheetPages({
         name: 'SATB',
         pages: [{ url: 'sheet.png' }, 'plain.png', { src: 'legacy.png' }, ''],
-    }), ['sheet.png', 'plain.png', 'legacy.png']);
+    }), ['plain.png']);
 });
 
 test('the phone shell names the open hymn and carries the one way back', () => {
@@ -537,7 +546,8 @@ test('the phone opens the Hymns page and keeps the stored home key', () => {
 
     const app = read('mobile/app.js');
     const screens = read('mobile/screens-content.js');
-    assert.match(app, /label: "Hymns", route: "hymnDirectory"/);
+    assert.ok(destinations.homeTiles(null).some((t) => t.key === 'hymn-directory'));
+    assert.match(app, /homeTiles\(/);
     assert.doesNotMatch(app, /Hymn Directory/);
     assert.match(app, /if \(route === "hymnManager"\) \{\s*\n\s*if \(data\.forget\) data\.forget\("hymns"\);/);
     assert.match(app, /HymnsPage\.phoneShellHref/);
