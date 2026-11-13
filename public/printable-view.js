@@ -937,7 +937,6 @@ function printableView() {
                     const sheets = Ex.folioSpreads(entries).length;
                     this.snapshotProgress = 'Drawing ' + sheets + ' folio sheet' + (sheets === 1 ? '' : 's') + '…';
                     blob = await PrintablePdf.renderFolio(this.project, entries, {
-                        scale: 1,
                         onProgress: (done, total) => {
                             this.snapshotProgress = 'Drawing sheet ' + done + ' of ' + total + '…';
                         },
@@ -949,7 +948,6 @@ function printableView() {
                         ? 'Drawing ' + printCount + ' page' + (printCount === 1 ? '' : 's') + ' (flat, padded ×4)…'
                         : 'Drawing ' + printCount + ' page' + (printCount === 1 ? '' : 's') + '…';
                     blob = await PrintablePdf.render(this.project, entries, {
-                        scale: 1,
                         onProgress: (done, total) => {
                             this.snapshotProgress = 'Drawing page ' + done + ' of ' + total + '…';
                         },

@@ -104,7 +104,9 @@
   top: 0.42em;
   width: 8px;
   height: 9px;
-  background: #C2B79D !important;
+  /* The page's own sand, so a page that prints in grays (its stylesheet
+     redefines --sand) gets a gray hexagon. Sand where a page sets none. */
+  background: var(--sand, #C2B79D) !important;
   -webkit-mask: none !important;
   mask: none !important;
   clip-path: polygon(50% 0, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);

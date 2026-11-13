@@ -1637,7 +1637,6 @@
                     const printCount = Ex ? Ex.exportPageCount(entries.length, record) : entries.length;
                     this.snapshotSendProgress = 'Drawing ' + printCount + ' page' + (printCount === 1 ? '' : 's') + (booklet ? '…' : '…');
                     const blob = await global.PrintablePdf.render(record, entries, {
-                        scale: 1,
                         onProgress: (done, total) => { this.snapshotSendProgress = 'Drawing page ' + done + ' of ' + total + '…'; },
                     });
                     this.snapshotSendProgress = 'Filing…';

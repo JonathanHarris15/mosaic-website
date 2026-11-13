@@ -2349,7 +2349,6 @@
                         ? 'Drawing ' + printCount + ' page' + (printCount === 1 ? '' : 's') + ' (flat, padded ×4)…'
                         : 'Drawing ' + printCount + ' page' + (printCount === 1 ? '' : 's') + '…';
                     const blob = await PrintablePdf.render(project, entries, {
-                        scale: 1,
                         onProgress: (done, total) => { this.snapshotProgress = 'Drawing page ' + done + ' of ' + total + '…'; },
                     });
                     this.snapshotProgress = 'Filing…';

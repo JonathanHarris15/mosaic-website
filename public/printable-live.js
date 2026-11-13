@@ -557,6 +557,12 @@
                 });
             });
 
+            // Stored pages past the last one the rows need. A list that asks
+            // to be left out when empty — hymns — does not draw them: this
+            // Sunday's hymns filled fewer sheets than were stored, and a
+            // blank hymn sheet is never wanted. They stay stored for a
+            // Sunday with more. Any other list keeps its tail page.
+            if (repeat.repeat.omitWhenEmpty) return;
             for (let i = plan.length; i < chain.length; i++) {
                 const bg = chain[i];
                 const r = overflowingRepeatOn(bg);
