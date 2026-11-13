@@ -323,13 +323,14 @@
 
     // How sharp the snapshot is. A printer needs 300–600 dpi for clean type;
     // the page itself is laid out at its template density (often 150). The
-    // first try is 450 dpi, stored lossless: JPEG's smudge around each
-    // letter is what a printer turns into specks. The canvas stays under the
-    // ~16.7 MP every browser will draw (Safari's ceiling), which is what
-    // holds a two-page folio sheet a little below 450.
+    // first try is 600 dpi, stored lossless: JPEG's smudge around each
+    // letter is what a printer turns into specks. One canvas stays under the
+    // ~16.7 MP every browser will draw (Safari's ceiling), so a Half Letter
+    // page lands a hair under 600 and a larger page lower; a folio sheet is
+    // drawn one page at a time so it gets the same density as a flat page.
     // A filed PDF must fit the 25 MB attachment cap, so a heavy one is drawn
     // again at 300 dpi, then at 300 dpi JPEG, rather than failing.
-    const TARGET_DPI = 450;
+    const TARGET_DPI = 600;
     const FALLBACK_DPI = 300;
     const MAX_CANVAS_PX = 16777216;
     const MAX_PDF_BYTES = 24 * 1024 * 1024;
@@ -355,23 +356,29 @@
         return out;
     }
 
-    // Draw `count` sheets into one PDF. `mount(i, host)` puts sheet i into
-    // the off-screen host and returns it. Each try draws every sheet fresh,
-    // because prepareRaster rewrites the DOM it is given at that try's scale.
+    // Draw `count` sheets into one PDF. A sheet is `frame.leaves` pages side
+    // by side (2 for a folio); `mount(i, j, host)` puts leaf j of sheet i
+    // into the off-screen host and returns it. Each leaf is its own picture,
+    // placed in its half of the sheet, so a folio leaf is as sharp as a flat
+    // page. Each try draws every leaf fresh, because prepareRaster rewrites
+    // the DOM it is given at that try's scale.
     /**
-     * @param {{ widthPx: number, heightPx: number, widthIn: number, heightIn: number, dpi?: number, orientation: string }} frame
+     * @param {{ widthPx: number, heightPx: number, widthIn: number, heightIn: number, dpi?: number, orientation: string, leaves?: number }} frame
      * @param {number} count
-     * @param {(i: number, host: HTMLElement) => HTMLElement} mount
+     * @param {(i: number, j: number, host: HTMLElement) => HTMLElement} mount
      * @param {any} [opts]
      * @returns {Promise<Blob|null>}
      */
     async function rasterPdf(frame, count, mount, opts) {
         const o = opts || {};
+        const leaves = Math.max(1, Math.round(Number(frame.leaves) || 1));
+        const leafWpx = frame.widthPx / leaves;
+        const leafWin = frame.widthIn / leaves;
         const host = document.createElement('div');
-        host.style.cssText = 'position:absolute;left:-100000px;top:0;width:' + frame.widthPx + 'px;pointer-events:none;';
+        host.style.cssText = 'position:absolute;left:-100000px;top:0;width:' + leafWpx + 'px;pointer-events:none;';
         document.body.appendChild(host);
         try {
-            const attempts = rasterAttempts(frame, o);
+            const attempts = rasterAttempts({ widthPx: leafWpx, heightPx: frame.heightPx, dpi: frame.dpi }, o);
             const maxBytes = Number(o.maxBytes) > 0 ? Number(o.maxBytes) : MAX_PDF_BYTES;
             let blob = null;
             for (let a = 0; a < attempts.length; a++) {
@@ -380,22 +387,24 @@
                     unit: 'in', format: [frame.widthIn, frame.heightIn], orientation: frame.orientation, compress: true,
                 });
                 for (let i = 0; i < count; i++) {
-                    host.innerHTML = '';
-                    const el = mount(i, host);
-                    await waitForImages(el);
-                    await prepareRaster(el, attempt.scale);
-                    const canvas = await globals.html2canvas(el, {
-                        scale: attempt.scale, useCORS: true, allowTaint: false, backgroundColor: '#ffffff', logging: false,
-                        width: frame.widthPx, height: frame.heightPx, windowWidth: frame.widthPx, windowHeight: frame.heightPx,
-                    });
                     if (i > 0) doc.addPage([frame.widthIn, frame.heightIn], frame.orientation);
-                    const data = attempt.format === 'JPEG'
-                        ? canvas.toDataURL('image/jpeg', 0.95)
-                        : canvas.toDataURL('image/png');
-                    doc.addImage(data, attempt.format, 0, 0, frame.widthIn, frame.heightIn, undefined, 'FAST');
-                    // Let the browser drop a 16 MP bitmap now, not at the end.
-                    canvas.width = 0;
-                    canvas.height = 0;
+                    for (let j = 0; j < leaves; j++) {
+                        host.innerHTML = '';
+                        const el = mount(i, j, host);
+                        await waitForImages(el);
+                        await prepareRaster(el, attempt.scale);
+                        const canvas = await globals.html2canvas(el, {
+                            scale: attempt.scale, useCORS: true, allowTaint: false, backgroundColor: '#ffffff', logging: false,
+                            width: leafWpx, height: frame.heightPx, windowWidth: leafWpx, windowHeight: frame.heightPx,
+                        });
+                        const data = attempt.format === 'JPEG'
+                            ? canvas.toDataURL('image/jpeg', 0.95)
+                            : canvas.toDataURL('image/png');
+                        doc.addImage(data, attempt.format, j * leafWin, 0, leafWin, frame.heightIn, undefined, 'FAST');
+                        // Let the browser drop a 16 MP bitmap now, not at the end.
+                        canvas.width = 0;
+                        canvas.height = 0;
+                    }
                     if (o.onProgress) o.onProgress(i + 1, count);
                 }
                 blob = doc.output('blob');
@@ -429,7 +438,7 @@
             widthPx: t.widthPx, heightPx: t.heightPx, widthIn: t.widthIn, heightIn: t.heightIn, dpi: t.dpi,
             orientation: t.widthIn > t.heightIn ? 'landscape' : 'portrait',
         };
-        return rasterPdf(frame, pages.length, (/** @type {number} */ i, /** @type {HTMLElement} */ host) => {
+        return rasterPdf(frame, pages.length, (/** @type {number} */ i, /** @type {number} */ _j, /** @type {HTMLElement} */ host) => {
             const entry = pages[i];
             const page = Dom.renderPage(Object.assign({}, entry.page, { nodes: entry.nodes }), t, {
                 scopeId: entry.page.id,
@@ -473,29 +482,24 @@
         const sheetHpx = t.heightPx;
         const frame = {
             widthPx: sheetWpx, heightPx: sheetHpx, widthIn: sheet.widthIn, heightIn: sheet.heightIn, dpi: t.dpi,
-            orientation: 'landscape',
+            orientation: 'landscape', leaves: 2,
         };
-        return rasterPdf(frame, spreads.length, (/** @type {number} */ i, /** @type {any} */ host) => {
+        return rasterPdf(frame, spreads.length, (/** @type {number} */ i, /** @type {number} */ j, /** @type {any} */ host) => {
             const spread = spreads[i];
-            const sheetEl = document.createElement('div');
-            sheetEl.style.cssText = 'display:flex;flex-direction:row;align-items:stretch;overflow:hidden;'
-                + 'width:' + sheetWpx + 'px;height:' + sheetHpx + 'px;background:#fff;';
-            ['left', 'right'].forEach((side) => {
-                const entry = spread[side];
-                const idx = side === 'left' ? spread.leftIdx : spread.rightIdx;
-                const leaf = document.createElement('div');
-                leaf.style.cssText = 'width:' + t.widthPx + 'px;height:' + t.heightPx + 'px;'
-                    + 'flex:0 0 ' + t.widthPx + 'px;overflow:hidden;position:relative;background:#fff;';
-                const page = pageForEntry(entry, blankOf[i + side] || 0);
-                leaf.appendChild(Dom.renderPage(page, t, {
-                    scopeId: page.id,
-                    pageIndex: idx == null ? 0 : idx,
-                    numberOrigin: numberOrigin,
-                }));
-                sheetEl.appendChild(leaf);
-            });
-            host.appendChild(sheetEl);
-            return sheetEl;
+            const side = j === 0 ? 'left' : 'right';
+            const entry = spread[side];
+            const idx = side === 'left' ? spread.leftIdx : spread.rightIdx;
+            const leaf = document.createElement('div');
+            leaf.style.cssText = 'width:' + t.widthPx + 'px;height:' + t.heightPx + 'px;'
+                + 'overflow:hidden;position:relative;background:#fff;';
+            const page = pageForEntry(entry, blankOf[i + side] || 0);
+            leaf.appendChild(Dom.renderPage(page, t, {
+                scopeId: page.id,
+                pageIndex: idx == null ? 0 : idx,
+                numberOrigin: numberOrigin,
+            }));
+            host.appendChild(leaf);
+            return leaf;
         }, o);
     }
 
