@@ -80,6 +80,37 @@ async function withTree(db, change, structureDocId = STRUCTURE_DOC) {
 }
 
 /**
+ * One change to a folder tree (MS-493, server half).
+ *
+ * ⚠ ONE CHANGE, APPLIED TO THE LATEST TREE. A tree (the Library's, or a
+ * person's Documents tab) is one record; this applies ONE change — the same
+ * pure function a page applies to its own copy — inside the transaction the
+ * assistant's tree tools already use. The pages do not reach it yet: the
+ * callable that would let them is MS-493.
+ *
+ * @param {object} db the Firestore handle
+ * @param {object} args treeId (`root` or `person_<id>`), change
+ * @return {Promise<object>} { ok, changed }
+ */
+async function changeTree(db, {treeId, change}) {
+  if (!DocsCore.isTreeId(treeId)) {
+    throw refuse("That is not a document tree.");
+  }
+  let out;
+  try {
+    out = await withTree(db, (tree) => DocsCore.applyTreeChange(tree, change),
+        treeId);
+  } catch (e) {
+    if (e && /No tree change is known/.test(e.message || "")) {
+      throw refuse(e.message);
+    }
+    throw e;
+  }
+  if (out.refused) throw refuse(out.refused);
+  return {ok: true, changed: !!out.changed};
+}
+
+/**
  * An Elder Document, or a refusal.
  * @param {object} db the Firestore handle
  * @param {string} documentId which document
@@ -579,5 +610,6 @@ module.exports = {
   loadDocument,
   loadTree,
   withTree,
+  changeTree,
   documentRow,
 };
