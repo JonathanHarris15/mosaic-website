@@ -46,7 +46,7 @@ const FormDocumentCore = require("./shared/form-document-core.js");
 const Actor = require("./mcp-actor.js");
 const {refuse, loadPerson} = require("./shepherding-writes.js");
 const {
-  loadDocument, withTree, changeTree: changeTreeOn,
+  loadDocument, withTree, changeTree,
 } = require("./shepherding-doc-writes.js");
 const Read = require("./shepherding-read.js");
 
@@ -368,7 +368,7 @@ async function answerFormDocument(db, {documentId, answers, actor}) {
     await FormDocumentCore.saveEdits(db, F.namespace(), documentId, {
       answers: answered.map((questionId) => ({
         questionId,
-        value: proposed[questionId] == null ? null : proposed[questionId],
+        value: proposed[questionId],
       })),
       byName: actor.name,
       extra: Actor.provenance(),
@@ -381,10 +381,9 @@ async function answerFormDocument(db, {documentId, answers, actor}) {
   // and each tree is changed inside its own transaction.
   const result = {ok: true, documentId, answered, skipped};
   if (answered.includes(FormDocumentCore.SUBJECT_QUESTION_ID)) {
-    const changeTree = (treeId, change) => changeTreeOn(db, {treeId, change});
     try {
-      const plan = await FormDocumentCore.settleFiling(
-          db, changeTree, documentId);
+      const plan = await FormDocumentCore.settleFiling(db,
+          (treeId, change) => changeTree(db, {treeId, change}), documentId);
       if (plan) result.ownerPersonId = plan.after || null;
     } catch (e) {
       // The answers are saved either way; this is only where it is SHOWN.

@@ -170,7 +170,7 @@ const MODULES = [
     'filing-core.js',
     'resources-core.js',
     // MS-483 / MS-484. The same for a Form Document: one field per answer, and
-    // re-filing only when the subject changed, whoever changed it.
+    // filing settled from the stored record, whoever changed the subject.
     'form-document-core.js',
 ];
 

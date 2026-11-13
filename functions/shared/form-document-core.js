@@ -150,6 +150,9 @@
         const was = String(before || '');
         const now = String(after || '');
         if (was === now) return null;
+        // Restated from ShepherdingDocsCore.personTreeId, which this must not
+        // require for the same reason as SUBJECT_QUESTION_ID. A test holds them
+        // together.
         return { off: was ? 'person_' + was : null, on: now ? 'person_' + now : null };
     }
 

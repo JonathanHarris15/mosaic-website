@@ -9,7 +9,8 @@
 //   - a whole answer is the unit — a picked person's id and name travel together;
 //   - an answer somebody else changed arrives, unless this page has an unsaved
 //     one of its own for that question;
-//   - only the save that changed who the document is about re-files it.
+//   - filing is settled from the stored record: whoever saves who it is about
+//     moves it if its subject and where it is filed disagree.
 
 const { test } = require('node:test');
 const assert = require('node:assert');
@@ -259,4 +260,21 @@ test('the title arrives unless this page is renaming it', () => {
 
 test('the subject question is the one the forms module names', () => {
     assert.strictEqual(Core.SUBJECT_QUESTION_ID, require('../public/forms-core.js').SUBJECT_QUESTION_ID);
+});
+
+// The two rules restated here because the page loads both modules as plain
+// scripts and neither may require the other.
+test('a profile tree is named the way the documents core names it', () => {
+    const Docs = require('../public/shepherding-documents-core.js');
+    assert.deepStrictEqual(Core.refiling('p1', 'p2'),
+        { off: Docs.personTreeId('p1'), on: Docs.personTreeId('p2') });
+});
+
+test('the subject is read the way the forms core reads it', () => {
+    const Forms = require('../public/forms-core.js');
+    const id = Core.SUBJECT_QUESTION_ID;
+    [{}, { [id]: null }, { [id]: { personId: 'p1', name: 'Ann' } }, { [id]: { name: 'no id' } }]
+        .forEach((answers) => {
+            assert.strictEqual(Core.subjectOf(answers), Forms.subjectPersonId({ answers }) || '');
+        });
 });

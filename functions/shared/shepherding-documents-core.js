@@ -298,10 +298,11 @@
     //
     // ⚠ A TREE IS ONE RECORD, SO NOBODY WRITES BACK A WHOLE TREE THEY LOADED.
     // Two elders filing at the same moment each saved the tree from before the
-    // other's change, and a folder, a move or a filed document vanished. Every
-    // writer now sends ONE of these changes, applied on the server to the
-    // latest tree inside a transaction. The page applies the same change to
-    // its own copy first, so a click still shows at once.
+    // other's change, and a folder, a move or a filed document vanished. A
+    // writer sends ONE of these changes, applied to the latest tree. The
+    // assistant applies it on the server in a transaction; the pages reach
+    // that through a callable once MS-493 lands, and until then apply it to a
+    // fresh read of the tree themselves.
 
     const LIBRARY_TREE = 'root';
 

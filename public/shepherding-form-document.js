@@ -497,16 +497,22 @@ function formDocumentPage() {
             if (live.focus && typeof ShepherdingPresence !== 'undefined') ShepherdingPresence.touch();
         },
 
-        enterTitle(event) {
+        // Into the title. Like stepping into a question, the last question's
+        // pending save goes FIRST and only then is the title claimed, so its
+        // hold is never let go while its answer is still on its way.
+        async enterTitle(event) {
             if (typeof ShepherdingPresence === 'undefined') return;
+            const previous = live.focus;
+            live.focus = null;
+            live.inTitle = true;
+            if (previous && live.session.unsaved(this.answers).includes(previous)) await this.save();
+            if (!live.inTitle) return; // already moved on again
             if (!ShepherdingPresence.claimBox(FormDocumentCore.box.title(this.docId))) {
-                event.target.blur();
+                live.inTitle = false;
+                if (event && event.target && event.target.blur) event.target.blur();
                 this.sayHeld(this.titleHolder, 'title');
                 return;
             }
-            if (live.focus && live.session.unsaved(this.answers).includes(live.focus)) this.save();
-            live.focus = null;
-            live.inTitle = true;
             const arrived = live.session.catchUpTitle(this.title);
             if (arrived !== null) this.title = arrived;
         },
