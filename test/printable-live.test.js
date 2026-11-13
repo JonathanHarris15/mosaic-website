@@ -310,6 +310,41 @@ test('a leftover continuation page stays in the document when the list shrinks',
     assert.equal(pages[1].nodes[1].children.length, 0);
 });
 
+test('a hymn run with more stored pages than sheets drops the empty tail, and numbers close up', () => {
+    const t = Core.buildTemplate({ paper: 'half_letter', dpi: 96 });
+    const card = (/** @type {string} */ id) => ({
+        id: id, tag: 'div',
+        repeat: {
+            source: 'sunday_hymns',
+            params: { when: { mode: 'this' } },
+            layout: { maxPerPage: 1 },
+            from: 1, to: 5,
+            overflow: 'new-page',
+            omitWhenEmpty: true,
+        },
+        children: [{ id: id + '-name', tag: 'p', text: '', bind: { text: { scope: 'item', field: 'name' } } }],
+    });
+    const p = Core.buildPrintable({
+        name: 'Guide',
+        template: t,
+        pages: [
+            Core.buildPage(t, { id: 'h1', nodes: [card('c1')] }),
+            Core.buildPage(t, { id: 'h2', continues: { from: 'h1', repeat: 'c1' }, nodes: [card('c2')] }),
+            Core.buildPage(t, { id: 'h3', continues: { from: 'h1', repeat: 'c1' }, nodes: [card('c3')] }),
+            Core.buildPage(t, { id: 'prayer', nodes: [{ id: 'pr', tag: 'p', text: 'Pastoral Prayer' }] }),
+        ],
+    });
+    const bundle = { services: { '2026-09-06': { liturgy: {
+        preparatoryHymn: { name: 'Amazing Grace' },
+        hymn1: { name: 'Be Thou My Vision' },
+    } } } };
+    const res = Live.resolver(p, bundle, { today: '2026-09-03', level: 'editor' });
+    const laid = Live.layoutPages(p, res, true, { fitsOn: () => true });
+    assert.deepEqual(laid.map(e => e.page.id), ['h1', 'h2', 'prayer'], 'the third stored hymn page has no hymn, so it is not drawn');
+    assert.deepEqual(laid.map(e => e.pageIndex), [0, 1, 2]);
+    assert.equal(p.pages.length, 4, 'the stored page is kept for a Sunday with more hymns');
+});
+
 test('warnings name the element and the page it is on', () => {
     const p = project();
     const res = Live.resolver(p, { people: [{ id: 'a', name: 'Anna', tags: ['Member'] }], services: {} }, { today: '2026-09-03', level: 'editor' });

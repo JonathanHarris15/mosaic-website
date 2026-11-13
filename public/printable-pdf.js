@@ -178,10 +178,15 @@
         });
     }
 
+    // html2canvas also ignores CSS `filter`, so a picture a page grays out
+    // (`img { filter: grayscale(1) }` on a black-and-white page) would print
+    // in color. Bake the filter into the bitmap with the box.
     async function fittedImageUrl(img, px) {
         const cs = globals.getComputedStyle(img);
         const fit = cs.objectFit || 'fill';
-        if (fit !== 'contain' && fit !== 'cover' && fit !== 'scale-down') return null;
+        const filter = cs.filter && cs.filter !== 'none' ? cs.filter : '';
+        const fits = fit === 'contain' || fit === 'cover' || fit === 'scale-down';
+        if (!fits && !filter) return null;
         const box = img.getBoundingClientRect();
         let source = img;
         let natW = img.naturalWidth;
@@ -196,15 +201,18 @@
                 return null;
             }
         }
-        const rect = fittedDrawRect(box.width, box.height, natW, natH, fit, cs.objectPosition);
-        if (!rect) return null;
-        if (Math.abs(rect.x) < 0.5 && Math.abs(rect.y) < 0.5
+        const rect = fits
+            ? fittedDrawRect(box.width, box.height, natW, natH, fit, cs.objectPosition)
+            : { x: 0, y: 0, w: box.width, h: box.height };
+        if (!rect || !(box.width > 0 && box.height > 0)) return null;
+        if (!filter && Math.abs(rect.x) < 0.5 && Math.abs(rect.y) < 0.5
             && Math.abs(rect.w - box.width) < 0.5 && Math.abs(rect.h - box.height) < 0.5) return null;
         const canvas = document.createElement('canvas');
         canvas.width = Math.max(1, Math.round(box.width * px));
         canvas.height = Math.max(1, Math.round(box.height * px));
         const ctx = canvas.getContext('2d');
         ctx.scale(px, px);
+        if (filter) ctx.filter = filter;
         ctx.drawImage(source, rect.x, rect.y, rect.w, rect.h);
         return canvas.toDataURL('image/png');
     }
@@ -313,9 +321,105 @@
         };
     }
 
-    // `entries` is what PrintableLive.layoutPages returns. `opts.scale` is
-    // the raster scale on top of the page's own pixels (1 = the page's
-    // density; 2 doubles it).
+    // How sharp the snapshot is. A printer needs 300–600 dpi for clean type;
+    // the page itself is laid out at its template density (often 150). The
+    // first try is 600 dpi, stored lossless: JPEG's smudge around each
+    // letter is what a printer turns into specks. One canvas stays under the
+    // ~16.7 MP every browser will draw (Safari's ceiling), so a Half Letter
+    // page lands a hair under 600 and a larger page lower; a folio sheet is
+    // drawn one page at a time so it gets the same density as a flat page.
+    // A filed PDF must fit the 25 MB attachment cap, so a heavy one is drawn
+    // again at 300 dpi, then at 300 dpi JPEG, rather than failing.
+    const TARGET_DPI = 600;
+    const FALLBACK_DPI = 300;
+    const MAX_CANVAS_PX = 16777216;
+    const MAX_PDF_BYTES = 24 * 1024 * 1024;
+
+    /**
+     * @param {{ widthPx: number, heightPx: number, dpi?: number }} frame
+     * @param {{ scale?: number }} [opts]
+     * @returns {{ scale: number, format: 'PNG'|'JPEG' }[]}
+     */
+    function rasterAttempts(frame, opts) {
+        const o = opts || {};
+        if (Number(o.scale) > 0) return [{ scale: Number(o.scale), format: 'PNG' }];
+        const dpi = Number(frame.dpi) || 96;
+        const area = Math.max(1, frame.widthPx * frame.heightPx);
+        const cap = Math.sqrt(MAX_CANVAS_PX / area) * 0.999;
+        const at = (/** @type {number} */ want) => Math.max(1, Math.min(want / dpi, cap));
+        const best = at(TARGET_DPI);
+        const fallback = Math.min(best, at(FALLBACK_DPI));
+        /** @type {{ scale: number, format: 'PNG'|'JPEG' }[]} */
+        const out = [{ scale: best, format: 'PNG' }];
+        if (fallback < best) out.push({ scale: fallback, format: 'PNG' });
+        out.push({ scale: fallback, format: 'JPEG' });
+        return out;
+    }
+
+    // Draw `count` sheets into one PDF. A sheet is `frame.leaves` pages side
+    // by side (2 for a folio); `mount(i, j, host)` puts leaf j of sheet i
+    // into the off-screen host and returns it. Each leaf is its own picture,
+    // placed in its half of the sheet, so a folio leaf is as sharp as a flat
+    // page. Each try draws every leaf fresh, because prepareRaster rewrites
+    // the DOM it is given at that try's scale.
+    /**
+     * @param {{ widthPx: number, heightPx: number, widthIn: number, heightIn: number, dpi?: number, orientation: string, leaves?: number }} frame
+     * @param {number} count
+     * @param {(i: number, j: number, host: HTMLElement) => HTMLElement} mount
+     * @param {any} [opts]
+     * @returns {Promise<Blob|null>}
+     */
+    async function rasterPdf(frame, count, mount, opts) {
+        const o = opts || {};
+        const leaves = Math.max(1, Math.round(Number(frame.leaves) || 1));
+        const leafWpx = frame.widthPx / leaves;
+        const leafWin = frame.widthIn / leaves;
+        const host = document.createElement('div');
+        host.style.cssText = 'position:absolute;left:-100000px;top:0;width:' + leafWpx + 'px;pointer-events:none;';
+        document.body.appendChild(host);
+        try {
+            const attempts = rasterAttempts({ widthPx: leafWpx, heightPx: frame.heightPx, dpi: frame.dpi }, o);
+            const maxBytes = Number(o.maxBytes) > 0 ? Number(o.maxBytes) : MAX_PDF_BYTES;
+            let blob = null;
+            for (let a = 0; a < attempts.length; a++) {
+                const attempt = attempts[a];
+                const doc = new globals.jspdf.jsPDF({
+                    unit: 'in', format: [frame.widthIn, frame.heightIn], orientation: frame.orientation, compress: true,
+                });
+                for (let i = 0; i < count; i++) {
+                    if (i > 0) doc.addPage([frame.widthIn, frame.heightIn], frame.orientation);
+                    for (let j = 0; j < leaves; j++) {
+                        host.innerHTML = '';
+                        const el = mount(i, j, host);
+                        await waitForImages(el);
+                        await prepareRaster(el, attempt.scale);
+                        const canvas = await globals.html2canvas(el, {
+                            scale: attempt.scale, useCORS: true, allowTaint: false, backgroundColor: '#ffffff', logging: false,
+                            width: leafWpx, height: frame.heightPx, windowWidth: leafWpx, windowHeight: frame.heightPx,
+                        });
+                        const data = attempt.format === 'JPEG'
+                            ? canvas.toDataURL('image/jpeg', 0.95)
+                            : canvas.toDataURL('image/png');
+                        doc.addImage(data, attempt.format, j * leafWin, 0, leafWin, frame.heightIn, undefined, 'FAST');
+                        // Let the browser drop a 16 MP bitmap now, not at the end.
+                        canvas.width = 0;
+                        canvas.height = 0;
+                    }
+                    if (o.onProgress) o.onProgress(i + 1, count);
+                }
+                blob = doc.output('blob');
+                if (blob.size <= maxBytes) return blob;
+            }
+            return blob;
+        } finally {
+            host.remove();
+        }
+    }
+
+    // `entries` is what PrintableLive.layoutPages returns. `opts.scale`
+    // forces one raster scale (1 = the page's own pixels); left out, the
+    // snapshot is drawn at print resolution (rasterAttempts).
+    /** @param {any} project @param {any[]} entries @param {any} [opts] */
     async function render(project, entries, opts) {
         const o = opts || {};
         await ready();
@@ -326,44 +430,30 @@
         // as laid out unless the caller forces padToMultipleOf4.
         const Export = globals.PrintableExportCore;
         const pages = Export ? Export.exportEntries(entries || [], project, o) : (entries || []);
-        const host = document.createElement('div');
-        host.style.cssText = 'position:absolute;left:-100000px;top:0;width:' + t.widthPx + 'px;pointer-events:none;';
-        document.body.appendChild(host);
-        try {
-            const orientation = t.widthIn > t.heightIn ? 'landscape' : 'portrait';
-            const doc = new globals.jspdf.jsPDF({ unit: 'in', format: [t.widthIn, t.heightIn], orientation: orientation, compress: true });
-            const Core = globals.PrintableCore;
-            const numberOrigin = Core && typeof Core.numberOriginFromEntries === 'function'
-                ? Core.numberOriginFromEntries(pages)
-                : 0;
-            for (let i = 0; i < pages.length; i++) {
-                const entry = pages[i];
-                host.innerHTML = '';
-                const page = Dom.renderPage(Object.assign({}, entry.page, { nodes: entry.nodes }), t, {
-                    scopeId: entry.page.id,
-                    pageIndex: entry.pageIndex == null ? i : entry.pageIndex,
-                    numberOrigin: numberOrigin,
-                });
-                host.appendChild(page);
-                await waitForImages(page);
-                await prepareRaster(page, o.scale || 1);
-                const canvas = await globals.html2canvas(page, {
-                    scale: o.scale || 1, useCORS: true, allowTaint: false, backgroundColor: '#ffffff', logging: false,
-                    width: t.widthPx, height: t.heightPx, windowWidth: t.widthPx, windowHeight: t.heightPx,
-                });
-                if (i > 0) doc.addPage([t.widthIn, t.heightIn], orientation);
-                doc.addImage(canvas.toDataURL('image/jpeg', 0.92), 'JPEG', 0, 0, t.widthIn, t.heightIn, undefined, 'FAST');
-                if (o.onProgress) o.onProgress(i + 1, pages.length);
-            }
-            return doc.output('blob');
-        } finally {
-            host.remove();
-        }
+        const Core = globals.PrintableCore;
+        const numberOrigin = Core && typeof Core.numberOriginFromEntries === 'function'
+            ? Core.numberOriginFromEntries(pages)
+            : 0;
+        const frame = {
+            widthPx: t.widthPx, heightPx: t.heightPx, widthIn: t.widthIn, heightIn: t.heightIn, dpi: t.dpi,
+            orientation: t.widthIn > t.heightIn ? 'landscape' : 'portrait',
+        };
+        return rasterPdf(frame, pages.length, (/** @type {number} */ i, /** @type {number} */ _j, /** @type {HTMLElement} */ host) => {
+            const entry = pages[i];
+            const page = Dom.renderPage(Object.assign({}, entry.page, { nodes: entry.nodes }), t, {
+                scopeId: entry.page.id,
+                pageIndex: entry.pageIndex == null ? i : entry.pageIndex,
+                numberOrigin: numberOrigin,
+            });
+            host.appendChild(page);
+            return page;
+        }, o);
     }
 
     // Folio-imposed PDF: two pages per landscape sheet, same pairing as
     // Print folio / PrintableExportCore.folioSpreads. Prefer a pad-ready
     // stack (multiple of 4) so blanks are only what the operator left.
+    /** @param {any} project @param {any[]} entries @param {any} [opts] */
     async function renderFolio(project, entries, opts) {
         const o = opts || {};
         await ready();
@@ -380,55 +470,37 @@
         const numberOrigin = Core && typeof Core.numberOriginFromEntries === 'function'
             ? Core.numberOriginFromEntries(entries || [])
             : 0;
+        // Blank leaves are numbered in sheet order, the same on every try.
+        /** @type {Record<string, number>} */
+        const blankOf = {};
+        let blanks = 0;
+        spreads.forEach((/** @type {any} */ spread, /** @type {number} */ i) => ['left', 'right'].forEach(side => {
+            const entry = spread[side];
+            if (!entry || !entry.page) blankOf[i + side] = ++blanks;
+        }));
         const sheetWpx = t.widthPx * 2;
         const sheetHpx = t.heightPx;
-        const host = document.createElement('div');
-        host.style.cssText = 'position:absolute;left:-100000px;top:0;width:' + sheetWpx + 'px;pointer-events:none;';
-        document.body.appendChild(host);
-        try {
-            const doc = new globals.jspdf.jsPDF({
-                unit: 'in',
-                format: [sheet.widthIn, sheet.heightIn],
-                orientation: 'landscape',
-                compress: true,
-            });
-            let blankN = 0;
-            for (let i = 0; i < spreads.length; i++) {
-                const spread = spreads[i];
-                host.innerHTML = '';
-                const sheetEl = document.createElement('div');
-                sheetEl.style.cssText = 'display:flex;flex-direction:row;align-items:stretch;overflow:hidden;'
-                    + 'width:' + sheetWpx + 'px;height:' + sheetHpx + 'px;background:#fff;';
-                ['left', 'right'].forEach((side) => {
-                    const entry = spread[side];
-                    const idx = side === 'left' ? spread.leftIdx : spread.rightIdx;
-                    const leaf = document.createElement('div');
-                    leaf.style.cssText = 'width:' + t.widthPx + 'px;height:' + t.heightPx + 'px;'
-                        + 'flex:0 0 ' + t.widthPx + 'px;overflow:hidden;position:relative;background:#fff;';
-                    if (!entry || !entry.page) blankN += 1;
-                    const page = pageForEntry(entry, blankN);
-                    leaf.appendChild(Dom.renderPage(page, t, {
-                        scopeId: page.id,
-                        pageIndex: idx == null ? 0 : idx,
-                        numberOrigin: numberOrigin,
-                    }));
-                    sheetEl.appendChild(leaf);
-                });
-                host.appendChild(sheetEl);
-                await waitForImages(sheetEl);
-                await prepareRaster(sheetEl, o.scale || 1);
-                const canvas = await globals.html2canvas(sheetEl, {
-                    scale: o.scale || 1, useCORS: true, allowTaint: false, backgroundColor: '#ffffff', logging: false,
-                    width: sheetWpx, height: sheetHpx, windowWidth: sheetWpx, windowHeight: sheetHpx,
-                });
-                if (i > 0) doc.addPage([sheet.widthIn, sheet.heightIn], 'landscape');
-                doc.addImage(canvas.toDataURL('image/jpeg', 0.92), 'JPEG', 0, 0, sheet.widthIn, sheet.heightIn, undefined, 'FAST');
-                if (o.onProgress) o.onProgress(i + 1, spreads.length);
-            }
-            return doc.output('blob');
-        } finally {
-            host.remove();
-        }
+        const frame = {
+            widthPx: sheetWpx, heightPx: sheetHpx, widthIn: sheet.widthIn, heightIn: sheet.heightIn, dpi: t.dpi,
+            orientation: 'landscape', leaves: 2,
+        };
+        return rasterPdf(frame, spreads.length, (/** @type {number} */ i, /** @type {number} */ j, /** @type {any} */ host) => {
+            const spread = spreads[i];
+            const side = j === 0 ? 'left' : 'right';
+            const entry = spread[side];
+            const idx = side === 'left' ? spread.leftIdx : spread.rightIdx;
+            const leaf = document.createElement('div');
+            leaf.style.cssText = 'width:' + t.widthPx + 'px;height:' + t.heightPx + 'px;'
+                + 'overflow:hidden;position:relative;background:#fff;';
+            const page = pageForEntry(entry, blankOf[i + side] || 0);
+            leaf.appendChild(Dom.renderPage(page, t, {
+                scopeId: page.id,
+                pageIndex: idx == null ? 0 : idx,
+                numberOrigin: numberOrigin,
+            }));
+            host.appendChild(leaf);
+            return leaf;
+        }, o);
     }
 
     // Attachment file name. Optional `title` is what the editor typed; empty
@@ -445,7 +517,7 @@
         return base;
     }
 
-    const PrintablePdf = { render, renderFolio, fileName, ready, fittedDrawRect, parseClipPolygon, parseMaskPolygon, prepareRaster };
+    const PrintablePdf = { render, renderFolio, rasterAttempts, fileName, ready, fittedDrawRect, parseClipPolygon, parseMaskPolygon, prepareRaster };
 
     if (typeof module !== 'undefined' && module.exports) {
         module.exports = PrintablePdf;

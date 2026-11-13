@@ -234,6 +234,28 @@ test('the PDF paints a picture inside its box and does not move the box', () => 
     assert.ok(Math.abs(fromMask[0][0] - 4) < 0.05 && Math.abs(fromMask[0][1]) < 0.05);
 });
 
+test('PrintablePdf draws at print resolution, lossless, and steps down only to fit the file cap', () => {
+    const Pdf = require('../public/printable-pdf.js');
+    // Half Letter at 150 dpi (one page; a folio draws each of its two pages
+    // the same way): the first try is 600 dpi, held just inside the
+    // ~16.7 MP canvas every browser will draw.
+    const page = Pdf.rasterAttempts({ widthPx: 825, heightPx: 1275, dpi: 150 });
+    assert.equal(page[0].format, 'PNG');
+    assert.ok(page[0].scale * 150 > 590 && page[0].scale * 150 <= 600, 'first try is ~600 dpi');
+    assert.ok((page[0].scale * 825) * (page[0].scale * 1275) <= 16777216, 'the canvas fits the browser ceiling');
+    assert.deepEqual(page.slice(1).map(a => a.format), ['PNG', 'JPEG'], 'then 300 dpi lossless, then 300 dpi JPEG');
+    assert.ok(Math.abs(page[1].scale - 2) < 1e-9 && Math.abs(page[2].scale - 2) < 1e-9);
+    // A bigger page (Letter at 150 dpi) is held by the ceiling, still above 400.
+    const letter = Pdf.rasterAttempts({ widthPx: 1275, heightPx: 1650, dpi: 150 });
+    assert.ok((letter[0].scale * 1275) * (letter[0].scale * 1650) <= 16777216);
+    assert.ok(letter[0].scale * 150 > 400);
+    // A page already drawn at print density is never drawn below its own pixels.
+    const dense = Pdf.rasterAttempts({ widthPx: 1650, heightPx: 2550, dpi: 300 });
+    assert.ok(dense.every(a => a.scale >= 1));
+    // An explicit scale is honoured as the one try.
+    assert.deepEqual(Pdf.rasterAttempts({ widthPx: 825, heightPx: 1275, dpi: 150 }, { scale: 1 }), [{ scale: 1, format: 'PNG' }]);
+});
+
 test('PrintablePdf.fileName uses a typed title and always ends in .pdf', () => {
     const Pdf = require('../public/printable-pdf.js');
     assert.equal(Pdf.fileName({ name: 'Directory' }, '2026-10-13'), 'Directory — 2026-10-13.pdf');
