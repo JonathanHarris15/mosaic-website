@@ -42,9 +42,12 @@ const ShepherdingCore = require("./shared/shepherding-core.js");
 const DocsCore = require("./shared/shepherding-documents-core.js");
 const NoteMarkdownCore = require("./shared/note-markdown-core.js");
 const CareListCore = require("./shared/care-list-core.js");
+const FormDocumentCore = require("./shared/form-document-core.js");
 const Actor = require("./mcp-actor.js");
 const {refuse, loadPerson} = require("./shepherding-writes.js");
-const {loadDocument, withTree} = require("./shepherding-doc-writes.js");
+const {
+  loadDocument, withTree, changeTree: changeTreeOn,
+} = require("./shepherding-doc-writes.js");
 const Read = require("./shepherding-read.js");
 
 const DOCUMENTS = "elder_documents";
@@ -183,40 +186,6 @@ async function coercePersonAnswer(db, question, value) {
 }
 
 /**
- * Move a personal shepherding document onto the profile its subject
- * question now names. The Library copy is left where it is.
- *
- * Same order as the page: off the old profile first, then onto the new
- * one. The answer is already decided; a failure here is reported, not
- * rolled back, because the words were saved either way.
- *
- * @param {object} db the Firestore handle
- * @param {string} documentId the document
- * @param {object} data the document before this answer
- * @param {object} answers the answers about to be stored
- * @return {Promise<?object>} owner fields to merge, or null when it did
- *   not move. Throws when the trees could not be updated.
- */
-async function refileSubject(db, documentId, data, answers) {
-  if (!data.shepherdingDoc) return null;
-  const now = FormsCore.subjectPersonId({answers}) || "";
-  const was = String(data.ownerPersonId || "");
-  if (now === was) return null;
-
-  if (was) {
-    await withTree(db, (tree) => {
-      DocsCore.removeFromTree(tree, documentId);
-      return true;
-    }, "person_" + was);
-  }
-  if (now) {
-    await withTree(db, (tree) => DocsCore.fileInRoot(tree, documentId),
-        "person_" + now);
-  }
-  return {ownerPersonId: now || null, inLibrary: true};
-}
-
-/**
  * Start a Form Document from a template.
  *
  * ⚠ THE QUESTIONS ARE COPIED, NEVER REFERENCED (ADR-0055). A record has to keep
@@ -336,7 +305,7 @@ async function getFormDocument(db, {documentId}) {
  * @return {Promise<object>} what was answered and what was not
  */
 async function answerFormDocument(db, {documentId, answers, actor}) {
-  const {ref, data} = await loadDocument(db, documentId);
+  const {data} = await loadDocument(db, documentId);
   if ((data.docType || "note") !== "form") {
     throw refuse("That is not a Form Document.");
   }
@@ -347,7 +316,6 @@ async function answerFormDocument(db, {documentId, answers, actor}) {
     if (q && q.id) byId[q.id] = q;
   });
 
-  const merged = Object.assign({}, data.answers || {});
   const skipped = [];
   const proposed = {};
 
@@ -390,33 +358,42 @@ async function answerFormDocument(db, {documentId, answers, actor}) {
     skipped.push({questionId: problem.id, why: problem.why});
   });
 
-  Object.assign(merged, proposed);
   const answered = Object.keys(proposed);
 
-  // A cleared person answer is null. Leaving the old object in place would
-  // keep the picker showing somebody the assistant just removed.
-  Object.keys(proposed).forEach((questionId) => {
-    if (proposed[questionId] == null) delete merged[questionId];
-  });
-
-  let filing = null;
-  let filingNote = null;
-  try {
-    filing = await refileSubject(db, documentId, data, merged);
-  } catch (e) {
-    filingNote = "Saved, but this did not reach their profile. Answer the " +
-      "person question again to retry that part.";
+  // ⚠ EACH ANSWER TO ITS OWN FIELD (MS-484). Reading the whole map, merging
+  // and writing it back put back every answer an elder saved in between. A
+  // cleared answer is stored as null, which every reader treats as unanswered,
+  // so the picker stops showing somebody the assistant just removed.
+  if (answered.length) {
+    await FormDocumentCore.saveEdits(db, F.namespace(), documentId, {
+      answers: answered.map((questionId) => ({
+        questionId,
+        value: proposed[questionId] == null ? null : proposed[questionId],
+      })),
+      byName: actor.name,
+      extra: Actor.provenance(),
+    });
   }
 
-  await ref.update(Object.assign({
-    answers: merged,
-    updatedAt: F.now(),
-    updatedByName: actor.name,
-  }, filing || {}, Actor.provenance()));
-
+  // A personal shepherding document is filed on whoever its first question
+  // names. The assistant changing that answer moves it exactly as the page
+  // does: the STORED record is asked whether its subject and filing agree,
+  // and each tree is changed inside its own transaction.
   const result = {ok: true, documentId, answered, skipped};
-  if (filingNote) result.filing = filingNote;
-  else if (filing) result.ownerPersonId = filing.ownerPersonId;
+  if (answered.includes(FormDocumentCore.SUBJECT_QUESTION_ID)) {
+    const changeTree = (treeId, change) => changeTreeOn(db, {treeId, change});
+    try {
+      const plan = await FormDocumentCore.settleFiling(
+          db, changeTree, documentId);
+      if (plan) result.ownerPersonId = plan.after || null;
+    } catch (e) {
+      // The answers are saved either way; this is only where it is SHOWN.
+      // The next save or opening of the document tries again.
+      result.filing = "The answers are saved, but moving this document " +
+        "to the new person's profile did not finish. It will be retried " +
+        "the next time the document is saved or opened.";
+    }
+  }
   return result;
 }
 

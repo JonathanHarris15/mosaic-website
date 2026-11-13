@@ -20,6 +20,12 @@ const FormsCore = require('../functions/shared/forms-core.js');
 // rather than the name they typed.
 
 const DELETE = {marker: 'delete'};
+
+class FakeFieldPath {
+    constructor(...segments) {
+        this.segments = segments;
+    }
+}
 const NOW = {marker: 'now'};
 
 function memoryDb(seed) {
@@ -31,9 +37,30 @@ function memoryDb(seed) {
                 const data = bucket[id];
                 return {exists: data != null, data: () => data};
             },
-            update: async (payload) => {
+            // Either a payload object (stored as given, dotted keys and all)
+            // or field/value pairs, where a FieldPath writes the nested field
+            // it names — how a Form Document answer is written (MS-484).
+            update: async (...args) => {
                 if (!store[collection]) store[collection] = {};
-                store[collection][id] = Object.assign({}, store[collection][id], payload);
+                if (args.length === 1) {
+                    store[collection][id] = Object.assign({}, store[collection][id], args[0]);
+                    return;
+                }
+                const doc = Object.assign({}, store[collection][id]);
+                for (let i = 0; i < args.length; i += 2) {
+                    const key = args[i];
+                    if (key instanceof FakeFieldPath) {
+                        let at = doc;
+                        key.segments.slice(0, -1).forEach((seg) => {
+                            at[seg] = Object.assign({}, at[seg]);
+                            at = at[seg];
+                        });
+                        at[key.segments[key.segments.length - 1]] = args[i + 1];
+                    } else {
+                        doc[key] = args[i + 1];
+                    }
+                }
+                store[collection][id] = doc;
             },
             set: async (payload) => {
                 if (!store[collection]) store[collection] = {};
@@ -239,6 +266,7 @@ describe('a form\'s person picker, answered by an assistant', () => {
                 serverTimestamp: () => NOW,
                 delete: () => DELETE,
             },
+            FieldPath: FakeFieldPath,
         });
     });
 

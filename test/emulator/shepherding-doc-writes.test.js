@@ -360,4 +360,70 @@ suite('the Document Library tools', () => {
         assert.deepStrictEqual(
             listed.documents.map((d) => d.documentId), [made.documentId]);
     });
+
+    // ── MS-493: one change to any tree, from a page ──────────────────────
+
+    async function treeOf(treeId) {
+        const snap = await db.collection('elder_document_structure').doc(treeId).get();
+        return snap.exists ? snap.data() : null;
+    }
+
+    test('two different changes racing on the Library tree both survive', async () => {
+        await db.collection('elder_document_structure').doc('root').set({children: [
+            {type: 'folder', id: 'F', name: 'Visits', children: []},
+            {type: 'document', id: 'd1'},
+        ]});
+        await Promise.all([
+            Docs.changeTree(db, {treeId: 'root', change: {op: 'createFolder', parentId: DocsCore.ROOT, folderId: 'N', name: 'New'}}),
+            Docs.changeTree(db, {treeId: 'root', change: {op: 'move', item: {type: 'document', id: 'd1'}, targetFolderId: 'F'}}),
+            Docs.changeTree(db, {treeId: 'root', change: {op: 'file', docId: 'd2', folderId: DocsCore.ROOT}}),
+        ]);
+        const t = await treeOf('root');
+        assert.ok(DocsCore.getFolderById(t, 'N'), 'the new folder was lost');
+        assert.deepStrictEqual(DocsCore.getAllDocIds(DocsCore.getFolderById(t, 'F')), ['d1'], 'the move was lost');
+        assert.ok(DocsCore.containsDoc(t, 'd2'), 'the filed document was lost');
+    });
+
+    test('the same holds on the tree of one person, which starts from nothing', async () => {
+        const treeId = DocsCore.personTreeId(SUBJECT);
+        await Promise.all([
+            Docs.changeTree(db, {treeId, change: {op: 'file', docId: 'd1'}}),
+            Docs.changeTree(db, {treeId, change: {op: 'file', docId: 'd2'}}),
+            Docs.changeTree(db, {treeId, change: {op: 'createFolder', parentId: DocsCore.ROOT, folderId: 'F', name: 'Interviews'}}),
+        ]);
+        const t = await treeOf(treeId);
+        assert.deepStrictEqual(DocsCore.treeDocIds(t).sort(), ['d1', 'd2']);
+        assert.ok(DocsCore.getFolderById(t, 'F'));
+        assert.strictEqual(await treeOf('root'), null, 'a change to one person reached the Library');
+    });
+
+    test('each change does what the shared rule says', async () => {
+        const changes = [
+            {op: 'createFolder', parentId: DocsCore.ROOT, folderId: 'F', name: 'Visits'},
+            {op: 'file', docId: 'd1', folderId: 'F'},
+            {op: 'file', docId: 'd2'},
+            {op: 'renameFolder', folderId: 'F', name: 'Home visits'},
+            {op: 'move', item: {type: 'document', id: 'd2'}, targetFolderId: 'F'},
+            {op: 'prune', docIds: ['d1']},
+            {op: 'remove', itemId: 'd2'},
+        ];
+        const expected = {children: []};
+        for (const change of changes) {
+            await Docs.changeTree(db, {treeId: 'root', change});
+            DocsCore.applyTreeChange(expected, change);
+            assert.deepStrictEqual(await treeOf('root'), expected, change.op + ' did something else on the server');
+        }
+    });
+
+    test('a change whose folder is gone is refused, and a tree that is not one is refused', async () => {
+        await assert.rejects(() => Docs.changeTree(db, {
+            treeId: 'root', change: {op: 'file', docId: 'd1', folderId: 'ghost'},
+        }), /no longer exists/);
+        await assert.rejects(() => Docs.changeTree(db, {
+            treeId: 'people', change: {op: 'file', docId: 'd1'},
+        }), /not a document tree/);
+        await assert.rejects(() => Docs.changeTree(db, {
+            treeId: 'root', change: {op: 'shuffle'},
+        }), /shuffle/);
+    });
 });

@@ -169,6 +169,9 @@ const MODULES = [
     // copy. FilingCore first: resources-core requires it.
     'filing-core.js',
     'resources-core.js',
+    // MS-483 / MS-484. The same for a Form Document: one field per answer, and
+    // re-filing only when the subject changed, whoever changed it.
+    'form-document-core.js',
 ];
 
 const BANNER = [
