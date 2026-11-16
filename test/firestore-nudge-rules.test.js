@@ -15,7 +15,7 @@ const rules = fs.readFileSync(
     path.join(__dirname, '..', 'firestore.rules'), 'utf8');
 
 const nudgeBlock = () => {
-    const m = rules.match(/match \/assignment_nudges\/\{recordId\}\s*\{([\s\S]*?)\n    \}/);
+    const m = rules.match(/match \/assignment_nudges\/\{recordId\}\s*\{([\s\S]*?)\n {4}\}/);
     assert.ok(m, 'MS-248 needs an /assignment_nudges collection');
     return m[1];
 };

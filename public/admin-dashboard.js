@@ -34,6 +34,16 @@ const EVENT_ANNOUNCEMENT_DEFAULTS = {
     pushBody: "{prose}",
 };
 
+// Nudge wording (MS-248). Mirrors DEFAULT_TEXT / DEFAULT_PUSH in
+// functions/assignment-nudge.js; test/admin-nudge-wording.test.js holds them
+// equal, so a blank field means the same words on the page and the server.
+const NUDGE_DEFAULTS = {
+    text: "Hi {name}, you're down for {places} and haven't said yet whether you can make it. Let the church know here: {link}",
+    pushTitle: "Can you make it?",
+    pushBody: "You're down for {places}. Tap to answer.",
+};
+const NUDGE_STORED = { text: 'nudgeText', pushTitle: 'pushNudgeTitle', pushBody: 'pushNudgeBody' };
+
 // Lock-screen wording. Mirrors DEFAULT_PUSH_WORDING in functions/prayer-request.js.
 // A blank saved field falls back to these. PUSH_TITLE_LIMIT is what a lock
 // screen can still show; the editor sees the count and is not blocked.
@@ -103,6 +113,14 @@ document.addEventListener('alpine:init', () => {
         eventAnnouncementWording: { ...EVENT_ANNOUNCEMENT_DEFAULTS },
         eventAnnouncementSaving: false,
 
+        // Nudges (MS-248): the wording, and the switch that turns them on.
+        nudgeWording: { ...NUDGE_DEFAULTS },
+        nudgeEnabled: false,
+        nudgeSwitchSaving: false,
+        nudgeLive: null,
+        stopNudgeWatch: null,
+        nudgeChip: 'saved',
+
         // ── Push notifications tab ──────────────────────────────────────
         pushOverview: null,        // the overview callable's whole payload
         pushFlow: null,            // …its flow diagram, pulled out for x-for
@@ -147,6 +165,7 @@ document.addEventListener('alpine:init', () => {
                 this.refreshStatus();
                 this.loadReplies();
                 this.loadEventAnnouncementWording();
+                this.loadNudgeSettings();
                 const hash = (window.location.hash || '').replace(/^#/, '');
                 if (hash === 'push') this.selectTab('push');
                 else if (hash === 'accounts') this.selectTab('accounts');
@@ -379,6 +398,124 @@ document.addEventListener('alpine:init', () => {
             Object.keys(EVENT_ANNOUNCEMENT_DEFAULTS).forEach(f => this.editWording(f, EVENT_ANNOUNCEMENT_DEFAULTS[f]));
             this.saveEventAnnouncementWording();
             this.showToast('Reset to defaults');
+        },
+
+        // ── Nudges (MS-248) ──────────────────────────────────────────────
+        // Same live-saving wording as the announcement boxes above, and a
+        // switch that saves the moment it is flipped. Off unless turned on.
+        get nudgeChipText() {
+            return typeof LiveFields !== 'undefined' ? LiveFields.chipText(this.nudgeChip) : '';
+        },
+
+        nudgeWordingFrom(saved) {
+            const d = saved || {};
+            const out = {};
+            Object.keys(NUDGE_STORED).forEach(f => {
+                const v = typeof d[NUDGE_STORED[f]] === 'string' ? d[NUDGE_STORED[f]].trim() : '';
+                out[f] = v || NUDGE_DEFAULTS[f];
+            });
+            return out;
+        },
+
+        async loadNudgeSettings() {
+            let data;
+            try {
+                const doc = await db.collection('app_config').doc('prayer_request_sms').get();
+                data = doc.exists ? doc.data() : {};
+            } catch (e) {
+                console.error('Error loading nudge settings:', e);
+                this.showToast('Could not load nudge settings', 'error');
+                return;
+            }
+            this.nudgeEnabled = data.nudgeEnabled === true;
+            this.nudgeWording = this.nudgeWordingFrom(data);
+            this.startLiveNudge();
+        },
+
+        startLiveNudge() {
+            if (typeof LiveFields === 'undefined') return;
+            if (this.nudgeLive) this.nudgeLive.dispose();
+            this.nudgeLive = LiveFields.create({
+                fields: Object.keys(NUDGE_STORED),
+                initial: { ...this.nudgeWording },
+                save: async (patch) => {
+                    const write = {
+                        updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+                        updatedBy: this.currentUser.uid,
+                    };
+                    const stored = {};
+                    Object.keys(patch).forEach(f => {
+                        stored[f] = String(patch[f] == null ? '' : patch[f]).trim();
+                        write[NUDGE_STORED[f]] = stored[f];
+                    });
+                    try {
+                        await db.collection('app_config').doc('prayer_request_sms').set(write, { merge: true });
+                    } catch (e) {
+                        console.error('Error saving nudge wording:', e);
+                        this.showToast('Error saving nudge wording', 'error');
+                        throw e;
+                    }
+                    return stored;
+                },
+                onChange: (state) => { this.nudgeChip = state.status; },
+            });
+            const Live = window.MosaicLiveRead;
+            if (this.stopNudgeWatch) { try { this.stopNudgeWatch(); } catch (e) {} }
+            this.stopNudgeWatch = null;
+            if (Live && db && typeof db.collection === 'function') {
+                try {
+                    this.stopNudgeWatch = Live.watch(db.collection('app_config').doc('prayer_request_sms'), (snap) => {
+                        if (!snap || !this.nudgeLive) return;
+                        const data = snap.exists ? snap.data() : {};
+                        const pending = !!(snap.metadata && snap.metadata.hasPendingWrites);
+                        if (!this.nudgeSwitchSaving) this.nudgeEnabled = data.nudgeEnabled === true;
+                        this.nudgeLive.remote(this.nudgeWordingFrom(data), { pendingWrites: pending });
+                        this.nudgeWording = { ...this.nudgeLive.state.draft };
+                    }, { onError: () => {} });
+                } catch (e) { /* stays as loaded */ }
+            }
+        },
+
+        editNudgeWording(field, value) {
+            this.nudgeWording = { ...this.nudgeWording, [field]: value };
+            if (this.nudgeLive) this.nudgeLive.edit(field, value);
+        },
+
+        revertNudgeWording(field) {
+            if (!this.nudgeLive) return;
+            this.nudgeLive.revert(field);
+            this.nudgeWording = { ...this.nudgeLive.state.draft };
+        },
+
+        async saveNudgeWording() {
+            if (!this.nudgeLive) return;
+            return this.nudgeLive.flush();
+        },
+
+        resetNudgeWording() {
+            Object.keys(NUDGE_DEFAULTS).forEach(f => this.editNudgeWording(f, NUDGE_DEFAULTS[f]));
+            this.saveNudgeWording();
+            this.showToast('Reset to defaults');
+        },
+
+        async setNudgeEnabled(on) {
+            const was = this.nudgeEnabled;
+            this.nudgeEnabled = !!on;
+            this.nudgeSwitchSaving = true;
+            try {
+                await db.collection('app_config').doc('prayer_request_sms').set({
+                    nudgeEnabled: !!on,
+                    updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+                    updatedBy: this.currentUser.uid,
+                }, { merge: true });
+                this.showToast(on ? 'Nudges are on' : 'Nudges are off');
+            } catch (e) {
+                console.error('Error saving the nudge switch:', e);
+                this.nudgeEnabled = was;
+                this.showToast('Could not change nudges. Try again.', 'error');
+            } finally {
+                this.nudgeSwitchSaving = false;
+            }
         },
 
 

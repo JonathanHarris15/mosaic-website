@@ -506,6 +506,53 @@
             </div>
         </section>
 
+        <section class="flex flex-col gap-md">
+            <div class="flex items-center gap-sm">
+                <span class="material-symbols-outlined text-[24px] text-primary">notifications_active</span>
+                <h2 class="font-headline-md text-headline-md text-primary">Nudges</h2>
+            </div>
+            <div class="bg-surface-container-lowest border border-outline-variant rounded-xl p-lg flex flex-col gap-md">
+                <p class="font-body-md text-sm text-on-surface-variant">
+                    Somebody who has not said whether they can make a date they are down for is nudged
+                    5 days before, and again at 3 days if they still have not answered. Editors are not sent anything.
+                </p>
+                <label class="m-check">
+                    <input type="checkbox" data-nudge-switch :checked="nudgeEnabled" :disabled="nudgeSwitchSaving" @change="setNudgeEnabled($event.target.checked)" />
+                    <span>Send nudges</span>
+                </label>
+                <p class="font-body-md text-sm text-on-surface-variant">
+                    Use
+                    <code class="bg-surface-container rounded px-1 py-[1px] text-xs">{name}</code>,
+                    <code class="bg-surface-container rounded px-1 py-[1px] text-xs">{places}</code> for what they are down for, and
+                    <code class="bg-surface-container rounded px-1 py-[1px] text-xs">{link}</code>
+                    for their Commitments page.
+                </p>
+                <label class="flex flex-col gap-xs">
+                    <span class="font-label-md text-label-md text-on-surface-variant">Text message</span>
+                    <textarea :value="nudgeWording.text" @input="editNudgeWording('text', $event.target.value)" @blur="saveNudgeWording()" @keydown.escape="revertNudgeWording('text')" data-live-nudge="text" rows="4"
+                        class="border border-outline-variant rounded-lg px-md py-sm font-body-md text-body-md bg-surface focus:outline-none focus:ring-2 focus:ring-primary/30 resize-y"></textarea>
+                </label>
+                <label class="flex flex-col gap-xs">
+                    <span class="font-label-md text-label-md text-on-surface-variant">Push title</span>
+                    <input type="text" :value="nudgeWording.pushTitle" @input="editNudgeWording('pushTitle', $event.target.value)" @blur="saveNudgeWording()" @keydown.escape="revertNudgeWording('pushTitle')" data-live-nudge="pushTitle"
+                        class="border border-outline-variant rounded-lg px-md py-sm font-body-md text-body-md bg-surface focus:outline-none focus:ring-2 focus:ring-primary/30">
+                </label>
+                <label class="flex flex-col gap-xs">
+                    <span class="font-label-md text-label-md text-on-surface-variant">Push body</span>
+                    <textarea :value="nudgeWording.pushBody" @input="editNudgeWording('pushBody', $event.target.value)" @blur="saveNudgeWording()" @keydown.escape="revertNudgeWording('pushBody')" data-live-nudge="pushBody" rows="3"
+                        class="border border-outline-variant rounded-lg px-md py-sm font-body-md text-body-md bg-surface focus:outline-none focus:ring-2 focus:ring-primary/30 resize-y"></textarea>
+                </label>
+                <div class="flex items-center justify-end gap-sm">
+                    <button @click="resetNudgeWording()" class="m-btn m-btn--quiet m-btn--sm">
+                        Reset to defaults
+                    </button>
+                    <span data-live-chip class="font-label-md text-label-md text-on-surface-variant" :class="nudgeChip === 'failed' ? 'text-error' : ''" x-text="nudgeChipText" aria-live="polite"></span>
+                    <button x-show="nudgeChip === 'failed'" type="button" @click="nudgeLive && nudgeLive.retry()"
+                        class="m-btn m-btn--quiet m-btn--sm">Retry</button>
+                </div>
+            </div>
+        </section>
+
         </div><!-- /tab: System tools -->
 
         <!-- ============================================================
