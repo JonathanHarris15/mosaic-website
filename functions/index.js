@@ -28,7 +28,7 @@ const answerDoor = require("./answer-link-door");
 const eventTell = require("./event-tell");
 const eventTellFs = require("./event-tell-firestore");
 const notify = require("./notification-send");
-const notifyBridge = require("./notification-send-bridge");
+const eventAnnWording = require("./event-announcement-notification");
 const ac = require("./assignment-conversion");
 const si = require("./service-involvement");
 const siRun = require("./service-involvement-run");
@@ -2338,6 +2338,7 @@ async function loadPrayerConfig(db) {
     autoSendEnabled: !!data.autoSendEnabled,
     includeAnswerLinkInSms: pr.prayerSmsIncludeAnswerLink(data),
     includeReplyWebhookInSms: pr.prayerSmsIncludeReplyWebhook(data),
+    raw: data,
   };
 }
 
@@ -2379,12 +2380,20 @@ function notifierDeps(db) {
     loadTemplates: async () => {
       const loaded = await loadPrayerConfig(db);
       const includeLink = loaded.includeAnswerLinkInSms;
+      // Each purpose keys its own wording, so prayer and event-announcement
+      // templates sit side by side without colliding (MS-623).
+      const announcement = eventAnnWording.templatesForSendPath(loaded.raw);
       return {
-        text: pr.preparePrayerSmsTextTemplates(loaded.templates, includeLink),
-        textFallback: pr.preparePrayerSmsTextTemplates(
-            pr.DEFAULT_PRAYER_MESSAGES, includeLink),
-        push: loaded.push,
-        pushFallback: pr.DEFAULT_PUSH_WORDING,
+        text: Object.assign({},
+            pr.preparePrayerSmsTextTemplates(loaded.templates, includeLink),
+            announcement.text),
+        textFallback: Object.assign({},
+            pr.preparePrayerSmsTextTemplates(
+                pr.DEFAULT_PRAYER_MESSAGES, includeLink),
+            announcement.textFallback),
+        push: Object.assign({}, loaded.push, announcement.push),
+        pushFallback: Object.assign({},
+            pr.DEFAULT_PUSH_WORDING, announcement.pushFallback),
       };
     },
     sendPush: async ({token, title, body, url}) => {
@@ -3117,9 +3126,8 @@ async function subjectWording(db, serviceDate, personId) {
 }
 
 /**
- * Hourly sender for told event announcements (MS-623). Uses the MS-189
- * Notification path when notification-send.js is on the branch; otherwise
- * the tick runs but records no sends.
+ * Hourly sender for told event announcements (MS-623). Each due person goes
+ * through the one send path, which picks push or text.
  */
 exports.sendEventAnnouncementTells = onSchedule(
     {
@@ -3130,13 +3138,8 @@ exports.sendEventAnnouncementTells = onSchedule(
     },
     async () => {
       const db = admin.firestore();
-      const tellPerson = notifyBridge.loadTellPerson();
-      const deps = eventTellFs.buildDeps(db, tellPerson);
-      // When MS-189 lands, wire notifierDeps here and merge
-      // eventAnnWording.templatesForSendPath into loadTemplates.
-      if (tellPerson) {
-        deps.notifierDeps = {};
-      }
+      const deps = eventTellFs.buildDeps(db, notify.tellPerson);
+      deps.notifierDeps = notifierDeps(db);
       const result = await eventTell.runEventTellTick(deps);
       if (result.ran && result.sent) {
         log(`sendEventAnnouncementTells: sent ${result.sent} notification(s).`);

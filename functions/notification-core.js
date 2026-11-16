@@ -172,23 +172,33 @@ function nameOrNeutral(firstName) {
 }
 
 /**
- * Fill {name} and {link}. A missing link removes the placeholder; it does
- * not mint a URL. MS-247 passes the Answer link in when one exists.
+ * Fill {name}, {link}, and any other {word} the caller passed a string for
+ * in `values.extra` (an event announcement's {title} and {prose}). One pass,
+ * so text that arrived inside a value is never filled again. A missing link
+ * removes the placeholder; it does not mint a URL. An unknown {word} stays.
  * @param {string} template
- * @param {Object} values firstName and an optional link
+ * @param {Object} values firstName, an optional link, optional extra
  * @return {string}
  */
 function fill(template, values) {
   const src = typeof template === "string" ? template : "";
-  const link = values && typeof values.link === "string" ? values.link : "";
-  return src
-      .split("{name}").join(nameOrNeutral(values && values.firstName))
-      .split("{link}").join(link);
+  const v = values || {};
+  const link = typeof v.link === "string" ? v.link : "";
+  const extra = v.extra || {};
+  return src.replace(/\{(\w+)\}/g, (whole, key) => {
+    if (key === "name") return nameOrNeutral(v.firstName);
+    if (key === "link") return link;
+    if (Object.prototype.hasOwnProperty.call(extra, key) &&
+        typeof extra[key] === "string") {
+      return extra[key];
+    }
+    return whole;
+  });
 }
 
 /**
  * The longer form a text takes. A blank template uses the fallback.
- * @param {Object} args template, fallback, firstName, link
+ * @param {Object} args template, fallback, firstName, link, extra
  * @return {string}
  */
 function renderText(args) {
@@ -201,7 +211,7 @@ function renderText(args) {
 /**
  * Title and body for a lock screen. Each field falls back on its own, so a
  * half-filled config still renders a complete notification.
- * @param {Object} args title, body, fallbacks, firstName, link
+ * @param {Object} args title, body, fallbacks, firstName, link, extra
  * @return {{title: string, body: string}}
  */
 function renderLockScreen(args) {
@@ -212,12 +222,14 @@ function renderLockScreen(args) {
       fallback: a.titleFallback,
       firstName: a.firstName,
       link: a.link,
+      extra: a.extra,
     }),
     body: renderText({
       template: a.body,
       fallback: a.bodyFallback,
       firstName: a.firstName,
       link: a.link,
+      extra: a.extra,
     }),
   };
 }
