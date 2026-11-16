@@ -252,3 +252,46 @@ test('profile prayer card helper builds a shell-aware href', () => {
     assert.match(profileJs, /answerLink/);
     assert.match(profileJs, /prayer-answer\.html/);
 });
+
+// MS-249: the same link page opens a Trade invitation.
+const TRADE_VIEW = {
+    status: 'waiting', inviterFirstName: 'Bob', eventName: 'Sunday Service',
+    roleName: 'Sound', dateLabel: 'Sunday 20 September', canAnswer: ['take', 'refuse'],
+};
+
+test('a Trade invitation link shows the ask, under its own title', async () => {
+    const { page } = loadPage({ ok: true, purpose: 'trade_invitation', thing: 't1', view: TRADE_VIEW });
+    await page.load();
+    assert.strictEqual(page.state, 'trade-waiting');
+    assert.strictEqual(page.pageTitle, 'Can you take this?');
+    assert.strictEqual(page.trade.inviterFirstName, 'Bob');
+});
+
+test('Yes sends take through the link and shows that they are down for it', async () => {
+    const { page, calls } = loadPage((payload) => (payload.op === 'read'
+        ? { ok: true, purpose: 'trade_invitation', view: TRADE_VIEW }
+        : { ok: true, purpose: 'trade_invitation', view: Object.assign({}, TRADE_VIEW, { status: 'took', canAnswer: [] }) }));
+    await page.load();
+    await page.answerTrade('take');
+    assert.strictEqual(JSON.stringify(calls[1]), JSON.stringify({ op: 'answer', token: '123456789ABCDEFGHJK', answer: 'take' }));
+    assert.strictEqual(page.state, 'trade-took');
+});
+
+test('a refusal from the server stays on the ask with its words', async () => {
+    const { page } = loadPage((payload) => (payload.op === 'read'
+        ? { ok: true, purpose: 'trade_invitation', view: TRADE_VIEW }
+        : { ok: false, code: 'refused', message: 'That swap would put somebody in a place the Role does not allow.' }));
+    await page.load();
+    await page.answerTrade('take');
+    assert.strictEqual(page.state, 'trade-waiting');
+    assert.match(page.problem, /Role does not allow/);
+});
+
+test('an ended ask reads as ended and offers no buttons', async () => {
+    const { page } = loadPage({ ok: true, purpose: 'trade_invitation', view: Object.assign({}, TRADE_VIEW, { status: 'ended', canAnswer: [] }) });
+    await page.load();
+    assert.strictEqual(page.state, 'trade-ended');
+    const html = fs.readFileSync(path.join(__dirname, '..', 'public', 'prayer-answer.html'), 'utf8');
+    const ended = html.slice(html.indexOf("state === 'trade-ended'"));
+    assert.ok(!/answerTrade/.test(ended.slice(0, ended.indexOf('</div>\n\n'))));
+});

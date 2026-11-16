@@ -10,10 +10,13 @@ const crypto = require("crypto");
 const al = require("./answer-link");
 const pr = require("./prayer-request");
 const writes = require("./prayer-request-writes");
+const tw = require("./trade-writes");
+const {inviteeView} = require("./trade-invitation-text");
 
 const LINKS = "answer_links";
 const LOOKUPS = "answer_link_lookups";
 const PURPOSE_PRAYER = "prayer_request";
+const PURPOSE_TRADE = "trade_invitation";
 
 const CLOSED = {
   ok: false,
@@ -224,7 +227,95 @@ async function dispatchPurpose(db, args) {
   if (purpose === PURPOSE_PRAYER) {
     return prayerPurpose(db, args);
   }
+  if (purpose === PURPOSE_TRADE) {
+    return tradeInvitationPurpose(tradeDeps(db), args);
+  }
   return closed();
+}
+
+/**
+ * What the Trade invitation purpose reads and moves, from Firestore.
+ * @param {FirebaseFirestore.Firestore} db
+ * @return {*}
+ */
+function tradeDeps(db) {
+  return {
+    loadTrade: async (/** @type {string} */ id) => {
+      const snap = await db.collection(tw.TRADES).doc(id).get();
+      return snap.exists ? Object.assign({id: snap.id}, snap.data()) : null;
+    },
+    firstNameOf: async (/** @type {string} */ personId) => {
+      if (!personId) return "";
+      const snap = await db.collection("people").doc(personId).get();
+      const data = snap.data();
+      return pr.firstNameOf((data && data.name) || "");
+    },
+    offer: (/** @type {*} */ spec) => tw.offer(db, spec),
+    refuse: (/** @type {*} */ spec) => tw.refuse(db, spec),
+  };
+}
+
+/**
+ * A Trade invitation answered through its link (MS-249). The invitee can
+ * take the place or say no, and nothing else: offering one of their own
+ * places would show the link holder their other Assignments. Both answers
+ * are the existing Trade moves, with the invitee off the link as the actor,
+ * so every eligibility and visibility check still runs.
+ * @param {*} deps loadTrade, firstNameOf, offer, refuse
+ * @param {*} args op, link, answer, now, linkRef
+ * @return {Promise<Object>}
+ */
+async function tradeInvitationPurpose(deps, args) {
+  const personId = args.link.personId;
+  const tradeId = args.link.thing;
+  const today = pr.churchDateParts(args.now).date;
+
+  const viewNow = async () => {
+    const trade = await deps.loadTrade(tradeId);
+    if (!trade || trade.counterpartyId !== personId) return null;
+    return inviteeView(trade, {
+      inviteeId: personId,
+      inviterFirstName: await deps.firstNameOf(trade.holderId),
+      today: today,
+    });
+  };
+
+  const before = await viewNow();
+  if (!before) return closed();
+  const shown = (/** @type {*} */ view) =>
+    ({ok: true, purpose: PURPOSE_TRADE, thing: tradeId, view: view});
+  if (args.op === "read") return shown(before);
+
+  const answer = String(args.answer || "");
+  if (answer !== "take" && answer !== "refuse") {
+    return {ok: false, code: "invalid-argument",
+      message: "Say yes or no."};
+  }
+  // Nothing left to answer: show where it stands rather than a refusal.
+  if (before.canAnswer.indexOf(answer) === -1) return shown(before);
+
+  if (args.linkRef) {
+    const linkSnap = await args.linkRef.get();
+    const save = al.saveRateDecision(linkSnap.data() || {}, args.now);
+    if (!save.ok) return Object.assign({}, RATE_LIMITED);
+    await args.linkRef.set({saveTimestamps: save.saveTimestamps},
+        {merge: true});
+  }
+
+  const spec = {tradeId: tradeId, actorId: personId, today: today,
+    now: args.now};
+  // An empty reply to an invitation settles it: they were asked, so their
+  // answer is the agreement (CONTEXT.md, Trade).
+  const result = answer === "take" ?
+    await deps.offer(Object.assign({offered: []}, spec)) :
+    await deps.refuse(spec);
+  // ⚠ NOT THE MOVE'S OWN CODE. The page reads failed-precondition as an
+  // expired link, so "the Role does not allow you" would show as a dead link.
+  if (!result || !result.ok) {
+    return {ok: false, code: "refused",
+      message: (result && result.message) || "That did not work."};
+  }
+  return shown(await viewNow() || before);
 }
 
 /**
@@ -291,4 +382,5 @@ module.exports = {
   RATE_LIMITED,
   mintAnswerLink,
   handleAnswerLink,
+  tradeInvitationPurpose,
 };

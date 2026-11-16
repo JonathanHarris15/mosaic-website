@@ -51,7 +51,7 @@
                     <span class="m-back__label">Back</span>
                 </a>
                 <div class="m-header__titles">
-                    <h1 class="m-header__title m-header__title--serif">Prayer request</h1>
+                    <h1 class="m-header__title m-header__title--serif" x-text="pageTitle">Prayer request</h1>
                 </div>
             </div>
             <div class="m-header__rule"></div>
@@ -119,6 +119,46 @@
             <button type="button" class="m-btn m-btn--secondary pa-wide" @click="state = 'open'">
                 <span class="m-btn__label">View or edit</span>
             </button>
+        </div>
+
+        <section x-show="state === 'trade-waiting'" class="pa-card">
+            <p class="pa-lead"><span x-text="trade.inviterFirstName"></span> asked if you could take their place.</p>
+            <p class="pa-sunday"><span x-text="trade.roleName"></span> · <span x-text="trade.eventName"></span></p>
+            <p class="pa-privacy" x-text="trade.dateLabel"></p>
+
+            <div class="m-notice m-notice--error" x-show="problem">
+                <span class="material-symbols-outlined m-notice__icon">error</span>
+                <div class="m-notice__body">
+                    <span class="m-notice__text" x-text="problem"></span>
+                </div>
+            </div>
+
+            <div class="pa-send">
+                <button type="button" class="m-btn m-btn--primary m-btn--lg pa-wide" :disabled="sending" @click="answerTrade('take')">
+                    <span class="m-btn__label">Yes, I'll take it</span>
+                </button>
+                <button type="button" class="m-btn m-btn--secondary m-btn--lg pa-wide" :disabled="sending" @click="answerTrade('refuse')">
+                    <span class="m-btn__label">No, I can't</span>
+                </button>
+            </div>
+        </section>
+
+        <div x-show="state === 'trade-took'" class="pa-centred">
+            <span class="material-symbols-outlined pa-centred__icon pa-centred__icon--good">task_alt</span>
+            <h1 class="m-headline-md">You're down for <span x-text="trade.roleName"></span> on <span x-text="trade.dateLabel"></span>.</h1>
+            <p class="pa-quiet">Thank you. <span x-text="trade.inviterFirstName"></span> will see that you said yes.</p>
+        </div>
+
+        <div x-show="state === 'trade-refused'" class="pa-centred">
+            <span class="material-symbols-outlined pa-centred__icon">check</span>
+            <h1 class="m-headline-md">Thanks for letting <span x-text="trade.inviterFirstName"></span> know.</h1>
+            <p class="pa-quiet">There is nothing else to do.</p>
+        </div>
+
+        <div x-show="state === 'trade-ended'" class="pa-centred">
+            <span class="material-symbols-outlined pa-centred__icon">event_busy</span>
+            <h1 class="m-headline-md">This ask has ended.</h1>
+            <p class="pa-quiet">There's nothing for you to do.</p>
         </div>
 
         <section x-show="state === 'open'" class="pa-card">
