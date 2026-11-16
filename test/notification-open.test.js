@@ -67,3 +67,13 @@ test('the phone glue asks the OS only from the explainer Allow button', () => {
     assert.doesNotMatch(push, /\.openUrl/);
     assert.match(push, /app-settings:/);
 });
+
+// MS-248 / MS-442: a nudge links to Commitments, and a tap lands there inside
+// the app rather than on its home.
+test('a Commitments link is a shell route that opens the page in the shell', () => {
+    assert.deepStrictEqual(
+        open.routeFromNotificationUrl('https://mosaic.example/commitments.html'),
+        {route: 'commitments', params: {}});
+    const nav = require('../public/dashboard-nav.js');
+    assert.equal(nav.MOBILE_SHELL_PAGES.commitments, 'commitments.html');
+});

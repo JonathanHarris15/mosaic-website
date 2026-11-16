@@ -93,7 +93,7 @@ test('the send path loads event announcement wording beside the prayer wording',
         path.join(__dirname, '../functions/index.js'), 'utf8');
     const deps = sliceBetween(index,
         'function notifierDeps(db)', 'function tell(db, request)');
-    assert.match(deps, /templatesForSendPath/);
+    assert.match(deps, /eventAnnWording\.templatesForSendPath/);
 });
 
 test('a due tell goes out through tellPerson with the deps it needs', async () => {

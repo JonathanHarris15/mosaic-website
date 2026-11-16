@@ -920,6 +920,15 @@ One message to one Person, sent by whichever channel can actually reach them. **
 - **A Person with no Device token *and* no phone number cannot be told anything by anybody**, and an editor is shown so. Nothing else about delivery is surfaced: the Prayer Request already reads as filled or unfilled, and that is the honest signal.
 _Avoid_: alert, reminder, message (unqualified), and **push** / **SMS** for the thing itself — each is one channel of a Notification
 
+### Nudge — MS-248
+A [[Notification]] to somebody whose [[Assignment]] is still **Unconfirmed** as its date nears, landing them on their [[Commitment]]s. **Two at most per Assignment**: a first when the date is 5 days away, and a second at 3 days if they still have not answered, by the **other route** from the first, because the second is how the feature copes with a push nobody saw. Each Assignment's two nudges are remembered on the server, apart from the roster, and a nudge counts as sent whether or not it landed.
+- **Any answer stops it.** Confirming or declining both count. An Assignment that goes to somebody else starts that person's own count.
+- **One message per Person per day**, naming every Assignment due. Never on the day the Assignment was made, on the date itself, or for a date that is skipped. A moved date keeps the count it had.
+- **Only the Person who holds the Assignment is told.** No editor is sent a Notification about somebody else's silence. An editor who holds an Assignment of their own is nudged like anyone else.
+- **Liturgical Roles are never nudged.** They are fields on the Service and carry no state to answer.
+- **Off until an admin turns it on.** A participant-rung Event is named by Role and date only, because a lock screen is seen by more people than the Event admits.
+_Avoid_: reminder, chase, confirmation request
+
 ### Device token
 The handle one signed-in device is reachable at, held in `users/{uid}/push_tokens/{id}` — on the **User**, never on the [[Person]], because it belongs to a phone somebody signed in on and one person has a phone *and* a tablet. A send addressed to a Person resolves through the existing `people.userId` link. Rewritten on every launch that has permission (the provider rotates them unasked), deleted when the provider rejects it, and **deleted on sign-out** — leave one behind and the next person to sign in on that phone gets the last person's pastoral prayer on their lock screen.
 _Avoid_: FCM token, device id, registration, push subscription

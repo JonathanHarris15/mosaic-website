@@ -506,6 +506,45 @@
             </div>
         </section>
 
+        <section class="m-section">
+            <div class="m-section__head">
+                <h2 class="m-section__title">Nudges</h2>
+                <p class="m-section__hint">Somebody who has not answered an Assignment is nudged 5 days before its date, and again at 3 days if they still have not. Nobody else is told.</p>
+            </div>
+            <div class="m-card flex flex-col gap-md">
+                <div class="m-setting">
+                    <div>
+                        <div class="m-setting__title">Send nudges</div>
+                        <p class="m-setting__hint">Off until you turn it on. Each one goes by push to the Mosaic app, or by text without it.</p>
+                    </div>
+                    <label class="m-check">
+                        <input type="checkbox" data-nudge-switch :checked="nudgeEnabled" :disabled="nudgeSwitchSaving" @change="setNudgeEnabled($event.target.checked)" />
+                        <span x-text="nudgeEnabled ? 'On' : 'Off'"></span>
+                    </label>
+                </div>
+                <p class="m-input-hint">
+                    Use <code>{name}</code>, <code>{places}</code> for what they are down for, and <code>{link}</code> for their Commitments page.
+                </p>
+                <label class="m-field">
+                    <span class="m-label">Text message</span>
+                    <textarea class="m-input" :value="nudgeWording.text" @input="editNudgeWording('text', $event.target.value)" @blur="saveNudgeWording()" @keydown.escape="revertNudgeWording('text')" data-live-nudge="text" rows="4"></textarea>
+                </label>
+                <label class="m-field">
+                    <span class="m-label">Push title</span>
+                    <input class="m-input" type="text" :value="nudgeWording.pushTitle" @input="editNudgeWording('pushTitle', $event.target.value)" @blur="saveNudgeWording()" @keydown.escape="revertNudgeWording('pushTitle')" data-live-nudge="pushTitle" />
+                </label>
+                <label class="m-field">
+                    <span class="m-label">Push body</span>
+                    <textarea class="m-input" :value="nudgeWording.pushBody" @input="editNudgeWording('pushBody', $event.target.value)" @blur="saveNudgeWording()" @keydown.escape="revertNudgeWording('pushBody')" data-live-nudge="pushBody" rows="3"></textarea>
+                </label>
+                <div class="flex items-center justify-end gap-sm">
+                    <button type="button" @click="resetNudgeWording()" class="m-btn m-btn--quiet m-btn--sm">Reset to defaults</button>
+                    <span data-live-chip class="m-input-hint" :class="nudgeChip === 'failed' ? 'm-input-hint--error' : ''" x-text="nudgeChipText" aria-live="polite"></span>
+                    <button x-show="nudgeChip === 'failed'" type="button" @click="nudgeLive && nudgeLive.retry()" class="m-btn m-btn--quiet m-btn--sm">Retry</button>
+                </div>
+            </div>
+        </section>
+
         </div><!-- /tab: System tools -->
 
         <!-- ============================================================

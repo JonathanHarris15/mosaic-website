@@ -1534,5 +1534,14 @@ service cloud.firestore {
     match /answer_link_lookups/{addressHash} {
       allow read, write: if false;
     }
+
+    // Nudge records (MS-248). What the hourly nudge scheduler remembers it
+    // sent: one per Assignment, keyed like an Involvement. Server-only. It is
+    // kept off the roster row because an editor's save rewrites roster rows
+    // whole, which would wipe a flag and nudge the Person again an hour
+    // later. A client read would tell a member who else has not answered.
+    match /assignment_nudges/{recordId} {
+      allow read, write: if false;
+    }
   }
 }

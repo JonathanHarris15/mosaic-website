@@ -25,10 +25,16 @@ const liturgyCatalog = require("./liturgy-catalog");
 const liturgyTranslate = require("./liturgy-translate");
 const LiturgyOrders = require("./shared/liturgy-order-core");
 const answerDoor = require("./answer-link-door");
+const {SITE_ORIGIN} = require("./answer-link");
 const eventTell = require("./event-tell");
 const eventTellFs = require("./event-tell-firestore");
 const notify = require("./notification-send");
 const eventAnnWording = require("./event-announcement-notification");
+const {templatesForSendPath: nudgeTemplates} = require("./assignment-nudge");
+const {
+  buildDeps: buildNudgeDeps,
+  runNudgeTick,
+} = require("./assignment-nudge-firestore");
 const ac = require("./assignment-conversion");
 const si = require("./service-involvement");
 const siRun = require("./service-involvement-run");
@@ -2327,7 +2333,7 @@ async function recordOutbound(db, entry) {
  * Loads the prayer-request config: the resolved message templates (saved
  * values over built-in defaults) and whether automatic sending is enabled.
  * @param {Object} db Firestore instance.
- * @return {Promise<Object>} templates and autoSendEnabled.
+ * @return {Promise<Object<string, *>>} templates and autoSendEnabled.
  */
 async function loadPrayerConfig(db) {
   const snap = await db.doc(PRAYER_CONFIG_DOC).get();
@@ -2380,20 +2386,25 @@ function notifierDeps(db) {
     loadTemplates: async () => {
       const loaded = await loadPrayerConfig(db);
       const includeLink = loaded.includeAnswerLinkInSms;
-      // Each purpose keys its own wording, so prayer and event-announcement
-      // templates sit side by side without colliding (MS-623).
-      const announcement = eventAnnWording.templatesForSendPath(loaded.raw);
+      // Each purpose keys its own wording kind, so they sit side by side.
+      const purposes = [
+        eventAnnWording.templatesForSendPath(loaded.raw),
+        nudgeTemplates(loaded.raw),
+      ];
+      /**
+       * @param {string} part text, textFallback, push or pushFallback
+       * @param {Object<string, *>} prayer the prayer wording for that part
+       * @return {Object<string, *>}
+       */
+      const merged = (part, prayer) => Object.assign({}, prayer,
+          ...purposes.map((p) => p[part]));
       return {
-        text: Object.assign({},
-            pr.preparePrayerSmsTextTemplates(loaded.templates, includeLink),
-            announcement.text),
-        textFallback: Object.assign({},
-            pr.preparePrayerSmsTextTemplates(
-                pr.DEFAULT_PRAYER_MESSAGES, includeLink),
-            announcement.textFallback),
-        push: Object.assign({}, loaded.push, announcement.push),
-        pushFallback: Object.assign({},
-            pr.DEFAULT_PUSH_WORDING, announcement.pushFallback),
+        text: merged("text",
+            pr.preparePrayerSmsTextTemplates(loaded.templates, includeLink)),
+        textFallback: merged("textFallback", pr.preparePrayerSmsTextTemplates(
+            pr.DEFAULT_PRAYER_MESSAGES, includeLink)),
+        push: merged("push", loaded.push),
+        pushFallback: merged("pushFallback", pr.DEFAULT_PUSH_WORDING),
       };
     },
     sendPush: async ({token, title, body, url}) => {
@@ -3143,6 +3154,37 @@ exports.sendEventAnnouncementTells = onSchedule(
       const result = await eventTell.runEventTellTick(deps);
       if (result.ran && result.sent) {
         log(`sendEventAnnouncementTells: sent ${result.sent} notification(s).`);
+      }
+    },
+);
+
+/**
+ * Hourly nudge to somebody still Unconfirmed as their date nears (MS-248).
+ * Off until an admin turns `nudgeEnabled` on. The rules live in
+ * assignment-nudge.js; every send goes through the one send path, which
+ * keeps the church's 8am–8pm window.
+ */
+exports.sendAssignmentNudges = onSchedule(
+    {
+      schedule: "every 60 minutes",
+      timeZone: pr.CHURCH_TIMEZONE,
+      region: "us-central1",
+      secrets: [TEXTBELT_KEY],
+    },
+    async () => {
+      const db = admin.firestore();
+      const deps = buildNudgeDeps(db, {
+        configDoc: PRAYER_CONFIG_DOC,
+        today: () => pr.churchDateParts(new Date()).date,
+        origin: SITE_ORIGIN,
+        tellPerson: notify.tellPerson,
+        notifierDeps: notifierDeps(db),
+        log: log,
+        serverTimestamp: () => admin.firestore.FieldValue.serverTimestamp(),
+      });
+      const result = await runNudgeTick(deps);
+      if (result.ran && result.sent) {
+        log(`sendAssignmentNudges: nudged ${result.sent} person(s).`);
       }
     },
 );
