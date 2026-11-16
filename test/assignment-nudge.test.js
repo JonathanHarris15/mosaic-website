@@ -72,14 +72,14 @@ function record(o, a, over) {
     }, over || {});
 }
 
-test('a Pending place 5 days out is due a first nudge naming the place', () => {
+test('a Pending Assignment 5 days out is due a first nudge naming it', () => {
     const o = occ({assignments: [pending()]});
     const out = plan([o]);
     assert.equal(out.length, 1);
     assert.equal(out[0].personId, 'p1');
     assert.equal(out[0].escalate, false);
-    assert.equal(out[0].places.length, 1);
-    assert.equal(out[0].places[0].stage, 'first');
+    assert.equal(out[0].assignments.length, 1);
+    assert.equal(out[0].assignments[0].stage, 'first');
     assert.equal(out[0].values.places, 'Sound on Sun 20 Sep (Sunday Service)');
 });
 
@@ -94,7 +94,7 @@ test('the day boundaries: only 1 to 5 days out are nudged', () => {
     assert.equal(at('2026-09-14'), 0, 'past');
 });
 
-test('Confirmed and Declined places are answers and are never nudged', () => {
+test('Confirmed and Declined Assignments are answers and are never nudged', () => {
     const o = occ({assignments: [
         pending({state: 'confirmed'}),
         pending({personId: 'p2', slotId: 's2', state: 'declined'}),
@@ -118,7 +118,7 @@ test('the second nudge comes at 3 days out, on a later day, and escalates', () =
     const r3 = record(o3, a, {firstDate: '2026-09-13', firstChannel: 'push'});
     const out = plan([o3], [r3]);
     assert.equal(out.length, 1);
-    assert.equal(out[0].places[0].stage, 'second');
+    assert.equal(out[0].assignments[0].stage, 'second');
     assert.equal(out[0].escalate, true);
     assert.equal(out[0].previousChannel, 'push');
 });
@@ -130,7 +130,7 @@ test('the second is never on the same day as the first', () => {
     assert.deepEqual(plan([o], [r]), []);
 });
 
-test('no place ever produces more than two nudges', () => {
+test('no Assignment ever gets more than two nudges', () => {
     const a = pending();
     const o = occ({date: '2026-09-16', assignments: [a]});
     const r = record(o, a, {
@@ -140,15 +140,15 @@ test('no place ever produces more than two nudges', () => {
     assert.deepEqual(plan([o], [r]), []);
 });
 
-test('a place assigned 2 days out gets one first nudge, not two on one day', () => {
+test('an Assignment made 2 days out gets one first nudge, not two on one day', () => {
     const o = occ({date: '2026-09-17', assignments: [pending()]});
     const out = plan([o]);
     assert.equal(out.length, 1);
-    assert.equal(out[0].places[0].stage, 'first');
+    assert.equal(out[0].assignments[0].stage, 'first');
     assert.equal(out[0].escalate, false);
 });
 
-test('a place assigned today is not nudged today', () => {
+test('an Assignment made today is not nudged today', () => {
     const o = occ({assignments: [pending({stateSetAt: '2026-09-15T14:00:00Z'})]});
     assert.deepEqual(plan([o]), []);
 });
@@ -197,19 +197,19 @@ test('a One-off Role is nudged by its label', () => {
     assert.equal(out[0].values.places, 'Unlock the hall on Sun 20 Sep (Sunday Service)');
 });
 
-test('two places due in one run are one Notification naming both', () => {
+test('two Assignments due in one run are one Notification naming both', () => {
     const o = occ({assignments: [
         pending(),
         pending({roleSlug: 'coffee', slotId: 'c1'}),
     ]});
     const out = plan([o]);
     assert.equal(out.length, 1);
-    assert.equal(out[0].places.length, 2);
+    assert.equal(out[0].assignments.length, 2);
     assert.equal(out[0].values.places,
         'Sound on Sun 20 Sep (Sunday Service) and Coffee on Sun 20 Sep (Sunday Service)');
 });
 
-test('three places read as a list with "and" before the last', () => {
+test('three Assignments read as a list with "and" before the last', () => {
     const o = occ({assignments: [
         pending(),
         pending({roleSlug: 'coffee', slotId: 'c1'}),
@@ -220,7 +220,7 @@ test('three places read as a list with "and" before the last', () => {
         'and Setup on Sun 20 Sep (Sunday Service)');
 });
 
-test('a grouped message escalates when any place in it is on its second', () => {
+test('a grouped message escalates when any Assignment in it is on its second', () => {
     const a = pending();
     const b = pending({roleSlug: 'coffee', slotId: 'c1'});
     const thu = occ({id: 'sunday_service_2026-09-18', date: '2026-09-18', assignments: [a]});
@@ -230,7 +230,7 @@ test('a grouped message escalates when any place in it is on its second', () => 
     assert.equal(out.length, 1);
     assert.equal(out[0].escalate, true);
     assert.equal(out[0].previousChannel, 'text');
-    assert.deepEqual(out[0].places.map((p) => p.stage).sort(), ['first', 'second']);
+    assert.deepEqual(out[0].assignments.map((p) => p.stage).sort(), ['first', 'second']);
 });
 
 test('nobody is nudged twice on one church-local day', () => {
@@ -238,12 +238,12 @@ test('nobody is nudged twice on one church-local day', () => {
     const b = pending({roleSlug: 'coffee', slotId: 'c1'});
     const o1 = occ({id: 'x_2026-09-18', date: '2026-09-18', assignments: [a]});
     const o2 = occ({id: 'y_2026-09-20', date: '2026-09-20', assignments: [b]});
-    // Place a was nudged this morning; place b turned up later the same day.
+    // Assignment a was nudged this morning; b turned up later the same day.
     const r = record(o1, a, {firstDate: TODAY, firstChannel: 'push'});
     assert.deepEqual(plan([o1, o2], [r]), []);
 });
 
-test('somebody who takes over a declined place starts their own clock', () => {
+test('somebody who takes over a declined Assignment starts their own clock', () => {
     const old = pending({personId: 'p1'});
     const o = occ({date: '2026-09-18', assignments: [pending({personId: 'p2'})]});
     const theirs = record(o, old, {
@@ -253,7 +253,7 @@ test('somebody who takes over a declined place starts their own clock', () => {
     const out = plan([o], [theirs]);
     assert.equal(out.length, 1);
     assert.equal(out[0].personId, 'p2');
-    assert.equal(out[0].places[0].stage, 'first');
+    assert.equal(out[0].assignments[0].stage, 'first');
 });
 
 test('a participant-rung Event names the Role and date, never the Event', () => {
@@ -274,16 +274,16 @@ test('a Role the roles list does not know reads by its slug, not as nothing', ()
     assert.equal(plan([o])[0].values.places, 'ushers on Sun 20 Sep (Sunday Service)');
 });
 
-test('each place carries the record it stamps', () => {
+test('each due Assignment carries the record it stamps', () => {
     const a = pending();
     const o = occ({assignments: [a]});
-    const place = plan([o])[0].places[0];
-    assert.equal(place.recordId, nudge.nudgeRecordId(o, a));
-    assert.equal(place.occurrenceId, o.id);
-    assert.equal(place.roleSlug, 'sound');
+    const due = plan([o])[0].assignments[0];
+    assert.equal(due.recordId, nudge.nudgeRecordId(o, a));
+    assert.equal(due.occurrenceId, o.id);
+    assert.equal(due.roleSlug, 'sound');
 });
 
-test('the record id is the Involvement key, so it names the place and the Person', () => {
+test('the record id is the key of the Assignment, so it names the slot and the Person', () => {
     const o = occ();
     assert.equal(
         nudge.nudgeRecordId(o, pending()),
@@ -292,7 +292,7 @@ test('the record id is the Involvement key, so it names the place and the Person
 
 test('stamping a record writes the first or the second, never both', () => {
     const first = nudge.stampedRecord(null, {
-        place: {recordId: 'r1', occurrenceId: 'o', roleSlug: 'sound', slotId: 's1',
+        assignment: {recordId: 'r1', occurrenceId: 'o', roleSlug: 'sound', slotId: 's1',
             oneOffId: null, stage: 'first'},
         personId: 'p1', today: TODAY, channel: 'push',
     });
@@ -301,7 +301,7 @@ test('stamping a record writes the first or the second, never both', () => {
     assert.equal(first.secondDate, null);
 
     const second = nudge.stampedRecord(first, {
-        place: {recordId: 'r1', stage: 'second'},
+        assignment: {recordId: 'r1', stage: 'second'},
         personId: 'p1', today: '2026-09-17', channel: 'text',
     });
     assert.equal(second.firstDate, TODAY);
@@ -350,4 +350,29 @@ test('only nudges when the admin switch is on, and it is off when unset', () => 
 
 test('the dates it reads run from tomorrow to 5 days out', () => {
     assert.deepEqual(nudge.lookAhead(TODAY), {from: '2026-09-16', to: '2026-09-20'});
+});
+
+test('a date moved after its nudges keeps its count, so it never gets a third', () => {
+    const a = pending();
+    const before = occ({id: 'sunday_service_2026-09-13', date: '2026-09-13'});
+    const r = record(before, a, {
+        firstDate: '2026-09-08', firstChannel: 'push',
+        secondDate: '2026-09-10', secondChannel: 'text',
+    });
+    const moved = occ({
+        id: 'sunday_service_2026-09-18', date: '2026-09-18',
+        movedFrom: '2026-09-13', assignments: [a],
+    });
+    assert.deepEqual(plan([moved], [r]), []);
+});
+
+test('a moved date not yet nudged is nudged by its new date', () => {
+    const moved = occ({
+        id: 'sunday_service_2026-09-18', date: '2026-09-18',
+        movedFrom: '2026-09-13', assignments: [pending()],
+    });
+    const out = plan([moved]);
+    assert.equal(out[0].assignments[0].recordId,
+        'sunday_service_2026-09-13__sound__s1__p1');
+    assert.equal(out[0].values.places, 'Sound on Fri 18 Sep (Sunday Service)');
 });

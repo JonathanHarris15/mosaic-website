@@ -2386,21 +2386,25 @@ function notifierDeps(db) {
     loadTemplates: async () => {
       const loaded = await loadPrayerConfig(db);
       const includeLink = loaded.includeAnswerLinkInSms;
-      // Each purpose keys its own wording, so prayer and event-announcement
-      // templates sit side by side without colliding (MS-623).
-      const announcement = eventAnnWording.templatesForSendPath(loaded.raw);
-      const nudges = nudgeTemplates(loaded.raw);
+      // Each purpose keys its own wording kind, so they sit side by side.
+      const purposes = [
+        eventAnnWording.templatesForSendPath(loaded.raw),
+        nudgeTemplates(loaded.raw),
+      ];
+      /**
+       * @param {string} part text, textFallback, push or pushFallback
+       * @param {Object<string, *>} prayer the prayer wording for that part
+       * @return {Object<string, *>}
+       */
+      const merged = (part, prayer) => Object.assign({}, prayer,
+          ...purposes.map((p) => p[part]));
       return {
-        text: Object.assign({},
-            pr.preparePrayerSmsTextTemplates(loaded.templates, includeLink),
-            announcement.text, nudges.text),
-        textFallback: Object.assign({},
-            pr.preparePrayerSmsTextTemplates(
-                pr.DEFAULT_PRAYER_MESSAGES, includeLink),
-            announcement.textFallback, nudges.textFallback),
-        push: Object.assign({}, loaded.push, announcement.push, nudges.push),
-        pushFallback: Object.assign({}, pr.DEFAULT_PUSH_WORDING,
-            announcement.pushFallback, nudges.pushFallback),
+        text: merged("text",
+            pr.preparePrayerSmsTextTemplates(loaded.templates, includeLink)),
+        textFallback: merged("textFallback", pr.preparePrayerSmsTextTemplates(
+            pr.DEFAULT_PRAYER_MESSAGES, includeLink)),
+        push: merged("push", loaded.push),
+        pushFallback: merged("pushFallback", pr.DEFAULT_PUSH_WORDING),
       };
     },
     sendPush: async ({token, title, body, url}) => {

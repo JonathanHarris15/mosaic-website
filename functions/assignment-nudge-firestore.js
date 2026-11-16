@@ -16,6 +16,7 @@ const {
   notifyRequest,
   stampedRecord,
 } = require("./assignment-nudge");
+const Occ = require("./shared/events-occurrence-core.js");
 
 /** @typedef {import("firebase-admin/firestore").Firestore} Firestore */
 /** @typedef {import("./assignment-nudge").Occurrence} Occurrence */
@@ -93,10 +94,10 @@ async function runNudgeTick(deps) {
     if (result && result.accepted) sent += 1;
 
     const channel = (result && result.channel) || null;
-    for (const place of send.places) {
-      const id = place.recordId;
+    for (const due of send.assignments) {
+      const id = due.recordId;
       const stamped = stampedRecord(byId[id] ? stripId(byId[id]) : null, {
-        place: place,
+        assignment: due,
         personId: send.personId,
         today: today,
         channel: channel,
@@ -137,7 +138,8 @@ async function loadOccurrences(db, from, to) {
   for (const doc of snap.docs) {
     /** @type {Occurrence} */
     const occurrence = Object.assign({id: doc.id}, doc.data());
-    if (occurrence.cancelled === true || occurrence.movedTo) continue;
+    // Skip a date that is not happening before reading its roster.
+    if (Occ.notHappening(occurrence)) continue;
     const roster = await doc.ref.collection("roster").get();
     if (roster.empty) continue;
     occurrence.assignments = roster.docs.map((r) => r.data());

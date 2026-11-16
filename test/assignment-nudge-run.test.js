@@ -64,7 +64,7 @@ function world(over) {
     return {deps, calls, records, setNow: (/** @type {Date} */ d) => { now = d; }};
 }
 
-test('switched on, a Pending place 5 days out gets one push linking to Commitments', async () => {
+test('switched on, a Pending Assignment 5 days out gets one push linking to Commitments', async () => {
     const w = world();
     const out = await runNudgeTick(w.deps);
     assert.deepEqual(out, {ran: true, sent: 1});
@@ -120,7 +120,7 @@ test('the second nudge, at 3 days, goes by the other route from the first', asyn
     assert.equal(w.calls.text[0].expectReply, false);
 });
 
-test('a place answered between nudges gets nothing more', async () => {
+test('an Assignment answered between nudges gets nothing more', async () => {
     const w = world();
     await runNudgeTick(w.deps);
     w.deps.loadOccurrences = async () => [{

@@ -921,10 +921,11 @@ One message to one Person, sent by whichever channel can actually reach them. **
 _Avoid_: alert, reminder, message (unqualified), and **push** / **SMS** for the thing itself — each is one channel of a Notification
 
 ### Nudge — MS-248
-A [[Notification]] to somebody still **Unconfirmed** as their date nears, about the places they have not answered, landing them on [[Commitment]]s. **Two at most per place**: a first when the date is 5 days away, a second at 3 if they still have not answered, by the **other route** from the first, because the second is how the feature copes with a push nobody saw.
-- **Any answer stops it.** Confirming or declining both count, and so does the place going to somebody else, who starts their own clock.
-- **One message per Person per day**, naming every place due, and never on the day they were put down, the day of the date, or a date that is skipped or moved away.
-- **Editors are not sent one.** The only person who can answer is the one nudged.
+A [[Notification]] to somebody whose [[Assignment]] is still **Unconfirmed** as its date nears, landing them on their [[Commitment]]s. **Two at most per Assignment**: a first when the date is 5 days away, and a second at 3 days if they still have not answered, by the **other route** from the first, because the second is how the feature copes with a push nobody saw. Each Assignment's two nudges are remembered on the server, apart from the roster, and a nudge counts as sent whether or not it landed.
+- **Any answer stops it.** Confirming or declining both count. An Assignment that goes to somebody else starts that person's own count.
+- **One message per Person per day**, naming every Assignment due. Never on the day the Assignment was made, on the date itself, or for a date that is skipped. A moved date keeps the count it had.
+- **Only the Person who holds the Assignment is told.** No editor is sent a Notification about somebody else's silence. An editor who holds an Assignment of their own is nudged like anyone else.
+- **Liturgical Roles are never nudged.** They are fields on the Service and carry no state to answer.
 - **Off until an admin turns it on.** A participant-rung Event is named by Role and date only, because a lock screen is seen by more people than the Event admits.
 _Avoid_: reminder, chase, confirmation request
 

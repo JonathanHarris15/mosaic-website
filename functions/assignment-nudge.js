@@ -4,17 +4,19 @@
  * scheduler passes today's church-local date in.
  *
  * A NUDGE is a Notification to somebody still Unconfirmed as their date
- * nears. Two at most per place: a first at 5 days out, a second at 3 if
+ * nears. Two at most per Assignment: a first at 5 days out, a second at 3 if
  * they still have not answered, by the other route from the first
  * (ADR-0036: a feature's own second chance is how it copes with a push
  * that never landed). Any answer stops them. Editors are never sent one.
  *
- * Assignment states, "is this date happening" and the place's key are read
+ * Assignment states, "is this date happening" and the Assignment's key are read
  * through the shared occurrence model, never restated here.
  */
 
 const Occ = require("./shared/events-occurrence-core.js");
 const Roles = require("./shared/roles-core.js");
+const {churchDateParts} = require("./notification-core");
+const {shiftDate} = require("./assignment-conversion");
 
 const PURPOSE = "assignment_nudge";
 const WORDING = "nudge";
@@ -24,7 +26,9 @@ const FIRST_DAYS_OUT = 5;
 /** The second goes at this many days away or fewer. */
 const SECOND_DAYS_OUT = 3;
 
-const CHURCH_TIMEZONE = "America/Chicago";
+/** Which of an Assignment's two nudges is due. */
+const FIRST = "first";
+const SECOND = "second";
 
 /**
  * One row of an occurrence's roster.
@@ -56,7 +60,7 @@ const CHURCH_TIMEZONE = "America/Chicago";
  */
 
 /**
- * What the scheduler remembers about one place's nudges.
+ * What the scheduler remembers about one Assignment's nudges.
  * @typedef {{
  *   id?: string,
  *   personId?: string,
@@ -72,7 +76,7 @@ const CHURCH_TIMEZONE = "America/Chicago";
  */
 
 /**
- * One place in a nudge.
+ * One Assignment a nudge names.
  * @typedef {{
  *   recordId: string,
  *   occurrenceId: string,
@@ -83,14 +87,14 @@ const CHURCH_TIMEZONE = "America/Chicago";
  *   stage: string,
  *   previousChannel: ?string,
  *   words: string,
- * }} Place
+ * }} DueAssignment
  */
 
 /**
- * One Notification to one Person, naming every place due for them.
+ * One Notification to one Person, naming every Assignment due for them.
  * @typedef {{
  *   personId: string,
- *   places: Array<Place>,
+ *   assignments: Array<DueAssignment>,
  *   escalate: boolean,
  *   previousChannel: ?string,
  *   values: {places: string},
@@ -128,16 +132,6 @@ function daysBetween(from, to) {
     86400000);
 }
 
-/**
- * @param {string} dateStr YYYY-MM-DD
- * @param {number} days
- * @return {string}
- */
-function shiftDate(dateStr, days) {
-  const d = utcDay(dateStr);
-  d.setUTCDate(d.getUTCDate() + days);
-  return d.toISOString().slice(0, 10);
-}
 
 /**
  * The dates the scheduler reads: tomorrow to 5 days out.
@@ -145,7 +139,10 @@ function shiftDate(dateStr, days) {
  * @return {{from: string, to: string}}
  */
 function lookAhead(today) {
-  return {from: shiftDate(today, 1), to: shiftDate(today, FIRST_DAYS_OUT)};
+  return {
+    from: shiftDate(today, 1),
+    to: shiftDate(today, FIRST_DAYS_OUT),
+  };
 }
 
 /**
@@ -163,19 +160,7 @@ function churchDateOf(at) {
     when = new Date(at);
   }
   if (!when || isNaN(when.getTime())) return null;
-  const parts = new Intl.DateTimeFormat("en-CA", {
-    timeZone: CHURCH_TIMEZONE,
-    year: "numeric", month: "2-digit", day: "2-digit",
-  }).formatToParts(when);
-  /**
-   * @param {string} type
-   * @return {string}
-   */
-  const get = (type) => {
-    const part = parts.find((p) => p.type === type);
-    return part ? part.value : "";
-  };
-  return `${get("year")}-${get("month")}-${get("day")}`;
+  return churchDateParts(when).date;
 }
 
 /**
@@ -190,25 +175,34 @@ function shortDate(dateStr) {
 }
 
 /**
- * The record a place's nudges are remembered under. The Involvement key, so
- * it names the occurrence, the Role, the slot or one-off job, and the Person
- * — which is what gives somebody taking over a place their own clock.
+ * The record an Assignment's nudges are remembered under: the Assignment's
+ * own key (occurrence, Role, slot or one-off job, and Person — the same key
+ * its Involvement is later written under). The Person in it is what gives
+ * somebody taking over an Assignment their own clock.
+ *
+ * A moved date is the same instance on another day (ADR-0018), so it keeps
+ * the key of the date it moved from, and with it the count of nudges it has
+ * already had.
  * @param {Occurrence} occurrence
  * @param {Assignment} assignment
  * @return {string}
  */
 function nudgeRecordId(occurrence, assignment) {
-  return Occ.involvementIdFor(occurrence, assignment);
+  const keyedOn = occurrence.movedFrom && occurrence.seriesId ?
+    {id: Occ.occurrenceId(occurrence.seriesId, occurrence.movedFrom)} :
+    occurrence;
+  return Occ.involvementIdFor(keyedOn, assignment);
 }
 
 /**
- * How one place reads in a message.
+ * How one Assignment reads in a message: "Sound on Sun 20 Sep (Sunday
+ * Service)".
  * @param {Occurrence} occurrence
  * @param {Assignment} assignment
  * @param {Object<string, string>} roleNames slug → name
  * @return {string}
  */
-function placeWords(occurrence, assignment, roleNames) {
+function assignmentWords(occurrence, assignment, roleNames) {
   const slug = assignment.roleSlug || "";
   const role = slug === Occ.ONE_OFF_SLUG ?
     (assignment.label || "A job") :
@@ -245,7 +239,7 @@ function joinWithAnd(items) {
 /**
  * What a record is stamped with. channel is push, text or none.
  * @typedef {{
- *   place: Partial<Place>,
+ *   assignment: Partial<DueAssignment>,
  *   personId: string,
  *   today: string,
  *   channel?: ?string,
@@ -270,23 +264,24 @@ function nudgeable(occurrence, assignment, today) {
 }
 
 /**
- * Which stage of nudge, if any, a place is due.
+ * Which of its two nudges, if any, an Assignment is due.
  * @param {?NudgeRecord} rec its record
  * @param {number} daysOut
  * @param {string} today
  * @return {?string} first, second, or null
  */
 function stageDue(rec, daysOut, today) {
-  if (!rec || !rec.firstDate) return "first";
+  if (!rec || !rec.firstDate) return FIRST;
   if (rec.secondDate) return null;
   if (daysOut > SECOND_DAYS_OUT) return null;
   if (!(rec.firstDate < today)) return null;
-  return "second";
+  return SECOND;
 }
 
 /**
- * Who to nudge now, about what. One entry per Person, naming every place
- * due for them in this run; it escalates when any place is on its second.
+ * Who to nudge now, about what. One entry per Person, naming every
+ * Assignment due for them in this run; it escalates when any of them is on
+ * its second nudge.
  *
  * Nobody is nudged twice on one church-local day: a Person with any record
  * stamped today waits for tomorrow.
@@ -308,7 +303,7 @@ function nudgePlan(args) {
     }
   });
 
-  /** @type {Map<string, Array<Place>>} */
+  /** @type {Map<string, Array<DueAssignment>>} */
   const byPerson = new Map();
   (a.occurrences || []).forEach((occurrence) => {
     if (!occurrence || !occurrence.date) return;
@@ -335,38 +330,39 @@ function nudgePlan(args) {
         oneOffId: assignment.oneOffId || null,
         date: occurrence.date || "",
         stage: stage,
-        previousChannel: stage === "second" && rec ?
+        previousChannel: stage === SECOND && rec ?
           (rec.firstChannel || null) : null,
-        words: placeWords(occurrence, assignment, a.roleNames || {}),
+        words: assignmentWords(occurrence, assignment, a.roleNames || {}),
       });
     });
   });
 
   /** @type {Array<NudgeSend>} */
   const out = [];
-  byPerson.forEach((places, personId) => {
-    places.sort((x, y) => (x.date < y.date ? -1 : x.date > y.date ? 1 : 0));
-    const seconds = places.filter((p) => p.stage === "second");
+  byPerson.forEach((due, personId) => {
+    due.sort((x, y) => (x.date < y.date ? -1 : x.date > y.date ? 1 : 0));
+    const seconds = due.filter((d) => d.stage === SECOND);
     out.push({
       personId: personId,
-      places: places,
+      assignments: due,
       escalate: seconds.length > 0,
       previousChannel: seconds.length ? seconds[0].previousChannel : null,
-      values: {places: joinWithAnd(places.map((p) => p.words))},
+      // {places} is the wording's name for this list (MS-248's PRD).
+      values: {places: joinWithAnd(due.map((d) => d.words))},
     });
   });
   return out;
 }
 
 /**
- * A place's record after this run's nudge. Every attempt is stamped
+ * An Assignment's record after this run's nudge. Every attempt is stamped
  * whatever the outcome; the second nudge is the retry.
  * @param {?NudgeRecord} existing the record before
  * @param {StampArgs} s
  * @return {NudgeRecord}
  */
 function stampedRecord(existing, s) {
-  const p = s.place || {};
+  const p = s.assignment || {};
   /** @type {NudgeRecord} */
   const base = Object.assign({
     personId: s.personId,
@@ -379,7 +375,7 @@ function stampedRecord(existing, s) {
     secondDate: null,
     secondChannel: null,
   }, existing || {});
-  if (p.stage === "second") {
+  if (p.stage === SECOND) {
     base.secondDate = s.today;
     base.secondChannel = s.channel || null;
   } else {
