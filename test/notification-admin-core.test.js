@@ -206,6 +206,8 @@ test('every purpose the functions write has a row in the registry', () => {
             values: {places: ''}}, 'https://x').purpose);
     // And the Trade invitation text (MS-249).
     written.add(require('../functions/trade-invitation-text.js').PURPOSE);
+    written.add(require('../functions/trade-tell.js').notifyRequest(
+        {personId: 'p', kind: 'ended', state: 'refused'}, {headline: '', detail: ''}, 'https://x').purpose);
 
     const known = new Set(core.NOTIFICATION_TYPES.map((type) => type.purpose));
     for (const purpose of written) {

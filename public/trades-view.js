@@ -19,18 +19,23 @@
 
     const Core = (typeof require !== 'undefined')
         ? require('./trade-core.js')
-        : global.TradeCore;
+        : /** @type {*} */ (global).TradeCore;
 
     const Roles = (typeof require !== 'undefined')
         ? require('./roles-core.js')
-        : global.RolesCore;
+        : /** @type {*} */ (global).RolesCore;
 
     const Occurrences = (typeof require !== 'undefined')
         ? require('./events-occurrence-core.js')
-        : global.EventsOccurrenceCore;
+        : /** @type {*} */ (global).EventsOccurrenceCore;
 
     // What somebody may do to this Trade from where they stand. Advisory: the
     // callable checks it all again, and the server's answer is the wall.
+    /**
+     * @param {*} trade
+     * @param {string} personId
+     * @return {*}
+     */
     function actionsFor(trade, personId) {
         const none = {
             offer: false, refuse: false, accept: false, withdraw: false,
@@ -76,6 +81,12 @@
 
     // How it reads. Written from the reader's side of the conversation, in the
     // words they would use about it themselves.
+    /**
+     * @param {*} trade
+     * @param {string} personId the reader
+     * @param {(personId: string) => string} [nameOf]
+     * @return {{headline: string, detail: string}}
+     */
     function wordingFor(trade, personId, nameOf) {
         const name = nameOf || (id => id);
         const holder = trade.holderId === personId;
@@ -125,7 +136,11 @@
         }
         if (trade.state === Core.STATES.REFUSED) {
             return {
-                headline: holder ? them + ' said no' : 'You said no',
+                // Either end can refuse, so who said it comes off the Trade,
+                // not off which end the reader is on (MS-824: a holder who
+                // refused an offer was being told "You said no" from the
+                // other side).
+                headline: trade.closedBy === personId ? 'You said no' : them + ' said no',
                 detail: 'Nothing changed. ' + place + ' is still ' +
                     (holder ? 'yours' : 'theirs') + '.',
             };
@@ -201,6 +216,11 @@
     }
 
     // One Trade as a row. `today` decides whether it is still live at all.
+    /**
+     * @param {*} trade
+     * @param {*} options
+     * @return {*}
+     */
     function rowFor(trade, options) {
         const opts = options || {};
         const personId = opts.personId;
@@ -236,6 +256,11 @@
     // ⚠ THE ENDED ONES ARE A SEPARATE LIST, NOT A THIRD SORT ORDER. They want
     // nothing from the reader except to be read, and mixing a thing you must
     // answer with a thing you must merely notice is how both get ignored.
+    /**
+     * @param {Array<*>} trades
+     * @param {*} options
+     * @return {*}
+     */
     function rowsFor(trades, options) {
         const opts = options || {};
         const all = trades || [];
@@ -260,6 +285,11 @@
     // that ended while they were not looking. The second is the one the first
     // cut missed, and it is the one that matters more — a person who is never
     // told their offer died concludes the app ate it.
+    /**
+     * @param {Array<*>} trades
+     * @param {*} options
+     * @return {*}
+     */
     function needingYou(trades, options) {
         const rows = rowsFor(trades, options);
         return rows.yours.length + rows.ended.length;
@@ -281,6 +311,11 @@
     // ⚠ A LINKED USER IS JUDGED AS A MEMBER. The picker cannot read other
     // people's ranks (users docs are own-only). Member is the account floor,
     // and it is who a members-only Event is for.
+    /**
+     * @param {Array<*>} people
+     * @param {*} options
+     * @return {Array<*>}
+     */
     function askableFrom(people, options) {
         const opts = options || {};
         const already = opts.alreadyAsked || [];
@@ -303,6 +338,11 @@
             }));
     }
 
+    /**
+     * @param {*} person
+     * @param {*} opts
+     * @return {*}
+     */
     function inviteeRow(person, opts) {
         const hasLinkedUser = !!(person && person.userId);
         const linkedUserCanSee = hasLinkedUser && Occurrences &&
@@ -329,6 +369,12 @@
     // Who is already in a conversation about this place — they cannot be asked
     // twice, and the picker should not offer them at all rather than refusing
     // after the tap.
+    /**
+     * @param {Array<*>} trades
+     * @param {*} assignment
+     * @param {string} today
+     * @return {Array<string>}
+     */
     function alreadyAsked(trades, assignment, today) {
         return Core.liveOnes(trades || [], today)
             .filter(t => Core.sameAssignment(t.assignment, assignment))
@@ -337,6 +383,12 @@
 
     // How many more people may be asked. Zero renders the picker's own reason
     // rather than an empty list.
+    /**
+     * @param {Array<*>} trades
+     * @param {*} assignment
+     * @param {string} today
+     * @return {number}
+     */
     function invitesLeft(trades, assignment, today) {
         return Math.max(0, Core.MAX_INVITATIONS -
             Core.liveInvitationCount(trades, assignment, today));
@@ -357,6 +409,6 @@
     if (typeof module !== 'undefined' && module.exports) {
         module.exports = TradesView;
     } else {
-        global.TradesView = TradesView;
+        /** @type {*} */ (global).TradesView = TradesView;
     }
 }(typeof window !== 'undefined' ? window : globalThis));

@@ -65,6 +65,9 @@ const MODULES = [
     'cover-core.js',
     'away-core.js',
     'trade-core.js',
+    // MS-824. A Trade's push says the sentence its Commitments row says,
+    // so the server reads the row's wording from the same module.
+    'trades-view.js',
     'usage-stats-core.js',
     'theme-similarity-core.js',
     // ADR-0080. The congregation's Liturgy Elements and Orders. The MCP read
