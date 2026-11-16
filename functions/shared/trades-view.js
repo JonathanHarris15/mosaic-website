@@ -92,7 +92,7 @@
     /**
      * @param {*} trade
      * @param {string} personId the reader
-     * @param {function(string): string} [nameOf]
+     * @param {(personId: string) => string} [nameOf]
      * @return {{headline: string, detail: string}}
      */
     function wordingFor(trade, personId, nameOf) {
@@ -144,7 +144,11 @@
         }
         if (trade.state === Core.STATES.REFUSED) {
             return {
-                headline: holder ? them + ' said no' : 'You said no',
+                // Either end can refuse, so who said it comes off the Trade,
+                // not off which end the reader is on (MS-824: a holder who
+                // refused an offer was being told "You said no" from the
+                // other side).
+                headline: trade.closedBy === personId ? 'You said no' : them + ' said no',
                 detail: 'Nothing changed. ' + place + ' is still ' +
                     (holder ? 'yours' : 'theirs') + '.',
             };

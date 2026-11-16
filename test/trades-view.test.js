@@ -382,3 +382,17 @@ test('the person invited never sees the text status line', () => {
     };
     assert.strictEqual(View.rowFor(t, { personId: SARAH, nameOf: () => 'Bob' }).textLine, null);
 });
+
+// MS-824: either end can refuse. Who said no comes off the Trade.
+test('a refusal says who refused, from either side', () => {
+    const offer = {
+        id: 't8', origin: Core.ORIGINS.OFFER, state: Core.STATES.REFUSED,
+        holderId: BOB, counterpartyId: SARAH, assignment: KIDS, closedBy: BOB,
+    };
+    const name = (/** @type {string} */ id) => (id === BOB ? 'Bob' : 'Sarah');
+    assert.strictEqual(View.wordingFor(offer, SARAH, name).headline, 'Bob said no');
+    assert.strictEqual(View.wordingFor(offer, BOB, name).headline, 'You said no');
+    const invite = Object.assign({}, offer, { origin: Core.ORIGINS.INVITATION, closedBy: SARAH });
+    assert.strictEqual(View.wordingFor(invite, BOB, name).headline, 'Sarah said no');
+    assert.strictEqual(View.wordingFor(invite, SARAH, name).headline, 'You said no');
+});

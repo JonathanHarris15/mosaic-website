@@ -15,8 +15,20 @@ const View = require("./shared/trades-view.js");
 const PURPOSE = "trade_update";
 const WORDING = "trade";
 
+/** Why a message is owed. */
+const KIND = Object.freeze({
+  INVITED: "invited",
+  OFFERED: "offered",
+  ENDED: "ended",
+});
+
 const ENDED = [Trade.STATES.SETTLED, Trade.STATES.REFUSED,
   Trade.STATES.WITHDRAWN];
+
+/**
+ * A Person's first name, by their id.
+ * @typedef {(personId: string) => string} NameOf
+ */
 
 /**
  * One message owed: to whom, why, and the state it is about.
@@ -50,15 +62,20 @@ function tellsFor(before, after, ctx) {
   /** @type {Array<Tell>} */
   let out = [];
   if (to === Trade.STATES.INVITED) {
-    out = [{personId: after.counterpartyId, kind: "invited", state: to}];
+    out = [{personId: after.counterpartyId, kind: KIND.INVITED, state: to}];
   } else if (to === Trade.STATES.OFFERED) {
-    out = [{personId: after.holderId, kind: "offered", state: to}];
+    out = [{personId: after.holderId, kind: KIND.OFFERED, state: to}];
   } else if (ENDED.indexOf(to) !== -1 && ENDED.indexOf(from) === -1) {
     // Whoever ended it is never told their own news back; when nobody in
     // the conversation ended it, both parties hear (CONTEXT.md, Trade).
+    // Keeping the place is the holder's own act even though the Trade
+    // records no closer for it, so they are not told "You kept it".
+    const actor = after.closedBy ||
+      (after.closedBecause === Trade.CAUSES.KEPT ? after.holderId : null);
     out = [after.holderId, after.counterpartyId]
-        .filter((id) => id && id !== after.closedBy)
-        .map((id) => ({personId: id, kind: "ended", state: to}));
+        .filter((id) => id && id !== actor &&
+          Trade.needsTelling(after, id, ctx.today))
+        .map((id) => ({personId: id, kind: KIND.ENDED, state: to}));
   }
   return out.filter((t) => t.personId && ctx.linked.has(t.personId));
 }
@@ -86,7 +103,11 @@ function stillTrue(trade, t, today) {
   if (!trade || trade.state !== t.state || datePassed(trade, today)) {
     return false;
   }
-  if (t.kind === "ended") return true;
+  // An ending they have already cleared from Commitments overnight is
+  // not news any more.
+  if (t.kind === KIND.ENDED) {
+    return Trade.needsTelling(trade, t.personId, today);
+  }
   return Trade.waitingOn(trade) === t.personId;
 }
 
@@ -94,7 +115,7 @@ function stillTrue(trade, t, today) {
  * The reader's own Commitments row, as a headline and a detail.
  * @param {*} trade
  * @param {string} personId the reader
- * @param {function(string): string} nameOf
+ * @param {NameOf} nameOf
  * @return {{headline: string, detail: string}}
  */
 function wordsFor(trade, personId, nameOf) {

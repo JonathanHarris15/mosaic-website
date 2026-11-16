@@ -4,6 +4,12 @@
  * a record for each so a retried trigger sends once, and sends through the
  * one send path. Outside the church's hours a message is held; the hourly
  * sweep sends it if it is still true, and drops it if not.
+ *
+ * `trade_tells` is not a second log. "Did we tell them?" stays in
+ * `notifications`, which the send path writes. This record only makes a
+ * message go once and holds it overnight. A crash between claiming a record
+ * and sending leaves it at "sending" and the message is not retried: once,
+ * not at least once.
  */
 
 const {
@@ -13,10 +19,17 @@ const {
   wordsFor,
   notifyRequest,
 } = require("./trade-tell");
-const {TRADES} = require("./trade-writes");
+const {statusFromSend, TEXT_STATUS} = require("./trade-invitation-text");
+const {tradeReads} = require("./trade-invitation-firestore");
 
 /** @typedef {import("firebase-admin/firestore").Firestore} Firestore */
 /** @typedef {import("./trade-tell").Tell} Tell */
+/** @typedef {import("./trade-tell").NameOf} NameOf */
+
+/**
+ * A Trade's two parties: who has a Linked User, and their first names.
+ * @typedef {{linked: Set<string>, nameOf: NameOf}} Parties
+ */
 
 const RECORDS = "trade_tells";
 
@@ -43,32 +56,26 @@ const RECORDS = "trade_tells";
  */
 
 /**
- * The first names of a Trade's two parties, for the Commitments sentence.
+ * A Trade's two parties, read once: who has a Linked User, and the first
+ * names the Commitments sentence uses.
  * @param {TellDeps} deps
  * @param {*} trade
- * @return {Promise<function(string): string>}
+ * @return {Promise<Parties>}
  */
-async function namesOf(deps, trade) {
+async function partiesOf(deps, trade) {
   /** @type {Object<string, string>} */
   const names = {};
+  const linked = new Set();
   for (const id of [trade.holderId, trade.counterpartyId]) {
     if (!id) continue;
     const p = await deps.loadPerson(id);
     names[id] = (p && p.firstName) || "Somebody";
+    if (p && p.uid) linked.add(id);
   }
-  return (personId) => names[personId] || "Somebody";
-}
-
-/**
- * The status a send leaves on its record.
- * @param {*} result tellPerson's outcome
- * @return {string}
- */
-function statusOf(result) {
-  if (result && result.skipped === "window") return "held";
-  if (result && result.accepted) return "sent";
-  if (result && result.unreachable) return "unreachable";
-  return "failed";
+  return {
+    linked: linked,
+    nameOf: (personId) => names[personId] || "Somebody",
+  };
 }
 
 /**
@@ -77,13 +84,14 @@ function statusOf(result) {
  * @param {string} id the record
  * @param {*} trade
  * @param {Tell} t
+ * @param {NameOf} nameOf
  * @return {Promise<string>}
  */
-async function deliver(deps, id, trade, t) {
+async function deliver(deps, id, trade, t, nameOf) {
   let status = "failed";
   try {
-    const words = wordsFor(trade, t.personId, await namesOf(deps, trade));
-    status = statusOf(await deps.tellPerson(deps.notifierDeps,
+    const words = wordsFor(trade, t.personId, nameOf);
+    status = statusFromSend(await deps.tellPerson(deps.notifierDeps,
         notifyRequest(t, words, deps.origin)));
   } catch (err) {
     if (deps.log) deps.log(`Trade tell ${id}: ${err}`);
@@ -101,15 +109,10 @@ async function deliver(deps, id, trade, t) {
 async function tellParties(deps, change) {
   const after = change.after;
   if (!after) return 0;
-  const linked = new Set();
-  for (const id of [after.holderId, after.counterpartyId]) {
-    if (!id) continue;
-    const p = await deps.loadPerson(id);
-    if (p && p.uid) linked.add(id);
-  }
+  const parties = await partiesOf(deps, after);
   const owed = tellsFor(change.before, after, {
     today: deps.churchNow().date,
-    linked: linked,
+    linked: parties.linked,
   });
   let sent = 0;
   for (const t of owed) {
@@ -117,7 +120,10 @@ async function tellParties(deps, change) {
     const claimed = await deps.claimRecord(id, Object.assign(
         {tradeId: change.tradeId, status: "sending", at: deps.now()}, t));
     if (!claimed) continue;
-    if (await deliver(deps, id, after, t) === "sent") sent += 1;
+    const status = await deliver(deps, id, after, t, parties.nameOf);
+    if (status === TEXT_STATUS.SENT) {
+      sent += 1;
+    }
   }
   return sent;
 }
@@ -136,7 +142,11 @@ async function sweepHeldTells(deps) {
       await deps.writeRecord(r.id, {status: "dropped", at: deps.now()});
       continue;
     }
-    if (await deliver(deps, r.id, trade, r) === "sent") sent += 1;
+    const parties = await partiesOf(deps, trade);
+    const status = await deliver(deps, r.id, trade, r, parties.nameOf);
+    if (status === TEXT_STATUS.SENT) {
+      sent += 1;
+    }
   }
   return sent;
 }
@@ -163,10 +173,7 @@ function buildTellDeps(db, opts) {
   const records = db.collection(RECORDS);
   return Object.assign({}, opts, {
     loadPerson: opts.notifierDeps.loadPerson,
-    loadTrade: async (/** @type {string} */ id) => {
-      const snap = await db.collection(TRADES).doc(id).get();
-      return snap.exists ? Object.assign({id: snap.id}, snap.data()) : null;
-    },
+    loadTrade: tradeReads(db).loadTrade,
     claimRecord: async (/** @type {string} */ id, /** @type {*} */ row) => {
       try {
         await records.doc(id).create(row);
@@ -179,7 +186,7 @@ function buildTellDeps(db, opts) {
       await records.doc(id).set(patch, {merge: true});
     },
     loadHeldRecords: async () => {
-      const snap = await records.where("status", "==", "held").get();
+      const snap = await records.where("status", "==", TEXT_STATUS.HELD).get();
       return snap.docs.map((d) => Object.assign({id: d.id}, d.data()));
     },
   });

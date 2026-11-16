@@ -98,6 +98,7 @@ test('a held message is still true only while nothing has moved', () => {
 });
 
 test('the words are the Commitments row’s words, seen from the person told', () => {
+    /** @type {Object<string, string>} */
     const names = {bob: 'Bob', ann: 'Ann'};
     const w = tell.wordsFor(trade(), 'ann', (/** @type {string} */ id) => names[id]);
     assert.equal(w.headline, 'Bob asked you');
@@ -122,4 +123,23 @@ test('the push is the headline over the detail; the text is both and the link', 
     const t = tell.templatesForSendPath();
     assert.deepEqual(t.push.trade, {title: '{headline}', body: '{detail}'});
     assert.equal(t.text.trade, '{headline}. {detail} {link}');
+});
+
+test('the holder is not told "You kept it" about keeping their own place', () => {
+    const kept = trade({state: 'withdrawn', closedBy: null, closedBecause: 'kept'});
+    assert.deepEqual(owed(trade(), kept).map((t) => t.personId), ['ann']);
+});
+
+test('a holder who refuses an offer is not told; the offerer hears who said no', () => {
+    const offered = trade({state: 'offered', offered: [{occurrenceId: 'o2'}]});
+    const refused = trade({state: 'refused', closedBy: 'bob', offered: [{occurrenceId: 'o2'}]});
+    assert.deepEqual(owed(offered, refused), [{personId: 'ann', kind: 'ended', state: 'refused'}]);
+    /** @type {Object<string, string>} */
+    const names = {bob: 'Bob', ann: 'Ann'};
+    assert.equal(tell.wordsFor(refused, 'ann', (/** @type {string} */ id) => names[id]).headline, 'Bob said no');
+});
+
+test('a held ending they already cleared from Commitments is not sent', () => {
+    const ended = {personId: 'bob', kind: 'ended', state: 'refused'};
+    assert.equal(tell.stillTrue(trade({state: 'refused', closedBy: 'ann', seenBy: ['bob']}), ended, TODAY), false);
 });
