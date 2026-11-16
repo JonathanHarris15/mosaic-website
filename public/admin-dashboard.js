@@ -46,6 +46,16 @@ const NUDGE_DEFAULTS = {
 };
 /** @type {Object<string, string>} */
 const NUDGE_STORED = { text: 'nudgeText', pushTitle: 'pushNudgeTitle', pushBody: 'pushNudgeBody' };
+// Trade invitation text (MS-249). Mirrors DEFAULT_TEXT in
+// functions/trade-invitation-text.js; test/admin-invitation-wording.test.js
+// holds them equal.
+/** @type {Object<string, string>} */
+const INVITATION_DEFAULTS = {
+    text: "Hi {name}, {inviter} from Mosaic Church asked if you could take their place: {role} at {event} on {date}. Tap to answer: {link}",
+};
+/** @type {Object<string, string>} */
+const INVITATION_STORED = { text: 'tradeInvitationText' };
+
 /** @type {Object<string, string>} */
 const ANNOUNCEMENT_STORED = { text: 'eventAnnouncementText', pushTitle: 'pushEventAnnouncementTitle', pushBody: 'pushEventAnnouncementBody' };
 
@@ -187,6 +197,12 @@ document.addEventListener('alpine:init', () => {
         nudgeSwitchSaving: false,
         /** @type {*} */
         nudgeLive: null,
+
+        // Trade invitation text (MS-249): one box, same live saving.
+        invitationWording: { ...INVITATION_DEFAULTS },
+        /** @type {*} */
+        invitationLive: null,
+        invitationChip: 'saved',
         nudgeChip: 'saved',
 
         // ── Push notifications tab ──────────────────────────────────────
@@ -234,6 +250,7 @@ document.addEventListener('alpine:init', () => {
                 this.loadReplies();
                 this.loadEventAnnouncementWording();
                 this.loadNudgeSettings();
+                this.loadInvitationWording();
                 const hash = (window.location.hash || '').replace(/^#/, '');
                 if (hash === 'push') this.selectTab('push');
                 else if (hash === 'accounts') this.selectTab('accounts');
@@ -380,11 +397,55 @@ document.addEventListener('alpine:init', () => {
 
         get wordingChipText() { return chipText(this.wordingChip); },
         get nudgeChipText() { return chipText(this.nudgeChip); },
+        get invitationChipText() { return chipText(this.invitationChip); },
 
         /** @param {?Object<string, *>} saved */
         wordingFrom(saved) { return wordingFromStored(saved, ANNOUNCEMENT_STORED, EVENT_ANNOUNCEMENT_DEFAULTS); },
         /** @param {?Object<string, *>} saved */
         nudgeWordingFrom(saved) { return wordingFromStored(saved, NUDGE_STORED, NUDGE_DEFAULTS); },
+        /** @param {?Object<string, *>} saved */
+        invitationWordingFrom(saved) { return wordingFromStored(saved, INVITATION_STORED, INVITATION_DEFAULTS); },
+
+        async loadInvitationWording() {
+            const data = await this.readWordingConfig();
+            if (!data) return;
+            this.invitationWording = this.invitationWordingFrom(data);
+            if (this.invitationLive) this.invitationLive.dispose();
+            this.invitationLive = liveWordingBlock(this, {
+                stored: INVITATION_STORED,
+                initial: this.invitationWording,
+                what: 'invitation wording',
+                /** @param {{status: string}} state */
+                onChange: (state) => { this.invitationChip = state.status; },
+            });
+            this.watchWordingConfig();
+        },
+
+        /**
+         * @param {string} field
+         * @param {string} value
+         */
+        editInvitationWording(field, value) {
+            this.invitationWording = { ...this.invitationWording, [field]: value };
+            if (this.invitationLive) this.invitationLive.edit(field, value);
+        },
+
+        /** @param {string} field */
+        revertInvitationWording(field) {
+            if (!this.invitationLive) return;
+            this.invitationLive.revert(field);
+            this.invitationWording = { ...this.invitationLive.state.draft };
+        },
+
+        async saveInvitationWording() {
+            if (this.invitationLive) return this.invitationLive.flush();
+        },
+
+        resetInvitationWording() {
+            this.editInvitationWording('text', INVITATION_DEFAULTS.text);
+            this.saveInvitationWording();
+            this.showToast('Reset to defaults');
+        },
 
         /** @return {Promise<?Object<string, *>>} the config, or null when it could not be read */
         async readWordingConfig() {
@@ -460,6 +521,10 @@ document.addEventListener('alpine:init', () => {
                         if (!this.nudgeSwitchSaving) this.nudgeEnabled = data.nudgeEnabled === true;
                         this.nudgeLive.remote(this.nudgeWordingFrom(data), opts);
                         this.nudgeWording = { ...this.nudgeLive.state.draft };
+                    }
+                    if (this.invitationLive) {
+                        this.invitationLive.remote(this.invitationWordingFrom(data), opts);
+                        this.invitationWording = { ...this.invitationLive.state.draft };
                     }
                 }, { onError: () => {} });
             } catch (e) { /* stays as loaded */ }

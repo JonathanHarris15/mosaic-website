@@ -545,6 +545,27 @@
             </div>
         </section>
 
+        <section class="m-section">
+            <div class="m-section__head">
+                <h2 class="m-section__title">Trade invitation text</h2>
+                <p class="m-section__hint">Sent when a member asks somebody with no Mosaic account to take a place they declined. One text, between 8am and 8pm, with a link to answer.</p>
+            </div>
+            <div class="m-card flex flex-col gap-md">
+                <p class="m-input-hint">
+                    Use <code>{name}</code>, <code>{inviter}</code>, <code>{role}</code>, <code>{event}</code>, <code>{date}</code>, and <code>{link}</code> for the answer page. Leave out <code>{link}</code> and it goes on its own line at the end.
+                </p>
+                <label class="m-field">
+                    <span class="m-label">Text message</span>
+                    <textarea class="m-input" :value="invitationWording.text" @input="editInvitationWording('text', $event.target.value)" @blur="saveInvitationWording()" @keydown.escape="revertInvitationWording('text')" data-live-invitation="text" rows="4"></textarea>
+                </label>
+                <div class="flex items-center justify-end gap-sm">
+                    <button type="button" @click="resetInvitationWording()" class="m-btn m-btn--quiet m-btn--sm">Reset to default</button>
+                    <span data-live-chip class="m-input-hint" :class="invitationChip === 'failed' ? 'm-input-hint--error' : ''" x-text="invitationChipText" aria-live="polite"></span>
+                    <button x-show="invitationChip === 'failed'" type="button" @click="invitationLive && invitationLive.retry()" class="m-btn m-btn--quiet m-btn--sm">Retry</button>
+                </div>
+            </div>
+        </section>
+
         </div><!-- /tab: System tools -->
 
         <!-- ============================================================

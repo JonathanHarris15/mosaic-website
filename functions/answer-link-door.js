@@ -63,7 +63,9 @@ function expiredLink() {
 /**
  * Mint a link. The raw token is returned to the caller and never stored.
  * @param {FirebaseFirestore.Firestore} db
- * @param {Object} args purpose, personId, thing, now, randomBytes
+ * @param {Object} args purpose, personId, thing, now, randomBytes, and
+ *   endDate (YYYY-MM-DD) when the thing is not itself the date the link
+ *   dies with, as for a Trade invitation
  * @return {Promise<{token: string, url: string, id: string}>}
  */
 async function mintAnswerLink(db, args) {
@@ -71,7 +73,7 @@ async function mintAnswerLink(db, args) {
   const token = al.mintAnswerToken(bytes);
   const id = al.tokenDocumentId(token);
   const now = args.now || new Date();
-  const expiresAt = al.linkExpiryAt(args.thing, now);
+  const expiresAt = al.linkExpiryAt(args.endDate || args.thing, now);
   await db.collection(LINKS).doc(id).set({
     purpose: args.purpose,
     personId: args.personId,
