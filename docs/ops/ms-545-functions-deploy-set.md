@@ -8,7 +8,7 @@ target first, then ship through that path. No one-off
 ## Standing `--only` targets
 
 ```
-hosting,functions:publicForm,functions:answerLink,functions:onAttendanceCreated,functions:syncAccountRankToPerson,functions:sendPrayerRequestNow,functions:sendPrayerRequestTexts,functions:notifyEldersOnPrayerComplete,functions:smsInbound,functions:mcp,functions:notificationOverview,functions:notificationHistory,functions:notificationRevokeToken,functions:notificationTestPush,functions:translateLiturgy,functions:oosUpdateLiturgy,functions:takeAssignment,functions:answerAssignment,functions:inviteToTrade,functions:withdrawTrade,functions:refuseTrade,functions:offerTrade,functions:acceptTrade,functions:setCoverReach,functions:clearTradeNotice,functions:endTradesOnFilledPlace,functions:convertServiceInvolvement,firestore:rules,storage
+hosting,functions:publicForm,functions:answerLink,functions:onAttendanceCreated,functions:syncAccountRankToPerson,functions:sendPrayerRequestNow,functions:sendPrayerRequestTexts,functions:notifyEldersOnPrayerComplete,functions:smsInbound,functions:mcp,functions:notificationOverview,functions:notificationHistory,functions:notificationRevokeToken,functions:notificationTestPush,functions:translateLiturgy,functions:oosUpdateLiturgy,functions:takeAssignment,functions:answerAssignment,functions:inviteToTrade,functions:withdrawTrade,functions:refuseTrade,functions:offerTrade,functions:acceptTrade,functions:setCoverReach,functions:clearTradeNotice,functions:endTradesOnFilledPlace,functions:convertServiceInvolvement,functions:sendEventAnnouncementTells,functions:sendAssignmentNudges,firestore:rules,storage
 ```
 
 | Target | Why it is in the set |
@@ -33,6 +33,8 @@ hosting,functions:publicForm,functions:answerLink,functions:onAttendanceCreated,
 | `functions:inviteToTrade`, `functions:withdrawTrade`, `functions:refuseTrade`, `functions:offerTrade`, `functions:acceptTrade`, `functions:setCoverReach`, `functions:clearTradeNotice` | Roles Trades and cover (MS-811, MS-813, MS-816). Export names in `functions/index.js` (`onCall`). Accept reads the Trade inside its transaction, and an uninvited offer only goes against a place on the cover list. |
 | `functions:endTradesOnFilledPlace` | Roles roster trigger (MS-819). Export name in `functions/index.js` (`onDocumentWritten`). It runs the cover sweep, which re-checks the roster in a transaction so a late trigger cannot delete a live cover entry. |
 | `functions:convertServiceInvolvement` | Nightly serving-history conversion (MS-815). Export name in `functions/index.js` (`onSchedule`). A deleted Person is skipped and each Sunday is caught on its own, so one bad row no longer stops the whole run. |
+| `functions:sendEventAnnouncementTells` | Hourly sender for told event announcements (MS-623). Export name in `functions/index.js` (`onSchedule`). Without this target a told announcement is saved and never sent. |
+| `functions:sendAssignmentNudges` | Hourly nudge to somebody still Unconfirmed (MS-248). Export name in `functions/index.js` (`onSchedule`). Off until an admin turns `nudgeEnabled` on; without this target the switch does nothing. |
 
 There is deliberately **no** `functions:notificationDevices`. The device list
 rides on `notificationOverview` because on the server both halves are the same
@@ -109,7 +111,7 @@ gh workflow run "Deploy Firebase (hosting + publicForm)" --ref MS-598 -f dry_run
 ```
 
 Then open the run under Actions and confirm the log prints
-`targets=hosting,functions:publicForm,functions:answerLink,functions:onAttendanceCreated,functions:syncAccountRankToPerson,functions:sendPrayerRequestNow,functions:sendPrayerRequestTexts,functions:notifyEldersOnPrayerComplete,functions:smsInbound,functions:mcp,functions:notificationOverview,functions:notificationHistory,functions:notificationRevokeToken,functions:notificationTestPush,functions:translateLiturgy,functions:oosUpdateLiturgy,functions:takeAssignment,functions:answerAssignment,functions:inviteToTrade,functions:withdrawTrade,functions:refuseTrade,functions:offerTrade,functions:acceptTrade,functions:setCoverReach,functions:clearTradeNotice,functions:endTradesOnFilledPlace,functions:convertServiceInvolvement,firestore:rules,storage`
+`targets=hosting,functions:publicForm,functions:answerLink,functions:onAttendanceCreated,functions:syncAccountRankToPerson,functions:sendPrayerRequestNow,functions:sendPrayerRequestTexts,functions:notifyEldersOnPrayerComplete,functions:smsInbound,functions:mcp,functions:notificationOverview,functions:notificationHistory,functions:notificationRevokeToken,functions:notificationTestPush,functions:translateLiturgy,functions:oosUpdateLiturgy,functions:takeAssignment,functions:answerAssignment,functions:inviteToTrade,functions:withdrawTrade,functions:refuseTrade,functions:offerTrade,functions:acceptTrade,functions:setCoverReach,functions:clearTradeNotice,functions:endTradesOnFilledPlace,functions:convertServiceInvolvement,functions:sendEventAnnouncementTells,functions:sendAssignmentNudges,firestore:rules,storage`
 and `dry_run=true`. App Check must stay `monitor`.
 
 Live (push to `main`, or `workflow_dispatch` without `dry_run=true`) waits
