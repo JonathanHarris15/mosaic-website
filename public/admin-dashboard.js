@@ -37,11 +37,13 @@ const EVENT_ANNOUNCEMENT_DEFAULTS = {
 // Nudge wording (MS-248). Mirrors DEFAULT_TEXT / DEFAULT_PUSH in
 // functions/assignment-nudge.js; test/admin-nudge-wording.test.js holds them
 // equal, so a blank field means the same words on the page and the server.
+/** @type {Object<string, string>} */
 const NUDGE_DEFAULTS = {
     text: "Hi {name}, you're down for {places} and haven't said yet whether you can make it. Let the church know here: {link}",
     pushTitle: "Can you make it?",
     pushBody: "You're down for {places}. Tap to answer.",
 };
+/** @type {Object<string, string>} */
 const NUDGE_STORED = { text: 'nudgeText', pushTitle: 'pushNudgeTitle', pushBody: 'pushNudgeBody' };
 
 // Lock-screen wording. Mirrors DEFAULT_PUSH_WORDING in functions/prayer-request.js.
@@ -117,7 +119,9 @@ document.addEventListener('alpine:init', () => {
         nudgeWording: { ...NUDGE_DEFAULTS },
         nudgeEnabled: false,
         nudgeSwitchSaving: false,
+        /** @type {*} */
         nudgeLive: null,
+        /** @type {*} */
         stopNudgeWatch: null,
         nudgeChip: 'saved',
 
@@ -404,11 +408,17 @@ document.addEventListener('alpine:init', () => {
         // Same live-saving wording as the announcement boxes above, and a
         // switch that saves the moment it is flipped. Off unless turned on.
         get nudgeChipText() {
-            return typeof LiveFields !== 'undefined' ? LiveFields.chipText(this.nudgeChip) : '';
+            const LF = /** @type {*} */ (window).LiveFields;
+            return LF ? LF.chipText(this.nudgeChip) : '';
         },
 
+        /**
+         * @param {?Object<string, *>} saved app_config/prayer_request_sms
+         * @return {Object<string, string>}
+         */
         nudgeWordingFrom(saved) {
             const d = saved || {};
+            /** @type {Object<string, string>} */
             const out = {};
             Object.keys(NUDGE_STORED).forEach(f => {
                 const v = typeof d[NUDGE_STORED[f]] === 'string' ? d[NUDGE_STORED[f]].trim() : '';
@@ -418,6 +428,7 @@ document.addEventListener('alpine:init', () => {
         },
 
         async loadNudgeSettings() {
+            /** @type {Object<string, *>} */
             let data;
             try {
                 const doc = await db.collection('app_config').doc('prayer_request_sms').get();
@@ -433,16 +444,20 @@ document.addEventListener('alpine:init', () => {
         },
 
         startLiveNudge() {
-            if (typeof LiveFields === 'undefined') return;
+            const LF = /** @type {*} */ (window).LiveFields;
+            if (!LF) return;
             if (this.nudgeLive) this.nudgeLive.dispose();
-            this.nudgeLive = LiveFields.create({
+            this.nudgeLive = LF.create({
                 fields: Object.keys(NUDGE_STORED),
                 initial: { ...this.nudgeWording },
+                /** @param {Object<string, *>} patch */
                 save: async (patch) => {
+                    /** @type {Object<string, *>} */
                     const write = {
                         updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
-                        updatedBy: this.currentUser.uid,
+                        updatedBy: /** @type {*} */ (this.currentUser).uid,
                     };
+                    /** @type {Object<string, string>} */
                     const stored = {};
                     Object.keys(patch).forEach(f => {
                         stored[f] = String(patch[f] == null ? '' : patch[f]).trim();
@@ -457,14 +472,15 @@ document.addEventListener('alpine:init', () => {
                     }
                     return stored;
                 },
+                /** @param {{status: string}} state */
                 onChange: (state) => { this.nudgeChip = state.status; },
             });
-            const Live = window.MosaicLiveRead;
+            const Live = /** @type {*} */ (window).MosaicLiveRead;
             if (this.stopNudgeWatch) { try { this.stopNudgeWatch(); } catch (e) {} }
             this.stopNudgeWatch = null;
             if (Live && db && typeof db.collection === 'function') {
                 try {
-                    this.stopNudgeWatch = Live.watch(db.collection('app_config').doc('prayer_request_sms'), (snap) => {
+                    this.stopNudgeWatch = Live.watch(db.collection('app_config').doc('prayer_request_sms'), (/** @type {*} */ snap) => {
                         if (!snap || !this.nudgeLive) return;
                         const data = snap.exists ? snap.data() : {};
                         const pending = !!(snap.metadata && snap.metadata.hasPendingWrites);
@@ -476,11 +492,16 @@ document.addEventListener('alpine:init', () => {
             }
         },
 
+        /**
+         * @param {string} field
+         * @param {string} value
+         */
         editNudgeWording(field, value) {
             this.nudgeWording = { ...this.nudgeWording, [field]: value };
             if (this.nudgeLive) this.nudgeLive.edit(field, value);
         },
 
+        /** @param {string} field */
         revertNudgeWording(field) {
             if (!this.nudgeLive) return;
             this.nudgeLive.revert(field);
@@ -498,6 +519,7 @@ document.addEventListener('alpine:init', () => {
             this.showToast('Reset to defaults');
         },
 
+        /** @param {boolean} on */
         async setNudgeEnabled(on) {
             const was = this.nudgeEnabled;
             this.nudgeEnabled = !!on;
@@ -506,7 +528,7 @@ document.addEventListener('alpine:init', () => {
                 await db.collection('app_config').doc('prayer_request_sms').set({
                     nudgeEnabled: !!on,
                     updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
-                    updatedBy: this.currentUser.uid,
+                    updatedBy: /** @type {*} */ (this.currentUser).uid,
                 }, { merge: true });
                 this.showToast(on ? 'Nudges are on' : 'Nudges are off');
             } catch (e) {

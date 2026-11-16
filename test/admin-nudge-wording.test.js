@@ -9,6 +9,9 @@ const vm = require('vm');
 const read = (f) => fs.readFileSync(path.join(__dirname, '..', 'public', f), 'utf8');
 const HTML = read('admin-dashboard.html');
 const core = require('../functions/assignment-nudge.js');
+const serverWording = core.templatesForSendPath({});
+const DEFAULT_TEXT = serverWording.text.nudge;
+const DEFAULT_PUSH = serverWording.push.nudge;
 
 function mount({ stored = {}, fail = false } = {}) {
     const writes = [];
@@ -47,9 +50,9 @@ function mount({ stored = {}, fail = false } = {}) {
 
 test('the page defaults are the server defaults, so a blank field means the same thing on both', () => {
     const { comp } = mount();
-    assert.strictEqual(comp.nudgeWording.text, core.DEFAULT_TEXT);
-    assert.strictEqual(comp.nudgeWording.pushTitle, core.DEFAULT_PUSH.title);
-    assert.strictEqual(comp.nudgeWording.pushBody, core.DEFAULT_PUSH.body);
+    assert.strictEqual(comp.nudgeWording.text, DEFAULT_TEXT);
+    assert.strictEqual(comp.nudgeWording.pushTitle, DEFAULT_PUSH.title);
+    assert.strictEqual(comp.nudgeWording.pushBody, DEFAULT_PUSH.body);
 });
 
 test('nudging reads as off when nothing is saved', async () => {
@@ -63,7 +66,7 @@ test('saved wording and the switch load from the shared config', async () => {
     await comp.loadNudgeSettings();
     assert.strictEqual(comp.nudgeEnabled, true);
     assert.strictEqual(comp.nudgeWording.text, 'Hey {name}: {places} {link}');
-    assert.strictEqual(comp.nudgeWording.pushTitle, core.DEFAULT_PUSH.title);
+    assert.strictEqual(comp.nudgeWording.pushTitle, DEFAULT_PUSH.title);
 });
 
 test('blur saves only the changed nudge field, trimmed and merged', async () => {
@@ -120,7 +123,7 @@ test('Reset to defaults saves the defaults', async () => {
     comp.resetNudgeWording();
     await new Promise((r) => setTimeout(r, 20));
     assert.strictEqual(writes.length, 1);
-    assert.strictEqual(writes[0].data.nudgeText, core.DEFAULT_TEXT);
+    assert.strictEqual(writes[0].data.nudgeText, DEFAULT_TEXT);
 });
 
 test('the page has the switch and three live boxes naming {places}', () => {

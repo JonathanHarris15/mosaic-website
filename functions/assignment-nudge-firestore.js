@@ -8,7 +8,34 @@
  * Firestore and no network. `buildDeps` is the Firestore half.
  */
 
-const nudge = require("./assignment-nudge");
+const {
+  lookAhead,
+  nudgePlan,
+  nudgeRecordId,
+  nudgingOn,
+  notifyRequest,
+  stampedRecord,
+} = require("./assignment-nudge");
+
+/** @typedef {import("firebase-admin/firestore").Firestore} Firestore */
+/** @typedef {import("./assignment-nudge").Occurrence} Occurrence */
+/** @typedef {import("./assignment-nudge").NudgeRecord} NudgeRecord */
+
+/**
+ * Everything a run needs, passed in.
+ * @typedef {{
+ *   today: () => string,
+ *   origin: string,
+ *   log?: (message: string) => void,
+ *   tellPerson: (deps: *, request: Object<string, *>) => Promise<*>,
+ *   notifierDeps: *,
+ *   loadConfig: () => Promise<Object<string, *>>,
+ *   loadOccurrences: (from: string, to: string) => Promise<Array<Occurrence>>,
+ *   loadRoleNames: () => Promise<Object<string, string>>,
+ *   loadRecords: (ids: Array<string>) => Promise<Array<NudgeRecord>>,
+ *   writeRecord: (id: string, row: NudgeRecord) => Promise<void>,
+ * }} NudgeDeps
+ */
 
 const OCCURRENCES = "event_occurrences";
 const SERIES = "events";
@@ -22,29 +49,30 @@ const RECORDS = "assignment_nudges";
  * second nudge is the retry. A send held back by the church's hours is
  * not an attempt, and is not stamped.
  *
- * @param {Object} deps today, loadConfig, loadOccurrences, loadRoleNames,
- *   loadRecords, writeRecord, tellPerson, notifierDeps, origin, log
+ * @param {NudgeDeps} deps
  * @return {Promise<{ran: boolean, sent: number}>}
  */
 async function runNudgeTick(deps) {
   const config = await deps.loadConfig();
-  if (!nudge.nudgingOn(config)) return {ran: false, sent: 0};
+  if (!nudgingOn(config)) return {ran: false, sent: 0};
 
   const today = deps.today();
-  const range = nudge.lookAhead(today);
+  const range = lookAhead(today);
   const occurrences = await deps.loadOccurrences(range.from, range.to);
 
+  /** @type {Array<string>} */
   const ids = [];
   occurrences.forEach((o) => (o.assignments || []).forEach((a) => {
-    if (a && a.personId) ids.push(nudge.nudgeRecordId(o, a));
+    if (a && a.personId) ids.push(nudgeRecordId(o, a));
   }));
   const records = await deps.loadRecords(ids);
+  /** @type {Object<string, NudgeRecord>} */
   const byId = {};
   records.forEach((r) => {
-    byId[r.id] = r;
+    if (r.id) byId[r.id] = r;
   });
 
-  const plan = nudge.nudgePlan({
+  const plan = nudgePlan({
     occurrences: occurrences,
     records: records,
     today: today,
@@ -56,7 +84,7 @@ async function runNudgeTick(deps) {
     let result;
     try {
       result = await deps.tellPerson(
-          deps.notifierDeps, nudge.notifyRequest(send, deps.origin));
+          deps.notifierDeps, notifyRequest(send, deps.origin));
     } catch (err) {
       if (deps.log) deps.log(`Nudge to ${send.personId} failed: ${err}`);
       result = {accepted: false, channel: null};
@@ -67,7 +95,7 @@ async function runNudgeTick(deps) {
     const channel = (result && result.channel) || null;
     for (const place of send.places) {
       const id = place.recordId;
-      const stamped = nudge.stampedRecord(byId[id] ? stripId(byId[id]) : null, {
+      const stamped = stampedRecord(byId[id] ? stripId(byId[id]) : null, {
         place: place,
         personId: send.personId,
         today: today,
@@ -80,8 +108,8 @@ async function runNudgeTick(deps) {
 }
 
 /**
- * @param {Object} r a record with its id
- * @return {Object} the record without it
+ * @param {NudgeRecord} r a record with its id
+ * @return {NudgeRecord} the record without it
  */
 function stripId(r) {
   const out = Object.assign({}, r);
@@ -92,19 +120,22 @@ function stripId(r) {
 /**
  * Stored occurrences dated in a range, each with its roster, and the
  * series name an occurrence without its own name is known by.
- * @param {Object} db Firestore
+ * @param {Firestore} db
  * @param {string} from YYYY-MM-DD
  * @param {string} to YYYY-MM-DD
- * @return {Promise<Array<Object>>}
+ * @return {Promise<Array<Occurrence>>}
  */
 async function loadOccurrences(db, from, to) {
   const snap = await db.collection(OCCURRENCES)
       .where("date", ">=", from)
       .where("date", "<=", to)
       .get();
+  /** @type {Object<string, string>} */
   const seriesNames = {};
+  /** @type {Array<Occurrence>} */
   const out = [];
   for (const doc of snap.docs) {
+    /** @type {Occurrence} */
     const occurrence = Object.assign({id: doc.id}, doc.data());
     if (occurrence.cancelled === true || occurrence.movedTo) continue;
     const roster = await doc.ref.collection("roster").get();
@@ -114,8 +145,8 @@ async function loadOccurrences(db, from, to) {
     if (!occurrence.name && seriesId) {
       if (!(seriesId in seriesNames)) {
         const series = await db.collection(SERIES).doc(seriesId).get();
-        seriesNames[seriesId] = series.exists ?
-          (series.data().name || "") : "";
+        const data = series.data();
+        seriesNames[seriesId] = (data && data.name) || "";
       }
       occurrence.seriesName = seriesNames[seriesId];
     }
@@ -126,11 +157,12 @@ async function loadOccurrences(db, from, to) {
 
 /**
  * Slug → name for every stored Role Definition.
- * @param {Object} db Firestore
+ * @param {Firestore} db
  * @return {Promise<Object<string, string>>}
  */
 async function loadRoleNames(db) {
   const snap = await db.collection("roles").get();
+  /** @type {Object<string, string>} */
   const names = {};
   snap.docs.forEach((doc) => {
     const data = doc.data() || {};
@@ -141,9 +173,9 @@ async function loadRoleNames(db) {
 
 /**
  * The records for these ids. Missing ones are simply absent.
- * @param {Object} db Firestore
+ * @param {Firestore} db
  * @param {Array<string>} ids
- * @return {Promise<Array<Object>>}
+ * @return {Promise<Array<NudgeRecord>>}
  */
 async function loadRecords(db, ids) {
   if (!ids.length) return [];
@@ -154,15 +186,27 @@ async function loadRecords(db, ids) {
 }
 
 /**
+ * What buildDeps is given.
+ * @typedef {{
+ *   configDoc: string,
+ *   today: () => string,
+ *   origin: string,
+ *   log?: (message: string) => void,
+ *   tellPerson: (deps: *, request: Object<string, *>) => Promise<*>,
+ *   notifierDeps: *,
+ *   serverTimestamp?: () => *,
+ * }} NudgeDepsOptions
+ */
+
+/**
  * Firestore deps for runNudgeTick. The send path's own deps are passed in,
  * so a nudge goes out by exactly the code every other Notification does.
- * @param {Object} db Firestore
- * @param {Object} opts tellPerson, notifierDeps, origin, today, log,
- *   serverTimestamp
- * @return {Object}
+ * @param {Firestore} db
+ * @param {NudgeDepsOptions} opts
+ * @return {NudgeDeps}
  */
 function buildDeps(db, opts) {
-  const o = opts || {};
+  const o = opts;
   return {
     today: o.today,
     origin: o.origin,
@@ -171,12 +215,13 @@ function buildDeps(db, opts) {
     notifierDeps: o.notifierDeps,
     loadConfig: async () => {
       const snap = await db.doc(o.configDoc).get();
-      return snap.exists ? snap.data() : {};
+      return snap.data() || {};
     },
     loadOccurrences: (from, to) => loadOccurrences(db, from, to),
     loadRoleNames: () => loadRoleNames(db),
     loadRecords: (ids) => loadRecords(db, ids),
     writeRecord: async (id, row) => {
+      /** @type {Object<string, *>} */
       const data = Object.assign({}, row);
       if (o.serverTimestamp) data.updatedAt = o.serverTimestamp();
       await db.collection(RECORDS).doc(id).set(data);
@@ -185,7 +230,6 @@ function buildDeps(db, opts) {
 }
 
 module.exports = {
-  RECORDS,
   runNudgeTick,
   buildDeps,
 };

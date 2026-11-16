@@ -26,6 +26,77 @@ const SECOND_DAYS_OUT = 3;
 
 const CHURCH_TIMEZONE = "America/Chicago";
 
+/**
+ * One row of an occurrence's roster.
+ * @typedef {{
+ *   personId?: string,
+ *   roleSlug?: string,
+ *   slotId?: ?string,
+ *   oneOffId?: ?string,
+ *   label?: ?string,
+ *   state?: string,
+ *   stateSetAt?: *,
+ * }} Assignment
+ */
+
+/**
+ * A dated Event occurrence with its roster read in.
+ * @typedef {{
+ *   id?: string,
+ *   seriesId?: string,
+ *   date?: string,
+ *   name?: string,
+ *   seriesName?: string,
+ *   visibility?: string,
+ *   cancelled?: boolean,
+ *   movedTo?: string,
+ *   movedFrom?: string,
+ *   assignments?: Array<Assignment>,
+ * }} Occurrence
+ */
+
+/**
+ * What the scheduler remembers about one place's nudges.
+ * @typedef {{
+ *   id?: string,
+ *   personId?: string,
+ *   occurrenceId?: ?string,
+ *   roleSlug?: ?string,
+ *   slotId?: ?string,
+ *   oneOffId?: ?string,
+ *   firstDate?: ?string,
+ *   firstChannel?: ?string,
+ *   secondDate?: ?string,
+ *   secondChannel?: ?string,
+ * }} NudgeRecord
+ */
+
+/**
+ * One place in a nudge.
+ * @typedef {{
+ *   recordId: string,
+ *   occurrenceId: string,
+ *   roleSlug: string,
+ *   slotId: ?string,
+ *   oneOffId: ?string,
+ *   date: string,
+ *   stage: string,
+ *   previousChannel: ?string,
+ *   words: string,
+ * }} Place
+ */
+
+/**
+ * One Notification to one Person, naming every place due for them.
+ * @typedef {{
+ *   personId: string,
+ *   places: Array<Place>,
+ *   escalate: boolean,
+ *   previousChannel: ?string,
+ *   values: {places: string},
+ * }} NudgeSend
+ */
+
 const DEFAULT_TEXT = "Hi {name}, you're down for {places} and haven't " +
   "said yet whether you can make it. Let the church know here: {link}";
 const DEFAULT_PUSH = {
@@ -96,7 +167,14 @@ function churchDateOf(at) {
     timeZone: CHURCH_TIMEZONE,
     year: "numeric", month: "2-digit", day: "2-digit",
   }).formatToParts(when);
-  const get = (type) => parts.find((p) => p.type === type).value;
+  /**
+   * @param {string} type
+   * @return {string}
+   */
+  const get = (type) => {
+    const part = parts.find((p) => p.type === type);
+    return part ? part.value : "";
+  };
   return `${get("year")}-${get("month")}-${get("day")}`;
 }
 
@@ -115,8 +193,8 @@ function shortDate(dateStr) {
  * The record a place's nudges are remembered under. The Involvement key, so
  * it names the occurrence, the Role, the slot or one-off job, and the Person
  * — which is what gives somebody taking over a place their own clock.
- * @param {Object} occurrence
- * @param {Object} assignment
+ * @param {Occurrence} occurrence
+ * @param {Assignment} assignment
  * @return {string}
  */
 function nudgeRecordId(occurrence, assignment) {
@@ -125,16 +203,17 @@ function nudgeRecordId(occurrence, assignment) {
 
 /**
  * How one place reads in a message.
- * @param {Object} occurrence
- * @param {Object} assignment
- * @param {Object} roleNames slug → name
+ * @param {Occurrence} occurrence
+ * @param {Assignment} assignment
+ * @param {Object<string, string>} roleNames slug → name
  * @return {string}
  */
 function placeWords(occurrence, assignment, roleNames) {
-  const role = assignment.roleSlug === Occ.ONE_OFF_SLUG ?
+  const slug = assignment.roleSlug || "";
+  const role = slug === Occ.ONE_OFF_SLUG ?
     (assignment.label || "A job") :
-    ((roleNames && roleNames[assignment.roleSlug]) || assignment.roleSlug);
-  const when = `${role} on ${shortDate(occurrence.date)}`;
+    ((roleNames && roleNames[slug]) || slug);
+  const when = `${role} on ${shortDate(occurrence.date || "")}`;
   // A lock screen is seen by more people than a participant-rung Event
   // admits, so its title stays off it.
   if (Occ.visibilityOf(occurrence) === "participant") return when;
@@ -153,16 +232,37 @@ function joinWithAnd(items) {
 }
 
 /**
+ * What nudgePlan is asked. today is church-local YYYY-MM-DD; roleNames
+ * maps a Role's slug to its name.
+ * @typedef {{
+ *   occurrences?: Array<Occurrence>,
+ *   records?: Array<NudgeRecord>,
+ *   today: string,
+ *   roleNames?: Object<string, string>,
+ * }} NudgePlanArgs
+ */
+
+/**
+ * What a record is stamped with. channel is push, text or none.
+ * @typedef {{
+ *   place: Partial<Place>,
+ *   personId: string,
+ *   today: string,
+ *   channel?: ?string,
+ * }} StampArgs
+ */
+
+/**
  * Whether this Assignment can be nudged at all today.
- * @param {Object} occurrence
- * @param {Object} assignment
+ * @param {Occurrence} occurrence
+ * @param {Assignment} assignment
  * @param {string} today
  * @return {boolean}
  */
 function nudgeable(occurrence, assignment, today) {
   if (!assignment || !assignment.personId) return false;
   if (Occ.stateOf(assignment) !== Occ.STATES.PENDING) return false;
-  if (Roles.LITURGICAL_SLUGS.indexOf(assignment.roleSlug) !== -1) {
+  if (Roles.LITURGICAL_SLUGS.indexOf(assignment.roleSlug || "") !== -1) {
     return false;
   }
   if (churchDateOf(assignment.stateSetAt) === today) return false;
@@ -171,7 +271,7 @@ function nudgeable(occurrence, assignment, today) {
 
 /**
  * Which stage of nudge, if any, a place is due.
- * @param {?Object} rec its record
+ * @param {?NudgeRecord} rec its record
  * @param {number} daysOut
  * @param {string} today
  * @return {?string} first, second, or null
@@ -191,14 +291,13 @@ function stageDue(rec, daysOut, today) {
  * Nobody is nudged twice on one church-local day: a Person with any record
  * stamped today waits for tomorrow.
  *
- * @param {Object} args occurrences (each with its assignments), records,
- *   today (church-local YYYY-MM-DD), roleNames (slug → name)
- * @return {Array<Object>} personId, places, escalate, previousChannel,
- *   values
+ * @param {NudgePlanArgs} args
+ * @return {Array<NudgeSend>}
  */
 function nudgePlan(args) {
-  const a = args || {};
+  const a = args;
   const today = a.today;
+  /** @type {Object<string, NudgeRecord>} */
   const records = {};
   const stampedToday = new Set();
   (a.records || []).forEach((r) => {
@@ -209,6 +308,7 @@ function nudgePlan(args) {
     }
   });
 
+  /** @type {Map<string, Array<Place>>} */
   const byPerson = new Map();
   (a.occurrences || []).forEach((occurrence) => {
     if (!occurrence || !occurrence.date) return;
@@ -218,29 +318,31 @@ function nudgePlan(args) {
 
     (occurrence.assignments || []).forEach((assignment) => {
       if (!nudgeable(occurrence, assignment, today)) return;
-      if (stampedToday.has(assignment.personId)) return;
+      const personId = assignment.personId || "";
+      if (stampedToday.has(personId)) return;
       const recordId = nudgeRecordId(occurrence, assignment);
       const rec = records[recordId] || null;
       const stage = stageDue(rec, daysOut, today);
       if (!stage) return;
 
-      if (!byPerson.has(assignment.personId)) {
-        byPerson.set(assignment.personId, []);
-      }
-      byPerson.get(assignment.personId).push({
+      const list = byPerson.get(personId) || [];
+      byPerson.set(personId, list);
+      list.push({
         recordId: recordId,
-        occurrenceId: occurrence.id,
-        roleSlug: assignment.roleSlug,
+        occurrenceId: occurrence.id || "",
+        roleSlug: assignment.roleSlug || "",
         slotId: assignment.slotId || null,
         oneOffId: assignment.oneOffId || null,
-        date: occurrence.date,
+        date: occurrence.date || "",
         stage: stage,
-        previousChannel: stage === "second" ? (rec.firstChannel || null) : null,
-        words: placeWords(occurrence, assignment, a.roleNames),
+        previousChannel: stage === "second" && rec ?
+          (rec.firstChannel || null) : null,
+        words: placeWords(occurrence, assignment, a.roleNames || {}),
       });
     });
   });
 
+  /** @type {Array<NudgeSend>} */
   const out = [];
   byPerson.forEach((places, personId) => {
     places.sort((x, y) => (x.date < y.date ? -1 : x.date > y.date ? 1 : 0));
@@ -259,12 +361,13 @@ function nudgePlan(args) {
 /**
  * A place's record after this run's nudge. Every attempt is stamped
  * whatever the outcome; the second nudge is the retry.
- * @param {?Object} existing the record before
- * @param {Object} s place, personId, today, channel (push, text or none)
- * @return {Object}
+ * @param {?NudgeRecord} existing the record before
+ * @param {StampArgs} s
+ * @return {NudgeRecord}
  */
 function stampedRecord(existing, s) {
   const p = s.place || {};
+  /** @type {NudgeRecord} */
   const base = Object.assign({
     personId: s.personId,
     occurrenceId: p.occurrenceId || null,
@@ -288,7 +391,7 @@ function stampedRecord(existing, s) {
 
 /**
  * What the send path is asked. Who, what and where — never push or text.
- * @param {Object} send one entry from nudgePlan
+ * @param {NudgeSend} send one entry from nudgePlan
  * @param {string} origin the site the Commitments page lives on
  * @return {Object}
  */
@@ -316,8 +419,8 @@ function trimmed(v) {
 /**
  * Nudge wording in the shape the send path loads, saved values over the
  * defaults, each field on its own.
- * @param {?Object} config app_config/prayer_request_sms
- * @return {Object}
+ * @param {?Object<string, *>} config app_config/prayer_request_sms
+ * @return {Object<string, *>}
  */
 function templatesForSendPath(config) {
   const c = config || {};
@@ -334,7 +437,7 @@ function templatesForSendPath(config) {
 
 /**
  * The admin switch. Off unless somebody turned it on.
- * @param {?Object} config app_config/prayer_request_sms
+ * @param {?Object<string, *>} config app_config/prayer_request_sms
  * @return {boolean}
  */
 function nudgingOn(config) {
@@ -342,14 +445,7 @@ function nudgingOn(config) {
 }
 
 module.exports = {
-  PURPOSE,
-  WORDING,
-  FIRST_DAYS_OUT,
-  SECOND_DAYS_OUT,
-  DEFAULT_TEXT,
-  DEFAULT_PUSH,
   lookAhead,
-  churchDateOf,
   nudgeRecordId,
   nudgePlan,
   stampedRecord,

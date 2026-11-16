@@ -9,6 +9,7 @@ const assert = require('node:assert/strict');
 const {runNudgeTick} = require('../functions/assignment-nudge-firestore.js');
 const {tellPerson} = require('../functions/notification-send.js');
 const nudge = require('../functions/assignment-nudge.js');
+const {churchDateParts} = require('../functions/notification-core.js');
 
 // 2026-09-15 15:00 UTC is 10:00 in Chicago, inside the 8am–8pm window.
 const INSIDE = new Date('2026-09-15T15:00:00Z');
@@ -43,7 +44,7 @@ function world(over) {
         writeLog: async (row) => { calls.logs.push(row); },
     };
     const deps = {
-        today: () => nudge.churchDateOf(now),
+        today: () => churchDateParts(now).date,
         origin: 'https://example.test',
         tellPerson,
         notifierDeps,
@@ -187,6 +188,7 @@ test('an hourly job runs the nudge tick through the real send path deps', () => 
     const job = sliceBetween(index, 'exports.sendAssignmentNudges', '\n);\n');
     assert.match(job, /every 60 minutes/);
     assert.match(job, /runNudgeTick/);
+    assert.match(job, /buildNudgeDeps/);
     assert.match(job, /notifierDeps\(db\)/);
     assert.match(job, /notify\.tellPerson/);
     assert.match(job, /secrets:\s*\[TEXTBELT_KEY\]/);
@@ -194,5 +196,5 @@ test('an hourly job runs the nudge tick through the real send path deps', () => 
 
 test('the send path loads the nudge wording beside the others', () => {
     const deps = sliceBetween(index, 'function notifierDeps(db)', 'function tell(db, request)');
-    assert.match(deps, /assignmentNudge\.templatesForSendPath/);
+    assert.match(deps, /nudgeTemplates\(loaded\.raw\)/);
 });
