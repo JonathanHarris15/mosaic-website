@@ -200,6 +200,10 @@ test('every purpose the functions write has a row in the registry', () => {
     // event-tell-core.js names its purpose through a constant, so the scan
     // above cannot see it. Ask the module.
     written.add(require('../public/event-tell-core.js').PURPOSE);
+    // So does the nudge request (MS-248). Ask what it actually sends.
+    written.add(require('../functions/assignment-nudge.js').notifyRequest(
+        {personId: 'p', assignments: [], escalate: false, previousChannel: null,
+            values: {places: ''}}, 'https://x').purpose);
 
     const known = new Set(core.NOTIFICATION_TYPES.map((type) => type.purpose));
     for (const purpose of written) {
