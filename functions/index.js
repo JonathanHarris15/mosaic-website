@@ -37,7 +37,9 @@ const {
 } = require("./assignment-nudge-firestore");
 const {
   templatesForSendPath: invitationTemplates,
+  PURPOSE: invitationPurpose,
 } = require("./trade-invitation-text");
+const {buildInviteDeps} = require("./trade-invitation-firestore");
 const {
   tellInvitee,
   sweepHeldInvitations,
@@ -3181,23 +3183,16 @@ exports.sendEventAnnouncementTells = onSchedule(
  * @return {*}
  */
 function inviteDeps(db) {
-  const nd = notifierDeps(db);
-  const trades = db.collection("trades");
-  return {
-    today: () => pr.churchDateParts(new Date()).date,
-    localHour: () => pr.churchDateParts(new Date()).hour,
+  return buildInviteDeps(db, {
+    churchNow: () => pr.churchDateParts(new Date()),
     now: () => admin.firestore.Timestamp.now(),
     log: log,
     tellPerson: notify.tellPerson,
-    notifierDeps: nd,
-    loadTrade: async (/** @type {string} */ id) => {
-      const snap = await trades.doc(id).get();
-      return snap.exists ? Object.assign({id: snap.id}, snap.data()) : null;
-    },
-    loadPerson: nd.loadPerson,
-    mintLink: async (/** @type {*} */ args) => {
+    notifierDeps: notifierDeps(db),
+    deleteField: () => admin.firestore.FieldValue.delete(),
+    mintLink: async (args) => {
       const minted = await answerDoor.mintAnswerLink(db, {
-        purpose: "trade_invitation",
+        purpose: invitationPurpose,
         personId: args.personId,
         thing: args.tradeId,
         endDate: args.endDate,
@@ -3205,18 +3200,7 @@ function inviteDeps(db) {
       });
       return minted.url;
     },
-    writeStatus: async (/** @type {string} */ id, /** @type {*} */ status) => {
-      await trades.doc(id).update({
-        invitationText: status ||
-          admin.firestore.FieldValue.delete(),
-      });
-    },
-    loadHeldTradeIds: async () => {
-      const snap = await trades
-          .where("invitationText.status", "==", "held").get();
-      return snap.docs.map((d) => d.id);
-    },
-  };
+  });
 }
 
 /**

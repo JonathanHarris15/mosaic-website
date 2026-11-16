@@ -163,17 +163,17 @@
         return { headline: 'Taken back', detail: 'Nothing changed.' };
     }
 
-    // One Trade as a row. `today` decides whether it is still live at all.
     // ── Somebody with no account is texted (MS-249) ─────────────────────────
     //
     // An invitation to a Person with no Linked User goes as a text with a link
     // to answer. The picker says beforehand whether it can, and the sent row
-    // says afterwards whether it did, so the inviter knows when to ask in
-    // person instead.
+    // says afterwards whether it did, so the holder knows when to ask in
+    // person instead. The church's hours are the send path's, so a held text
+    // says "in the morning" rather than naming an hour.
     /** @type {Object<string, string>} */
     const TEXT_LINES = Object.freeze({
         sent: 'Texted',
-        held: 'Will text at 8am',
+        held: 'Will text them in the morning',
         failed: "Couldn't text them — ask them yourself",
         unreachable: 'No phone — ask them yourself',
     });
@@ -200,6 +200,7 @@
         return TEXT_LINES[status] || null;
     }
 
+    // One Trade as a row. `today` decides whether it is still live at all.
     function rowFor(trade, options) {
         const opts = options || {};
         const personId = opts.personId;

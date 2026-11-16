@@ -47,19 +47,33 @@ const MONTHS = ["January", "February", "March", "April", "May", "June",
  *   roleName?: ?string,
  *   closedBy?: ?string,
  *   closedBecause?: ?string,
+ *   invitationText?: ?{status: string, at: *},
  * }} TradeDoc
  */
 
 /**
- * What the invitee sees. Nothing beyond these fields, ever.
+ * What the invitee (the Person a Trade invites) sees. Nothing beyond these
+ * fields, ever.
  * @typedef {{
  *   status: string,
- *   inviterFirstName: string,
+ *   holderFirstName: string,
  *   eventName: string,
  *   roleName: string,
  *   dateLabel: string,
+ *   timeLabel: string,
  *   canAnswer: Array<string>,
  * }} InviteeView
+ */
+
+/**
+ * Whose eyes the invitee view is for. time is the Event's start, HH:MM,
+ * when it has one.
+ * @typedef {{
+ *   inviteeId: string,
+ *   holderFirstName: string,
+ *   today: string,
+ *   time?: ?string,
+ * }} ViewContext
  */
 
 /**
@@ -88,7 +102,8 @@ function waitingOnInvitee(trade, inviteeId, today) {
 }
 
 /**
- * Whether to text the invitee now.
+ * Whether to text the invitee now. The invitee is the Person a Trade
+ * invites; the holder is the one who declined and asked them.
  * `send` — text now. `held` — outside 8am–8pm; the hourly sweep sends it.
  * `unreachable` — no account and no phone. `none` — nothing to do.
  * @param {DecisionArgs} args
@@ -125,6 +140,21 @@ function longDate(dateStr) {
 }
 
 /**
+ * "7:00 pm" from "19:00", the way the Calendar writes a time. Blank when the
+ * Event has no time.
+ * @param {?string} hhmm
+ * @return {string}
+ */
+function clockLabel(hhmm) {
+  const m = /^(\d{1,2}):(\d{2})$/.exec(String(hhmm || ""));
+  if (!m) return "";
+  const hour = Number(m[1]);
+  const meridiem = hour < 12 ? "am" : "pm";
+  const display = hour % 12 === 0 ? 12 : hour % 12;
+  return `${display}:${m[2]} ${meridiem}`;
+}
+
+/**
  * The Role's name, or its slug when no name was stored.
  * @param {TradeDoc} trade
  * @return {string}
@@ -158,17 +188,18 @@ function statusFor(trade, inviteeId, today) {
  * What the Answer link shows. Never the roster, a surname, contact
  * details, other invitees, or anything the invitee could offer back.
  * @param {TradeDoc} trade
- * @param {{inviteeId: string, inviterFirstName: string, today: string}} ctx
+ * @param {ViewContext} ctx
  * @return {InviteeView}
  */
 function inviteeView(trade, ctx) {
   const status = statusFor(trade, ctx.inviteeId, ctx.today);
   return {
     status: status,
-    inviterFirstName: ctx.inviterFirstName || "Somebody",
+    holderFirstName: ctx.holderFirstName || "Somebody",
     eventName: trade.eventName || "",
     roleName: roleNameOf(trade),
     dateLabel: longDate(linkEndDate(trade)),
+    timeLabel: clockLabel(ctx.time || null),
     canAnswer: status === "waiting" ? ["take", "refuse"] : [],
   };
 }
@@ -176,12 +207,12 @@ function inviteeView(trade, ctx) {
 /**
  * The words a text fills in besides {name} and {link}.
  * @param {TradeDoc} trade
- * @param {{inviterFirstName: string}} ctx
+ * @param {{holderFirstName: string}} ctx
  * @return {Object<string, string>}
  */
 function requestValues(trade, ctx) {
   return {
-    inviter: ctx.inviterFirstName || "Somebody",
+    inviter: ctx.holderFirstName || "Somebody",
     role: roleNameOf(trade),
     event: trade.eventName || "",
     date: longDate(linkEndDate(trade)),
@@ -191,7 +222,7 @@ function requestValues(trade, ctx) {
 /**
  * What the send path is asked. Who, what and where — never push or text.
  * @param {TradeDoc} trade
- * @param {{inviteeId: string, inviterFirstName: string, url: string}} ctx
+ * @param {{inviteeId: string, holderFirstName: string, url: string}} ctx
  * @return {Object<string, *>}
  */
 function notifyRequest(trade, ctx) {
@@ -241,6 +272,7 @@ function templatesForSendPath(config) {
 }
 
 module.exports = {
+  PURPOSE,
   TEXT_STATUS,
   textDecision,
   linkEndDate,

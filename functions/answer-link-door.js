@@ -11,12 +11,13 @@ const al = require("./answer-link");
 const pr = require("./prayer-request");
 const writes = require("./prayer-request-writes");
 const tw = require("./trade-writes");
-const {inviteeView} = require("./trade-invitation-text");
+const {inviteeView, PURPOSE: PURPOSE_TRADE} =
+  require("./trade-invitation-text");
+const {tradeReads} = require("./trade-invitation-firestore");
 
 const LINKS = "answer_links";
 const LOOKUPS = "answer_link_lookups";
 const PURPOSE_PRAYER = "prayer_request";
-const PURPOSE_TRADE = "trade_invitation";
 
 const CLOSED = {
   ok: false,
@@ -239,20 +240,31 @@ async function dispatchPurpose(db, args) {
  * @return {*}
  */
 function tradeDeps(db) {
-  return {
-    loadTrade: async (/** @type {string} */ id) => {
-      const snap = await db.collection(tw.TRADES).doc(id).get();
-      return snap.exists ? Object.assign({id: snap.id}, snap.data()) : null;
-    },
-    firstNameOf: async (/** @type {string} */ personId) => {
-      if (!personId) return "";
-      const snap = await db.collection("people").doc(personId).get();
-      const data = snap.data();
-      return pr.firstNameOf((data && data.name) || "");
-    },
+  return Object.assign({}, tradeReads(db), {
     offer: (/** @type {*} */ spec) => tw.offer(db, spec),
     refuse: (/** @type {*} */ spec) => tw.refuse(db, spec),
-  };
+  });
+}
+
+/**
+ * Spend one of a link's saves around a write: refuse when the link has had
+ * too many, and stamp the save only once the write went through. One order
+ * for every purpose.
+ * @param {*} linkRef the answer_links document, or null when signed in
+ * @param {Date} now
+ * @param {function(): Promise<*>} write returns {ok}
+ * @return {Promise<*>} the write's result, or RATE_LIMITED
+ */
+async function withSave(linkRef, now, write) {
+  if (!linkRef) return write();
+  const linkSnap = await linkRef.get();
+  const save = al.saveRateDecision(linkSnap.data() || {}, now);
+  if (!save.ok) return Object.assign({}, RATE_LIMITED);
+  const result = await write();
+  if (result && result.ok) {
+    await linkRef.set({saveTimestamps: save.saveTimestamps}, {merge: true});
+  }
+  return result;
 }
 
 /**
@@ -261,7 +273,7 @@ function tradeDeps(db) {
  * places would show the link holder their other Assignments. Both answers
  * are the existing Trade moves, with the invitee off the link as the actor,
  * so every eligibility and visibility check still runs.
- * @param {*} deps loadTrade, firstNameOf, offer, refuse
+ * @param {*} deps loadTrade, holderFirstName, eventTime, offer, refuse
  * @param {*} args op, link, answer, now, linkRef
  * @return {Promise<Object<string, *>>}
  */
@@ -275,8 +287,9 @@ async function tradeInvitationPurpose(deps, args) {
     if (!trade || trade.counterpartyId !== personId) return null;
     return inviteeView(trade, {
       inviteeId: personId,
-      inviterFirstName: await deps.firstNameOf(trade.holderId),
+      holderFirstName: await deps.holderFirstName(trade.holderId),
       today: today,
+      time: await deps.eventTime(trade),
     });
   };
 
@@ -294,21 +307,15 @@ async function tradeInvitationPurpose(deps, args) {
   // Nothing left to answer: show where it stands rather than a refusal.
   if (before.canAnswer.indexOf(answer) === -1) return shown(before);
 
-  if (args.linkRef) {
-    const linkSnap = await args.linkRef.get();
-    const save = al.saveRateDecision(linkSnap.data() || {}, args.now);
-    if (!save.ok) return Object.assign({}, RATE_LIMITED);
-    await args.linkRef.set({saveTimestamps: save.saveTimestamps},
-        {merge: true});
-  }
-
   const spec = {tradeId: tradeId, actorId: personId, today: today,
     now: args.now};
   // An empty reply to an invitation settles it: they were asked, so their
   // answer is the agreement (CONTEXT.md, Trade).
-  const result = answer === "take" ?
-    await deps.offer(Object.assign({offered: []}, spec)) :
-    await deps.refuse(spec);
+  const result = await withSave(args.linkRef, args.now, () =>
+    answer === "take" ?
+      deps.offer(Object.assign({offered: []}, spec)) :
+      deps.refuse(spec));
+  if (result && result.code === RATE_LIMITED.code) return result;
   // ⚠ NOT THE MOVE'S OWN CODE. The page reads failed-precondition as an
   // expired link, so "the Role does not allow you" would show as a dead link.
   if (!result || !result.ok) {
@@ -342,33 +349,13 @@ async function prayerPurpose(db, args) {
     return {ok: false, code: "invalid-argument", message: "Write something."};
   }
 
-  if (args.linkRef) {
-    const linkSnap = await args.linkRef.get();
-    const link = linkSnap.exists ? linkSnap.data() : {};
-    const save = al.saveRateDecision(link, now);
-    if (!save.ok) {
-      return Object.assign({}, RATE_LIMITED);
-    }
-    const result = await writes.saveFormAnswer(db, {
+  const result = await withSave(args.linkRef, now, () =>
+    writes.saveFormAnswer(db, {
       personId, serviceDate, todayDate,
       answerText: args.answer,
       now,
-      viaAnswerLink: true,
-    });
-    if (result.ok) {
-      await args.linkRef.set({saveTimestamps: save.saveTimestamps},
-          {merge: true});
-    }
-    if (!result.ok && result.code === "closed") return closed();
-    return result;
-  }
-
-  const result = await writes.saveFormAnswer(db, {
-    personId, serviceDate, todayDate,
-    answerText: args.answer,
-    now,
-    viaAnswerLink: false,
-  });
+      viaAnswerLink: !!args.linkRef,
+    }));
   if (!result.ok && result.code === "closed") return closed();
   return result;
 }

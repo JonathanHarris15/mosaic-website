@@ -29,7 +29,8 @@ function setup(over) {
     /** @type {*} */
     const deps = {
         loadTrade: async (/** @type {string} */ id) => (id === 't1' ? trade : null),
-        firstNameOf: async (/** @type {string} */ id) => (id === 'holder' ? 'Bob' : 'Ann'),
+        holderFirstName: async (/** @type {string} */ id) => (id === 'holder' ? 'Bob' : 'Ann'),
+        eventTime: async () => '10:30',
         offer: o.offer || (async (/** @type {*} */ spec) => {
             moves.push(['offer', spec]);
             Object.assign(trade, {state: 'settled', closedBy: spec.actorId});
@@ -58,8 +59,9 @@ test('read shows the invitee who asked, the Event, the Role and the date, and bo
     assert.equal(out.ok, true);
     assert.equal(out.purpose, 'trade_invitation');
     assert.equal(out.view.status, 'waiting');
-    assert.equal(out.view.inviterFirstName, 'Bob');
+    assert.equal(out.view.holderFirstName, 'Bob');
     assert.equal(out.view.roleName, 'Sound');
+    assert.equal(out.view.timeLabel, '10:30 am');
     assert.deepEqual(out.view.canAnswer, ['take', 'refuse']);
 });
 
@@ -131,5 +133,5 @@ test('the door dispatches the trade_invitation purpose', () => {
     const src = require('fs').readFileSync(
         require('path').join(__dirname, '../functions/answer-link-door.js'), 'utf8');
     assert.match(src, /purpose === PURPOSE_TRADE/);
-    assert.match(src, /PURPOSE_TRADE = "trade_invitation"/);
+    assert.equal(require('../functions/trade-invitation-text.js').PURPOSE, 'trade_invitation');
 });

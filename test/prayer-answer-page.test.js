@@ -255,7 +255,7 @@ test('profile prayer card helper builds a shell-aware href', () => {
 
 // MS-249: the same link page opens a Trade invitation.
 const TRADE_VIEW = {
-    status: 'waiting', inviterFirstName: 'Bob', eventName: 'Sunday Service',
+    status: 'waiting', holderFirstName: 'Bob', eventName: 'Sunday Service',
     roleName: 'Sound', dateLabel: 'Sunday 20 September', canAnswer: ['take', 'refuse'],
 };
 
@@ -264,7 +264,7 @@ test('a Trade invitation link shows the ask, under its own title', async () => {
     await page.load();
     assert.strictEqual(page.state, 'trade-waiting');
     assert.strictEqual(page.pageTitle, 'Can you take this?');
-    assert.strictEqual(page.trade.inviterFirstName, 'Bob');
+    assert.strictEqual(page.trade.holderFirstName, 'Bob');
 });
 
 test('Yes sends take through the link and shows that they are down for it', async () => {

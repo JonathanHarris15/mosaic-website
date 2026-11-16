@@ -60,6 +60,40 @@ const INVITATION_STORED = { text: 'tradeInvitationText' };
 const ANNOUNCEMENT_STORED = { text: 'eventAnnouncementText', pushTitle: 'pushEventAnnouncementTitle', pushBody: 'pushEventAnnouncementBody' };
 
 /**
+ * The wording blocks on System tools, one row each: where its words are
+ * stored, their defaults, and the component fields that hold its draft,
+ * its live controller and its saved chip.
+ * @type {Object<string, {stored: Object<string, string>, defaults: Object<string, string>, draft: string, live: string, chip: string, what: string}>}
+ */
+const WORDING_BLOCKS = {
+    announcement: {
+        stored: ANNOUNCEMENT_STORED, defaults: EVENT_ANNOUNCEMENT_DEFAULTS,
+        draft: 'eventAnnouncementWording', live: 'wordingLive', chip: 'wordingChip',
+        what: 'event announcement wording',
+    },
+    nudge: {
+        stored: NUDGE_STORED, defaults: NUDGE_DEFAULTS,
+        draft: 'nudgeWording', live: 'nudgeLive', chip: 'nudgeChip',
+        what: 'nudge wording',
+    },
+    invitation: {
+        stored: INVITATION_STORED, defaults: INVITATION_DEFAULTS,
+        draft: 'invitationWording', live: 'invitationLive', chip: 'invitationChip',
+        what: 'invitation wording',
+    },
+};
+
+/**
+ * @param {string} name a WORDING_BLOCKS key
+ * @param {?Object<string, *>} saved app_config/prayer_request_sms
+ * @return {Object<string, string>}
+ */
+function blockFrom(name, saved) {
+    const b = WORDING_BLOCKS[name];
+    return wordingFromStored(saved, b.stored, b.defaults);
+}
+
+/**
  * One wording block read off the config: each field trimmed, a blank one
  * falling back to its default.
  * @param {?Object<string, *>} saved app_config/prayer_request_sms
@@ -381,10 +415,12 @@ document.addEventListener('alpine:init', () => {
             }
         },
 
-        // ── Message wording saves itself (ADR 0081, MS-721, MS-248) ──────
-        // Two blocks on one config document: event announcement tells and
-        // nudges. Typing waits 1.5 s, blur saves now, Escape puts back what
-        // is stored. One watch on the document feeds both, and the nudge
+        // ── Message wording saves itself (ADR 0081, MS-721, MS-248, MS-249)
+        // Three blocks on one config document: event announcement tells,
+        // nudges, and the Trade invitation text. Each is a row in
+        // WORDING_BLOCKS; the methods below are the same for all of them.
+        // Typing waits 1.5 s, blur saves now, Escape puts back what is
+        // stored. One watch on the document feeds every block, and the nudge
         // switch rides on the same read. The page is gated on
         // admin.dashboard.access (accessesAdminDashboard); app_config stays
         // the backstop.
@@ -400,52 +436,9 @@ document.addEventListener('alpine:init', () => {
         get invitationChipText() { return chipText(this.invitationChip); },
 
         /** @param {?Object<string, *>} saved */
-        wordingFrom(saved) { return wordingFromStored(saved, ANNOUNCEMENT_STORED, EVENT_ANNOUNCEMENT_DEFAULTS); },
+        wordingFrom(saved) { return blockFrom('announcement', saved); },
         /** @param {?Object<string, *>} saved */
-        nudgeWordingFrom(saved) { return wordingFromStored(saved, NUDGE_STORED, NUDGE_DEFAULTS); },
-        /** @param {?Object<string, *>} saved */
-        invitationWordingFrom(saved) { return wordingFromStored(saved, INVITATION_STORED, INVITATION_DEFAULTS); },
-
-        async loadInvitationWording() {
-            const data = await this.readWordingConfig();
-            if (!data) return;
-            this.invitationWording = this.invitationWordingFrom(data);
-            if (this.invitationLive) this.invitationLive.dispose();
-            this.invitationLive = liveWordingBlock(this, {
-                stored: INVITATION_STORED,
-                initial: this.invitationWording,
-                what: 'invitation wording',
-                /** @param {{status: string}} state */
-                onChange: (state) => { this.invitationChip = state.status; },
-            });
-            this.watchWordingConfig();
-        },
-
-        /**
-         * @param {string} field
-         * @param {string} value
-         */
-        editInvitationWording(field, value) {
-            this.invitationWording = { ...this.invitationWording, [field]: value };
-            if (this.invitationLive) this.invitationLive.edit(field, value);
-        },
-
-        /** @param {string} field */
-        revertInvitationWording(field) {
-            if (!this.invitationLive) return;
-            this.invitationLive.revert(field);
-            this.invitationWording = { ...this.invitationLive.state.draft };
-        },
-
-        async saveInvitationWording() {
-            if (this.invitationLive) return this.invitationLive.flush();
-        },
-
-        resetInvitationWording() {
-            this.editInvitationWording('text', INVITATION_DEFAULTS.text);
-            this.saveInvitationWording();
-            this.showToast('Reset to defaults');
-        },
+        nudgeWordingFrom(saved) { return blockFrom('nudge', saved); },
 
         /** @return {Promise<?Object<string, *>>} the config, or null when it could not be read */
         async readWordingConfig() {
@@ -459,47 +452,76 @@ document.addEventListener('alpine:init', () => {
             }
         },
 
-        async loadEventAnnouncementWording() {
+        /**
+         * Load one block's words and start saving it live.
+         * @param {string} name a WORDING_BLOCKS key
+         * @return {Promise<?Object<string, *>>} the config it read
+         */
+        async loadBlock(name) {
             const data = await this.readWordingConfig();
-            if (!data) return;
-            this.eventAnnouncementWording = this.wordingFrom(data);
-            this.startLiveWording();
+            if (!data) return null;
+            /** @type {*} */ (this)[WORDING_BLOCKS[name].draft] = blockFrom(name, data);
+            this.startBlock(name);
+            return data;
         },
 
-        async loadNudgeSettings() {
-            const data = await this.readWordingConfig();
-            if (!data) return;
-            this.nudgeEnabled = data.nudgeEnabled === true;
-            this.nudgeWording = this.nudgeWordingFrom(data);
-            this.startLiveNudge();
-        },
-
-        startLiveWording() {
-            if (this.wordingLive) this.wordingLive.dispose();
-            this.wordingLive = liveWordingBlock(this, {
-                stored: ANNOUNCEMENT_STORED,
-                initial: this.eventAnnouncementWording,
-                what: 'event announcement wording',
+        /** @param {string} name */
+        startBlock(name) {
+            const b = WORDING_BLOCKS[name];
+            const self = /** @type {*} */ (this);
+            if (self[b.live]) self[b.live].dispose();
+            self[b.live] = liveWordingBlock(this, {
+                stored: b.stored,
+                initial: self[b.draft],
+                what: b.what,
                 /** @param {{status: string, error?: string}} state */
                 onChange: (state) => {
-                    this.wordingChip = state.status;
-                    this.wordingError = state.error || '';
-                    this.eventAnnouncementSaving = state.status === 'saving';
+                    self[b.chip] = state.status;
+                    if (name === 'announcement') {
+                        this.wordingError = state.error || '';
+                        this.eventAnnouncementSaving = state.status === 'saving';
+                    }
                 },
             });
             this.watchWordingConfig();
         },
 
-        startLiveNudge() {
-            if (this.nudgeLive) this.nudgeLive.dispose();
-            this.nudgeLive = liveWordingBlock(this, {
-                stored: NUDGE_STORED,
-                initial: this.nudgeWording,
-                what: 'nudge wording',
-                /** @param {{status: string}} state */
-                onChange: (state) => { this.nudgeChip = state.status; },
-            });
-            this.watchWordingConfig();
+        /**
+         * @param {string} name
+         * @param {string} field
+         * @param {string} value
+         */
+        editBlock(name, field, value) {
+            const b = WORDING_BLOCKS[name];
+            const self = /** @type {*} */ (this);
+            self[b.draft] = { ...self[b.draft], [field]: value };
+            if (self[b.live]) self[b.live].edit(field, value);
+        },
+
+        /**
+         * @param {string} name
+         * @param {string} field
+         */
+        revertBlock(name, field) {
+            const b = WORDING_BLOCKS[name];
+            const self = /** @type {*} */ (this);
+            if (!self[b.live]) return;
+            self[b.live].revert(field);
+            self[b.draft] = { ...self[b.live].state.draft };
+        },
+
+        /** @param {string} name */
+        async saveBlock(name) {
+            const live = /** @type {*} */ (this)[WORDING_BLOCKS[name].live];
+            if (live) return live.flush();
+        },
+
+        /** @param {string} name */
+        resetBlock(name) {
+            const defaults = WORDING_BLOCKS[name].defaults;
+            Object.keys(defaults).forEach(f => this.editBlock(name, f, defaults[f]));
+            this.saveBlock(name);
+            this.showToast('Reset to defaults');
         },
 
         // Somebody else's change lands in the fields this admin has not touched.
@@ -508,80 +530,52 @@ document.addEventListener('alpine:init', () => {
             if (this.stopWordingWatch) { try { this.stopWordingWatch(); } catch (e) {} }
             this.stopWordingWatch = null;
             if (!Live || !db || typeof db.collection !== 'function') return;
+            const self = /** @type {*} */ (this);
             try {
                 this.stopWordingWatch = Live.watch(db.collection('app_config').doc('prayer_request_sms'), (/** @type {*} */ snap) => {
                     if (!snap) return;
                     const data = snap.exists ? snap.data() : {};
                     const opts = { pendingWrites: !!(snap.metadata && snap.metadata.hasPendingWrites) };
-                    if (this.wordingLive) {
-                        this.wordingLive.remote(this.wordingFrom(data), opts);
-                        this.eventAnnouncementWording = { ...this.wordingLive.state.draft };
-                    }
-                    if (this.nudgeLive) {
-                        if (!this.nudgeSwitchSaving) this.nudgeEnabled = data.nudgeEnabled === true;
-                        this.nudgeLive.remote(this.nudgeWordingFrom(data), opts);
-                        this.nudgeWording = { ...this.nudgeLive.state.draft };
-                    }
-                    if (this.invitationLive) {
-                        this.invitationLive.remote(this.invitationWordingFrom(data), opts);
-                        this.invitationWording = { ...this.invitationLive.state.draft };
-                    }
+                    if (this.nudgeLive && !this.nudgeSwitchSaving) this.nudgeEnabled = data.nudgeEnabled === true;
+                    Object.keys(WORDING_BLOCKS).forEach(name => {
+                        const b = WORDING_BLOCKS[name];
+                        if (!self[b.live]) return;
+                        self[b.live].remote(blockFrom(name, data), opts);
+                        self[b.draft] = { ...self[b.live].state.draft };
+                    });
                 }, { onError: () => {} });
             } catch (e) { /* stays as loaded */ }
         },
 
-        /**
-         * @param {string} field
-         * @param {string} value
-         */
-        editWording(field, value) {
-            this.eventAnnouncementWording = { ...this.eventAnnouncementWording, [field]: value };
-            if (this.wordingLive) this.wordingLive.edit(field, value);
-        },
+        // The names the page binds to, one per block.
+        loadEventAnnouncementWording() { return this.loadBlock('announcement'); },
+        startLiveWording() { this.startBlock('announcement'); },
+        /** @param {string} f @param {string} v */
+        editWording(f, v) { this.editBlock('announcement', f, v); },
+        /** @param {string} f */
+        revertWording(f) { this.revertBlock('announcement', f); },
+        saveEventAnnouncementWording() { return this.saveBlock('announcement'); },
+        resetEventAnnouncementWording() { this.resetBlock('announcement'); },
 
-        /**
-         * @param {string} field
-         * @param {string} value
-         */
-        editNudgeWording(field, value) {
-            this.nudgeWording = { ...this.nudgeWording, [field]: value };
-            if (this.nudgeLive) this.nudgeLive.edit(field, value);
+        async loadNudgeSettings() {
+            const data = await this.loadBlock('nudge');
+            if (data) this.nudgeEnabled = data.nudgeEnabled === true;
         },
+        startLiveNudge() { this.startBlock('nudge'); },
+        /** @param {string} f @param {string} v */
+        editNudgeWording(f, v) { this.editBlock('nudge', f, v); },
+        /** @param {string} f */
+        revertNudgeWording(f) { this.revertBlock('nudge', f); },
+        saveNudgeWording() { return this.saveBlock('nudge'); },
+        resetNudgeWording() { this.resetBlock('nudge'); },
 
-        /** @param {string} field */
-        revertWording(field) {
-            if (!this.wordingLive) return;
-            this.wordingLive.revert(field);
-            this.eventAnnouncementWording = { ...this.wordingLive.state.draft };
-        },
-
-        /** @param {string} field */
-        revertNudgeWording(field) {
-            if (!this.nudgeLive) return;
-            this.nudgeLive.revert(field);
-            this.nudgeWording = { ...this.nudgeLive.state.draft };
-        },
-
-        // Blur / Retry. No Save button any more.
-        async saveEventAnnouncementWording() {
-            if (this.wordingLive) return this.wordingLive.flush();
-        },
-
-        async saveNudgeWording() {
-            if (this.nudgeLive) return this.nudgeLive.flush();
-        },
-
-        resetEventAnnouncementWording() {
-            Object.keys(EVENT_ANNOUNCEMENT_DEFAULTS).forEach(f => this.editWording(f, EVENT_ANNOUNCEMENT_DEFAULTS[f]));
-            this.saveEventAnnouncementWording();
-            this.showToast('Reset to defaults');
-        },
-
-        resetNudgeWording() {
-            Object.keys(NUDGE_DEFAULTS).forEach(f => this.editNudgeWording(f, NUDGE_DEFAULTS[f]));
-            this.saveNudgeWording();
-            this.showToast('Reset to defaults');
-        },
+        loadInvitationWording() { return this.loadBlock('invitation'); },
+        /** @param {string} f @param {string} v */
+        editInvitationWording(f, v) { this.editBlock('invitation', f, v); },
+        /** @param {string} f */
+        revertInvitationWording(f) { this.revertBlock('invitation', f); },
+        saveInvitationWording() { return this.saveBlock('invitation'); },
+        resetInvitationWording() { this.resetBlock('invitation'); },
 
         // The nudge switch saves the moment it is flipped, and flips back if
         // the save fails. Off unless somebody turned it on.

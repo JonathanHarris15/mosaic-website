@@ -85,8 +85,8 @@
             // door. Its view is the invitee's, and nothing more.
             purpose: 'prayer_request',
             trade: {
-                status: '', inviterFirstName: '', eventName: '',
-                roleName: '', dateLabel: '', canAnswer: [],
+                status: '', holderFirstName: '', eventName: '',
+                roleName: '', dateLabel: '', timeLabel: '', canAnswer: [],
             },
 
             get pageTitle() {

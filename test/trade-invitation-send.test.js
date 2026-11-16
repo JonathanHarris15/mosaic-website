@@ -52,8 +52,7 @@ function world(over) {
     };
     /** @type {*} */
     const deps = {
-        today: () => churchDateParts(now).date,
-        localHour: () => churchDateParts(now).hour,
+        churchNow: () => churchDateParts(now),
         tellPerson,
         notifierDeps,
         loadTrade: async (/** @type {string} */ id) => trades[id] || null,

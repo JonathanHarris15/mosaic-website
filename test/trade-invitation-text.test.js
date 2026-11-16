@@ -89,7 +89,7 @@ test('the link expires with the Assignment’s date', () => {
 
 // ── What the invitee sees ───────────────────────────────────────────────────
 
-const VIEW_KEYS = ['status', 'inviterFirstName', 'eventName', 'roleName', 'dateLabel', 'canAnswer'];
+const VIEW_KEYS = ['status', 'holderFirstName', 'eventName', 'roleName', 'dateLabel', 'timeLabel', 'canAnswer'];
 
 /**
  * @param {*} t
@@ -99,8 +99,9 @@ const VIEW_KEYS = ['status', 'inviterFirstName', 'eventName', 'roleName', 'dateL
 function view(t, today) {
     return inv.inviteeView(t, {
         inviteeId: 'invitee',
-        inviterFirstName: 'Bob',
+        holderFirstName: 'Bob',
         today: today || TODAY,
+        time: '10:30',
     });
 }
 
@@ -108,10 +109,11 @@ test('waiting on you: first name, Event, Role and date, and both answers', () =>
     const v = view(trade());
     assert.deepEqual(Object.keys(v).sort(), VIEW_KEYS.slice().sort());
     assert.equal(v.status, 'waiting');
-    assert.equal(v.inviterFirstName, 'Bob');
+    assert.equal(v.holderFirstName, 'Bob');
     assert.equal(v.eventName, 'Sunday Service');
     assert.equal(v.roleName, 'Sound');
     assert.equal(v.dateLabel, 'Sunday 20 September');
+    assert.equal(v.timeLabel, '10:30 am');
     assert.deepEqual(v.canAnswer, ['take', 'refuse']);
 });
 
@@ -148,7 +150,7 @@ test('the view never carries the roster, a surname, contact details or other inv
     });
     const v = view(t);
     assert.deepEqual(Object.keys(v).sort(), VIEW_KEYS.slice().sort());
-    assert.doesNotMatch(JSON.stringify(v), /Smith|5550000|holder|offered|roster/);
+    assert.doesNotMatch(JSON.stringify(v), /Smith|5550000|"holder"|offered|roster/);
 });
 
 test('a Role with no stored name reads by its slug, not as nothing', () => {
@@ -165,7 +167,7 @@ test('the default wording names who asked, the Role, the Event, the date and the
     assert.equal(t.text.invitation,
         'Hi {name}, {inviter} from Mosaic Church asked if you could take their place: ' +
         '{role} at {event} on {date}. Tap to answer: {link}');
-    assert.deepEqual(inv.notifyRequest(trade(), {inviteeId: 'invitee', inviterFirstName: 'Bob', url: 'u'}).values, VALUES);
+    assert.deepEqual(inv.notifyRequest(trade(), {inviteeId: 'invitee', holderFirstName: 'Bob', url: 'u'}).values, VALUES);
 });
 
 test('a saved wording replaces the default; a blank one falls back', () => {
@@ -182,7 +184,7 @@ test('a saved wording with no {link} still sends the link, on its own line', () 
 
 test('the send request names a Person, a purpose and the link, and wants no reply', () => {
     const req = inv.notifyRequest(trade(), {
-        inviteeId: 'invitee', inviterFirstName: 'Bob', url: 'https://x.test/a/tok',
+        inviteeId: 'invitee', holderFirstName: 'Bob', url: 'https://x.test/a/tok',
     });
     assert.equal(req.personId, 'invitee');
     assert.equal(req.purpose, 'trade_invitation');
@@ -199,4 +201,11 @@ test('the text status written on the Trade is one of four, from what the send pa
     assert.equal(inv.statusFromSend({accepted: false, unreachable: true}), 'unreachable');
     assert.equal(inv.statusFromSend({accepted: false, channel: 'text'}), 'failed');
     assert.equal(inv.statusFromSend(null), 'failed');
+});
+
+test('an Event with no time shows none, rather than a made-up one', () => {
+    const v = inv.inviteeView(trade(), {inviteeId: 'invitee', holderFirstName: 'Bob', today: TODAY});
+    assert.equal(v.timeLabel, '');
+    const pm = inv.inviteeView(trade(), {inviteeId: 'invitee', holderFirstName: 'Bob', today: TODAY, time: '19:00'});
+    assert.equal(pm.timeLabel, '7:00 pm');
 });

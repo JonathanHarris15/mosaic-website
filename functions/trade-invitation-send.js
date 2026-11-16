@@ -32,8 +32,7 @@ const {
 /**
  * Everything a run needs, passed in.
  * @typedef {{
- *   today: () => string,
- *   localHour: () => number,
+ *   churchNow: () => {date: string, hour: number},
  *   now?: () => *,
  *   log?: (message: string) => void,
  *   tellPerson: (deps: *, request: Object<string, *>) => Promise<*>,
@@ -69,19 +68,20 @@ async function tellInvitee(deps, tradeId) {
     if (!trade) return "none";
     const inviteeId = trade.counterpartyId || "";
     const invitee = (await deps.loadPerson(inviteeId)) || {};
+    const clock = deps.churchNow();
     const decision = textDecision({
       trade: trade,
       inviteeId: inviteeId,
       inviteeHasLinkedUser: !!invitee.uid,
       inviteeHasPhone: !!invitee.phone,
-      localHour: deps.localHour(),
-      today: deps.today(),
+      localHour: clock.hour,
+      today: clock.date,
     });
 
     if (decision === "none") {
       // A held text whose Trade has ended goes nowhere, and stops being
       // looked at.
-      const held = /** @type {*} */ (trade).invitationText;
+      const held = trade.invitationText;
       if (held && held.status === TEXT_STATUS.HELD) {
         await deps.writeStatus(tradeId, null);
         return "cleared";
@@ -102,7 +102,7 @@ async function tellInvitee(deps, tradeId) {
     const result = await deps.tellPerson(deps.notifierDeps, notifyRequest(
         trade, {
           inviteeId: inviteeId,
-          inviterFirstName: holder.firstName || "",
+          holderFirstName: holder.firstName || "",
           url: url,
         }));
     const status = statusFromSend(result);

@@ -368,7 +368,7 @@ test('a sent invitation shows its text status, each on its own line', () => {
         Object.assign({}, base, status ? { invitationText: { status } } : {}),
         { personId: BOB, nameOf: () => 'Sarah' }).textLine;
     assert.strictEqual(line('sent'), 'Texted');
-    assert.strictEqual(line('held'), 'Will text at 8am');
+    assert.strictEqual(line('held'), 'Will text them in the morning');
     assert.strictEqual(line('failed'), "Couldn't text them — ask them yourself");
     assert.strictEqual(line('unreachable'), 'No phone — ask them yourself');
     assert.strictEqual(line(null), null);

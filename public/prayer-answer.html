@@ -122,9 +122,9 @@
         </div>
 
         <section x-show="state === 'trade-waiting'" class="pa-card">
-            <p class="pa-lead"><span x-text="trade.inviterFirstName"></span> asked if you could take their place.</p>
+            <p class="pa-lead"><span x-text="trade.holderFirstName"></span> asked if you could take their place.</p>
             <p class="pa-sunday"><span x-text="trade.roleName"></span> · <span x-text="trade.eventName"></span></p>
-            <p class="pa-privacy" x-text="trade.dateLabel"></p>
+            <p class="pa-quiet"><span x-text="trade.dateLabel"></span><span x-show="trade.timeLabel"> at <span x-text="trade.timeLabel"></span></span></p>
 
             <div class="m-notice m-notice--error" x-show="problem">
                 <span class="material-symbols-outlined m-notice__icon">error</span>
@@ -146,12 +146,12 @@
         <div x-show="state === 'trade-took'" class="pa-centred">
             <span class="material-symbols-outlined pa-centred__icon pa-centred__icon--good">task_alt</span>
             <h1 class="m-headline-md">You're down for <span x-text="trade.roleName"></span> on <span x-text="trade.dateLabel"></span>.</h1>
-            <p class="pa-quiet">Thank you. <span x-text="trade.inviterFirstName"></span> will see that you said yes.</p>
+            <p class="pa-quiet">Thank you. <span x-text="trade.holderFirstName"></span> will see that you said yes.</p>
         </div>
 
         <div x-show="state === 'trade-refused'" class="pa-centred">
             <span class="material-symbols-outlined pa-centred__icon">check</span>
-            <h1 class="m-headline-md">Thanks for letting <span x-text="trade.inviterFirstName"></span> know.</h1>
+            <h1 class="m-headline-md">Thanks for letting <span x-text="trade.holderFirstName"></span> know.</h1>
             <p class="pa-quiet">There is nothing else to do.</p>
         </div>
 
