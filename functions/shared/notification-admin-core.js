@@ -516,9 +516,9 @@
             killSwitch: 'Per announcement, on the Event.',
             window: 'church',
             wordingSource: 'Event announcement tells (this page)',
-            live: false,
-            note: 'Not wired to the send path yet (MS-623). The tick runs ' +
-                'and records nothing.',
+            live: true,
+            note: 'Goes through the send path: push to the app, or a text. ' +
+                'One per person per tell moment.',
         },
         {
             id: 'sms_test',
