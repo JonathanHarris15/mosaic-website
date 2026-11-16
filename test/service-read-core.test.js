@@ -13,7 +13,7 @@ const WITH_ORDERS = (() => {
         { id: 'offertory', name: 'Offertory', primitive: 'song', hasRole: false, hasNote: false },
     ];
     const communionIds = ['callToWorship', 'lordsSupper', 'offertory', 'benediction'];
-    const byId = new Map(Liturgy.STANDARD_ELEMENTS.concat(extra).map((el) => [el.id, el]));
+    const byId = new Map(/** @type {Array<*>} */ (Liturgy.STANDARD_ELEMENTS).concat(extra).map((el) => [el.id, el]));
     return {
         orders: [
             Liturgy.STANDARD_ORDER,
@@ -65,7 +65,7 @@ describe('readableService walks the Sunday\'s Liturgy Order', () => {
 
     test('an order that has since been deleted reads as Standard', () => {
         const s = Read.readableService('2031-03-16', { liturgyOrderId: 'gone', liturgy: {} }, WITH_ORDERS);
-        assert.strictEqual(s.liturgyOrder.id, 'standard');
+        assert.strictEqual(/** @type {*} */ (s.liturgyOrder).id, 'standard');
         assert.deepStrictEqual(fields(s), Liturgy.STANDARD_ORDER.elementIds.slice());
     });
 
@@ -85,6 +85,7 @@ describe('readableService walks the Sunday\'s Liturgy Order', () => {
             requests: { people: [{ who: 'male' }, { who: 'female' }] },
         });
         const withPrayer = Liturgy.addToOrder(added.catalog, 'standard', added.element.id);
+        /** @type {Object<string, *>} */
         const liturgy = {};
         liturgy[added.element.id] = [
             { id: 'p-1', name: 'Sam Sample' },
@@ -99,7 +100,7 @@ describe('readableService walks the Sunday\'s Liturgy Order', () => {
             'Pastoral Prayer 1': { id: 'p-1', name: 'Sam Sample' },
             'Pastoral Prayer 2': { id: 'p-2', name: 'Pat Sample' },
         });
-        assert.strictEqual(s.people.Preacher, 'Pat Placeholder');
+        assert.strictEqual(/** @type {*} */ (s.people).Preacher, 'Pat Placeholder');
     });
 
     test('a people element keeps only the people somebody named', () => {
@@ -117,8 +118,8 @@ describe('readableService walks the Sunday\'s Liturgy Order', () => {
             isIrregular: true,
             irregularElements: [{ name: 'Lessons and Carols' }],
         }, WITH_ORDERS);
-        assert.strictEqual(s.isIrregular, undefined);
-        assert.strictEqual(s.irregularElements, undefined);
+        assert.strictEqual(/** @type {*} */ (s).isIrregular, undefined);
+        assert.strictEqual(/** @type {*} */ (s).irregularElements, undefined);
     });
 
     test('leftovers come back with the Sunday, and an empty drawer is an empty list', () => {
