@@ -920,6 +920,14 @@ One message to one Person, sent by whichever channel can actually reach them. **
 - **A Person with no Device token *and* no phone number cannot be told anything by anybody**, and an editor is shown so. Nothing else about delivery is surfaced: the Prayer Request already reads as filled or unfilled, and that is the honest signal.
 _Avoid_: alert, reminder, message (unqualified), and **push** / **SMS** for the thing itself — each is one channel of a Notification
 
+### Nudge — MS-248
+A [[Notification]] to somebody still **Unconfirmed** as their date nears, about the places they have not answered, landing them on [[Commitment]]s. **Two at most per place**: a first when the date is 5 days away, a second at 3 if they still have not answered, by the **other route** from the first, because the second is how the feature copes with a push nobody saw.
+- **Any answer stops it.** Confirming or declining both count, and so does the place going to somebody else, who starts their own clock.
+- **One message per Person per day**, naming every place due, and never on the day they were put down, the day of the date, or a date that is skipped or moved away.
+- **Editors are not sent one.** The only person who can answer is the one nudged.
+- **Off until an admin turns it on.** A participant-rung Event is named by Role and date only, because a lock screen is seen by more people than the Event admits.
+_Avoid_: reminder, chase, confirmation request
+
 ### Device token
 The handle one signed-in device is reachable at, held in `users/{uid}/push_tokens/{id}` — on the **User**, never on the [[Person]], because it belongs to a phone somebody signed in on and one person has a phone *and* a tablet. A send addressed to a Person resolves through the existing `people.userId` link. Rewritten on every launch that has permission (the provider rotates them unasked), deleted when the provider rejects it, and **deleted on sign-out** — leave one behind and the next person to sign in on that phone gets the last person's pastoral prayer on their lock screen.
 _Avoid_: FCM token, device id, registration, push subscription

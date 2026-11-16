@@ -20,6 +20,7 @@
         'peoples-page.html': 'people',
         'profile.html': 'profile',
         'calendar.html': 'events',
+        'commitments.html': 'commitments',
         'service-builder.html': 'serviceBuilder',
         'manager.html': 'hymnManager',
         'roles-manager.html': 'rolesManager',

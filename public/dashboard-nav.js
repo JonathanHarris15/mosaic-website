@@ -271,6 +271,9 @@
     const MOBILE_SHELL_PAGES = Object.freeze({
         profile: 'profile.html',
         events: 'calendar.html',
+        // A nudge lands here (MS-248). Reached on the phone from the Calendar's
+        // "All your commitments", and by name from a tapped notification.
+        commitments: 'commitments.html',
         rolesManager: 'roles-manager.html',
         forms: 'forms.html',
         admin: 'admin-dashboard.html',
