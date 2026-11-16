@@ -116,11 +116,7 @@ test('the GitHub Actions deploy workflow ships both halves and stays on monitor'
     // sendPrayerRequestNow, mcp, AND firestore:rules. The old prefix
     // without the two new functions still matches a shorter string, so
     // pin the full list (and fail if either export is dropped).
-<<<<<<< HEAD
     assert.match(wf, /--only hosting,functions:publicForm,functions:answerLink,functions:onAttendanceCreated,functions:syncAccountRankToPerson,functions:sendPrayerRequestNow,functions:sendPrayerRequestTexts,functions:notifyEldersOnPrayerComplete,functions:smsInbound,functions:mcp,functions:notificationOverview,functions:notificationHistory,functions:notificationRevokeToken,functions:notificationTestPush,functions:translateLiturgy,functions:oosUpdateLiturgy,functions:takeAssignment,functions:answerAssignment,functions:inviteToTrade,functions:withdrawTrade,functions:refuseTrade,functions:offerTrade,functions:acceptTrade,functions:setCoverReach,functions:clearTradeNotice,functions:endTradesOnFilledPlace,functions:convertServiceInvolvement,functions:sendEventAnnouncementTells,functions:sendAssignmentNudges,firestore:rules,storage/,
-=======
-    assert.match(wf, /--only hosting,functions:publicForm,functions:answerLink,functions:onAttendanceCreated,functions:syncAccountRankToPerson,functions:sendPrayerRequestNow,functions:sendPrayerRequestTexts,functions:notifyEldersOnPrayerComplete,functions:smsInbound,functions:mcp,functions:notificationOverview,functions:notificationHistory,functions:notificationRevokeToken,functions:notificationTestPush,functions:translateLiturgy,functions:oosUpdateLiturgy,functions:takeAssignment,functions:answerAssignment,functions:inviteToTrade,functions:withdrawTrade,functions:refuseTrade,functions:offerTrade,functions:acceptTrade,functions:setCoverReach,functions:clearTradeNotice,functions:endTradesOnFilledPlace,functions:convertServiceInvolvement,functions:sendEventAnnouncementTells,firestore:rules,storage/,
->>>>>>> origin/main
         'the deploy workflow no longer ships the standing --only set');
     assert.match(wf, /PUBLIC_FORM_APP_CHECK_MODE=monitor/,
         'the deploy workflow no longer pins App Check to monitor');
@@ -131,11 +127,7 @@ test('the GitHub Actions deploy workflow ships both halves and stays on monitor'
     assert.ok(fs.existsSync(opsPath),
         'docs/ops/ms-545-functions-deploy-set.md is missing; the standing set is undocumented');
     const ops = fs.readFileSync(opsPath, 'utf8');
-<<<<<<< HEAD
     assert.match(ops, /hosting,functions:publicForm,functions:answerLink,functions:onAttendanceCreated,functions:syncAccountRankToPerson,functions:sendPrayerRequestNow,functions:sendPrayerRequestTexts,functions:notifyEldersOnPrayerComplete,functions:smsInbound,functions:mcp,functions:notificationOverview,functions:notificationHistory,functions:notificationRevokeToken,functions:notificationTestPush,functions:translateLiturgy,functions:oosUpdateLiturgy,functions:takeAssignment,functions:answerAssignment,functions:inviteToTrade,functions:withdrawTrade,functions:refuseTrade,functions:offerTrade,functions:acceptTrade,functions:setCoverReach,functions:clearTradeNotice,functions:endTradesOnFilledPlace,functions:convertServiceInvolvement,functions:sendEventAnnouncementTells,functions:sendAssignmentNudges,firestore:rules,storage/,
-=======
-    assert.match(ops, /hosting,functions:publicForm,functions:answerLink,functions:onAttendanceCreated,functions:syncAccountRankToPerson,functions:sendPrayerRequestNow,functions:sendPrayerRequestTexts,functions:notifyEldersOnPrayerComplete,functions:smsInbound,functions:mcp,functions:notificationOverview,functions:notificationHistory,functions:notificationRevokeToken,functions:notificationTestPush,functions:translateLiturgy,functions:oosUpdateLiturgy,functions:takeAssignment,functions:answerAssignment,functions:inviteToTrade,functions:withdrawTrade,functions:refuseTrade,functions:offerTrade,functions:acceptTrade,functions:setCoverReach,functions:clearTradeNotice,functions:endTradesOnFilledPlace,functions:convertServiceInvolvement,functions:sendEventAnnouncementTells,firestore:rules,storage/,
->>>>>>> origin/main
         'the ops note no longer lists the standing --only targets');
     assert.match(ops, /functions:answerLink/,
         'the ops note dropped functions:answerLink');
@@ -180,10 +172,7 @@ test('the GitHub Actions deploy workflow ships both halves and stays on monitor'
         ['clearTradeNotice', 'onCall'], ['endTradesOnFilledPlace', 'onDocumentWritten'],
         ['convertServiceInvolvement', 'onSchedule'],
         ['sendEventAnnouncementTells', 'onSchedule'],
-<<<<<<< HEAD
         ['sendAssignmentNudges', 'onSchedule'],
-=======
->>>>>>> origin/main
     ];
     const indexSrc = fs.readFileSync(path.join(ROOT, 'functions/index.js'), 'utf8');
     roles.forEach(([name, kind]) => {
