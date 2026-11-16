@@ -9,6 +9,10 @@ const nudge = require('../functions/assignment-nudge.js');
 
 const TODAY = '2026-09-15'; // a Tuesday
 
+/**
+ * @param {Object<string, *>} [over]
+ * @return {*}
+ */
 function occ(over) {
     return Object.assign({
         id: 'sunday_service_2026-09-20',
@@ -19,6 +23,10 @@ function occ(over) {
     }, over || {});
 }
 
+/**
+ * @param {Object<string, *>} [over]
+ * @return {*}
+ */
 function pending(over) {
     return Object.assign({
         personId: 'p1',
@@ -33,6 +41,11 @@ function pending(over) {
 
 const ROLE_NAMES = {sound: 'Sound', coffee: 'Coffee', setup: 'Setup'};
 
+/**
+ * @param {Array<*>} occurrences
+ * @param {Array<*>} [records]
+ * @param {string} [today]
+ */
 function plan(occurrences, records, today) {
     return nudge.nudgePlan({
         occurrences: occurrences,
@@ -42,6 +55,12 @@ function plan(occurrences, records, today) {
     });
 }
 
+/**
+ * @param {*} o
+ * @param {*} a
+ * @param {Object<string, *>} [over]
+ * @return {*}
+ */
 function record(o, a, over) {
     return Object.assign({
         id: nudge.nudgeRecordId(o, a),
@@ -65,7 +84,7 @@ test('a Pending place 5 days out is due a first nudge naming the place', () => {
 });
 
 test('the day boundaries: only 1 to 5 days out are nudged', () => {
-    const at = (date) => plan([occ({date: date, assignments: [pending()]})]).length;
+    const at = (/** @type {string} */ date) => plan([occ({date: date, assignments: [pending()]})]).length;
     assert.equal(at('2026-09-21'), 0, '6 days out');
     assert.equal(at('2026-09-20'), 1, '5 days out');
     assert.equal(at('2026-09-19'), 1, '4 days out');

@@ -6,29 +6,35 @@ const fs = require('fs');
 const path = require('path');
 const vm = require('vm');
 
-const read = (f) => fs.readFileSync(path.join(__dirname, '..', 'public', f), 'utf8');
+const read = (/** @type {string} */ f) => fs.readFileSync(path.join(__dirname, '..', 'public', f), 'utf8');
 const HTML = read('admin-dashboard.html');
 const core = require('../functions/assignment-nudge.js');
 const serverWording = core.templatesForSendPath({});
 const DEFAULT_TEXT = serverWording.text.nudge;
 const DEFAULT_PUSH = serverWording.push.nudge;
 
+/** @param {{stored?: Object<string, *>, fail?: boolean}} [opts] */
 function mount({ stored = {}, fail = false } = {}) {
+    /** @type {Array<*>} */
     const writes = [];
+    /** @type {Array<*>} */
     const toasts = [];
+    /** @type {*} */
     let factory = null;
+    /** @type {Array<*>} */
     const watchers = [];
+    /** @type {*} */
     const ctx = {
         console: { error() {}, warn() {}, info() {}, log() {} },
         setTimeout, clearTimeout,
         firebase: { firestore: { FieldValue: { serverTimestamp: () => 'TS' } } },
-        document: { addEventListener: (ev, fn) => { if (ev === 'alpine:init') fn(); } },
-        Alpine: { data: (name, fn) => { if (name === 'adminDashboard') factory = fn; } },
+        document: { addEventListener: (/** @type {string} */ ev, /** @type {Function} */ fn) => { if (ev === 'alpine:init') fn(); } },
+        Alpine: { data: (/** @type {string} */ name, /** @type {Function} */ fn) => { if (name === 'adminDashboard') factory = fn; } },
         db: {
-            collection: (c) => ({
-                doc: (id) => ({
+            collection: (/** @type {string} */ c) => ({
+                doc: (/** @type {string} */ id) => ({
                     get: async () => ({ exists: true, data: () => stored }),
-                    set: async (data, opts) => {
+                    set: async (/** @type {*} */ data, /** @type {*} */ opts) => {
                         if (fail) throw new Error('offline');
                         writes.push({ path: c + '/' + id, data: JSON.parse(JSON.stringify(data)), merge: !!(opts && opts.merge) });
                     },
@@ -37,14 +43,14 @@ function mount({ stored = {}, fail = false } = {}) {
         },
     };
     ctx.window = ctx;
-    ctx.MosaicLiveRead = { watch: (ref, onNext) => { watchers.push(onNext); return () => {}; } };
+    ctx.MosaicLiveRead = { watch: (/** @type {*} */ ref, /** @type {*} */ onNext) => { watchers.push(onNext); return () => {}; } };
     vm.createContext(ctx);
     vm.runInContext(read('live-fields-core.js'), ctx);
     vm.runInContext(read('admin-dashboard.js'), ctx);
     const comp = factory();
     comp.currentUser = { uid: 'admin1' };
-    comp.showToast = (m, kind) => toasts.push(kind || 'ok');
-    const push = (data) => watchers.forEach((w) => w({ exists: true, data: () => data, metadata: { hasPendingWrites: false } }));
+    comp.showToast = (/** @type {string} */ m, /** @type {string} */ kind) => toasts.push(kind || 'ok');
+    const push = (/** @type {*} */ data) => watchers.forEach((w) => w({ exists: true, data: () => data, metadata: { hasPendingWrites: false } }));
     return { comp, writes, toasts, push };
 }
 

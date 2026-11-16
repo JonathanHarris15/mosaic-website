@@ -393,7 +393,7 @@ function stampedRecord(existing, s) {
  * What the send path is asked. Who, what and where — never push or text.
  * @param {NudgeSend} send one entry from nudgePlan
  * @param {string} origin the site the Commitments page lives on
- * @return {Object}
+ * @return {Object<string, *>}
  */
 function notifyRequest(send, origin) {
   return {
