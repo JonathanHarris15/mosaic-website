@@ -43,7 +43,7 @@ function destinationUrl(request) {
  * Render both wordings. Templates are already resolved by the caller; the
  * fallbacks cover a purpose the config does not know.
  * @param {Object} templates
- * @param {Object} request
+ * @param {Object<string, *>} request
  * @param {Object} person
  * @return {{text: string, title: string, body: string, url: string}}
  */

@@ -172,12 +172,21 @@ function nameOrNeutral(firstName) {
 }
 
 /**
+ * What a template is filled from.
+ * @typedef {{
+ *   firstName?: string,
+ *   link?: string,
+ *   extra?: Object<string, *>,
+ * }} FillValues
+ */
+
+/**
  * Fill {name}, {link}, and any other {word} the caller passed a string for
  * in `values.extra` (an event announcement's {title} and {prose}). One pass,
  * so text that arrived inside a value is never filled again. A missing link
  * removes the placeholder; it does not mint a URL. An unknown {word} stays.
  * @param {string} template
- * @param {Object} values firstName, an optional link, optional extra
+ * @param {FillValues} values
  * @return {string}
  */
 function fill(template, values) {
