@@ -170,6 +170,7 @@
     // to answer. The picker says beforehand whether it can, and the sent row
     // says afterwards whether it did, so the inviter knows when to ask in
     // person instead.
+    /** @type {Object<string, string>} */
     const TEXT_LINES = Object.freeze({
         sent: 'Texted',
         held: 'Will text at 8am',
@@ -177,6 +178,10 @@
         unreachable: 'No phone — ask them yourself',
     });
 
+    /**
+     * @param {*} person a directory Person
+     * @return {?string}
+     */
     function reachLabel(person) {
         const p = person || {};
         if (p.userId) return null;
@@ -184,6 +189,11 @@
         return phone ? "No account — we'll text them" : 'No account and no phone — ask them yourself';
     }
 
+    /**
+     * @param {*} trade
+     * @param {string} personId
+     * @return {?string}
+     */
     function textLineFor(trade, personId) {
         if (!trade || trade.holderId !== personId) return null;
         const status = trade.invitationText && trade.invitationText.status;

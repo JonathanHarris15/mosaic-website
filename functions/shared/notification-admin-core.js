@@ -543,6 +543,32 @@
                 'day. Editors are not sent one.',
         },
         {
+            id: 'trade_invitation',
+            name: 'Trade invitation text',
+            purpose: 'trade_invitation',
+            wording: 'invitation',
+            channels: ['text'],
+            audience: 'Somebody with no Mosaic account whom a member asks to take a place',
+            firedBy: [
+                {
+                    kind: 'manual',
+                    name: 'inviteToTrade',
+                    how: 'A member invites them from Commitments.',
+                },
+                {
+                    kind: 'schedule',
+                    name: 'sendHeldTradeInvitations',
+                    how: 'Hourly, for an invitation made outside the church\'s hours.',
+                },
+            ],
+            killSwitch: 'None. A member asking is the switch.',
+            window: 'church',
+            wordingSource: 'Trade invitation text (System tools)',
+            live: true,
+            note: 'One text with an Answer link, no reminder. Somebody with ' +
+                'an account answers on Commitments instead.',
+        },
+        {
             id: 'sms_test',
             name: 'SMS test',
             purpose: 'test',

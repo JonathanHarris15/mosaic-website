@@ -165,7 +165,7 @@ test('the default wording names who asked, the Role, the Event, the date and the
     assert.equal(t.text.invitation,
         'Hi {name}, {inviter} from Mosaic Church asked if you could take their place: ' +
         '{role} at {event} on {date}. Tap to answer: {link}');
-    assert.deepEqual(inv.requestValues(trade(), {inviterFirstName: 'Bob'}), VALUES);
+    assert.deepEqual(inv.notifyRequest(trade(), {inviteeId: 'invitee', inviterFirstName: 'Bob', url: 'u'}).values, VALUES);
 });
 
 test('a saved wording replaces the default; a blank one falls back', () => {

@@ -279,12 +279,14 @@
                 this.problem = data.message || 'That did not work.';
             },
 
+            /** @param {*} view */
             showTrade(view) {
                 this.purpose = 'trade_invitation';
                 this.trade = view;
                 this.state = 'trade-' + view.status;
             },
 
+            /** @param {string} choice take or refuse */
             async answerTrade(choice) {
                 if (this.sending || !this.token) return;
                 this.sending = true;
@@ -294,6 +296,7 @@
                         fns.httpsCallable('answerLink')({ op: 'answer', token: this.token, answer: choice }),
                         CALL_TIMEOUT,
                         'the server did not answer in time');
+                    /** @type {*} */
                     const data = res.data || {};
                     if (data.ok && data.view) {
                         this.showTrade(data.view);

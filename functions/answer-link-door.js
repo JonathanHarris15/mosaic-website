@@ -66,10 +66,10 @@ function expiredLink() {
 /**
  * Mint a link. The raw token is returned to the caller and never stored.
  * @param {FirebaseFirestore.Firestore} db
- * @param {Object} args purpose, personId, thing, now, randomBytes, and
- *   endDate (YYYY-MM-DD) when the thing is not itself the date the link
- *   dies with, as for a Trade invitation
- * @return {Promise<{token: string, url: string, id: string}>}
+ * @param {Object<string, *>} args purpose, personId, thing, now,
+ *   randomBytes, and endDate (YYYY-MM-DD) when the thing is not itself the
+ *   date the link dies with, as for a Trade invitation
+ * @return {Promise<{token: string, url: string, id: string, expiresAt: Date}>}
  */
 async function mintAnswerLink(db, args) {
   const bytes = args.randomBytes || crypto.randomBytes(16);
@@ -263,7 +263,7 @@ function tradeDeps(db) {
  * so every eligibility and visibility check still runs.
  * @param {*} deps loadTrade, firstNameOf, offer, refuse
  * @param {*} args op, link, answer, now, linkRef
- * @return {Promise<Object>}
+ * @return {Promise<Object<string, *>>}
  */
 async function tradeInvitationPurpose(deps, args) {
   const personId = args.link.personId;

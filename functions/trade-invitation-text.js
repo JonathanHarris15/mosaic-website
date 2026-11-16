@@ -241,12 +241,10 @@ function templatesForSendPath(config) {
 }
 
 module.exports = {
-  PURPOSE,
   TEXT_STATUS,
   textDecision,
   linkEndDate,
   inviteeView,
-  requestValues,
   notifyRequest,
   statusFromSend,
   templatesForSendPath,
