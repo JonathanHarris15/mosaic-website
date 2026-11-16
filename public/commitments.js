@@ -491,6 +491,10 @@
             // unpicked.
             unreachable(person) { return !person || !person.userId; },
 
+            // What the picker says about somebody with no account (MS-249):
+            // whether they will be texted, or need asking in person.
+            reachLabel(person) { return TradeView.reachLabel(this.personById(person && person.id) || person); },
+
             async ask(person) {
                 if (this.busy) return;
                 if (!person || person.selectable === false) return;

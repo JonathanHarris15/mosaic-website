@@ -516,6 +516,8 @@
                                     <span x-text="roleNameFor(swap.roleName)"></span> ·
                                     <span x-text="longDateOf(swap.date)"></span>
                                 </div>
+                                <div x-show="swap.textLine" class="text-[12px] text-on-surface-variant mt-[2px]"
+                                     x-text="swap.textLine"></div>
                             </div>
                             <button x-show="swap.can.withdraw" type="button"
                                     :disabled="busy" @click="withdrawSwap(swap)"
@@ -606,7 +608,7 @@
                                   class="inline-flex items-center mt-[3px] px-[7px] py-[2px] rounded
                                          bg-surface-container text-[10.5px] uppercase tracking-[.1em]
                                          text-on-surface-variant">
-                                No account
+                                <span x-text="reachLabel(person)"></span>
                             </span>
                         </span>
                     </button>
