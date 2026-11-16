@@ -163,6 +163,43 @@
         return { headline: 'Taken back', detail: 'Nothing changed.' };
     }
 
+    // ── Somebody with no account is texted (MS-249) ─────────────────────────
+    //
+    // An invitation to a Person with no Linked User goes as a text with a link
+    // to answer. The picker says beforehand whether it can, and the sent row
+    // says afterwards whether it did, so the holder knows when to ask in
+    // person instead. The church's hours are the send path's, so a held text
+    // says "in the morning" rather than naming an hour.
+    /** @type {Object<string, string>} */
+    const TEXT_LINES = Object.freeze({
+        sent: 'Texted',
+        held: 'Will text them in the morning',
+        failed: "Couldn't text them — ask them yourself",
+        unreachable: 'No phone — ask them yourself',
+    });
+
+    /**
+     * @param {*} person a directory Person
+     * @return {?string}
+     */
+    function reachLabel(person) {
+        const p = person || {};
+        if (p.userId) return null;
+        const phone = p.contact && typeof p.contact.phone === 'string' ? p.contact.phone.trim() : '';
+        return phone ? "No account — we'll text them" : 'No account and no phone — ask them yourself';
+    }
+
+    /**
+     * @param {*} trade
+     * @param {string} personId
+     * @return {?string}
+     */
+    function textLineFor(trade, personId) {
+        if (!trade || trade.holderId !== personId) return null;
+        const status = trade.invitationText && trade.invitationText.status;
+        return TEXT_LINES[status] || null;
+    }
+
     // One Trade as a row. `today` decides whether it is still live at all.
     function rowFor(trade, options) {
         const opts = options || {};
@@ -188,6 +225,7 @@
             date: trade.assignment && trade.assignment.date,
             otherId: trade.holderId === personId
                 ? trade.counterpartyId : trade.holderId,
+            textLine: textLineFor(trade, personId),
         };
     }
 
@@ -313,6 +351,7 @@
         askableFrom,
         alreadyAsked,
         invitesLeft,
+        reachLabel,
     };
 
     if (typeof module !== 'undefined' && module.exports) {

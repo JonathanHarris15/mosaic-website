@@ -81,6 +81,17 @@
             token: '',
             serviceDate: '',
             signedIn: false,
+            // A Trade invitation (MS-249) opens through the same link and
+            // door. Its view is the invitee's, and nothing more.
+            purpose: 'prayer_request',
+            trade: {
+                status: '', holderFirstName: '', eventName: '',
+                roleName: '', dateLabel: '', timeLabel: '', canAnswer: [],
+            },
+
+            get pageTitle() {
+                return this.purpose === 'trade_invitation' ? 'Can you take this?' : 'Prayer request';
+            },
 
             get greeting() {
                 const name = (this.view && this.view.firstName) || 'there';
@@ -167,6 +178,10 @@
                     data, !this.token);
                 if (refused) {
                     this.state = refused;
+                    return;
+                }
+                if (data.ok && data.purpose === 'trade_invitation' && data.view) {
+                    this.showTrade(data.view);
                     return;
                 }
                 if (!data.ok) {
@@ -262,6 +277,44 @@
                     return;
                 }
                 this.problem = data.message || 'That did not work.';
+            },
+
+            /** @param {*} view */
+            showTrade(view) {
+                this.purpose = 'trade_invitation';
+                this.trade = view;
+                this.state = 'trade-' + view.status;
+            },
+
+            /** @param {string} choice take or refuse */
+            async answerTrade(choice) {
+                if (this.sending || !this.token) return;
+                this.sending = true;
+                this.problem = '';
+                try {
+                    const res = await withTimeout(
+                        fns.httpsCallable('answerLink')({ op: 'answer', token: this.token, answer: choice }),
+                        CALL_TIMEOUT,
+                        'the server did not answer in time');
+                    /** @type {*} */
+                    const data = res.data || {};
+                    if (data.ok && data.view) {
+                        this.showTrade(data.view);
+                    } else {
+                        const refused = linkCore && linkCore.readRefusalState(data);
+                        if (refused === 'limited' || refused === 'invalid' || refused === 'closed') {
+                            this.state = refused;
+                        } else {
+                            this.problem = data.message || 'That did not work.';
+                        }
+                    }
+                } catch (e) {
+                    console.error('answerLink trade answer failed:', e && (e.code || ''), e && e.message);
+                    const refused = linkCore && linkCore.readCallableErrorState(e);
+                    if (refused) this.state = refused;
+                    else this.problem = 'That did not go through. Nothing has changed. Try again.';
+                }
+                this.sending = false;
             },
 
             retry() {

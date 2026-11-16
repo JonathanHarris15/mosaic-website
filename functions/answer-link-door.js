@@ -10,6 +10,10 @@ const crypto = require("crypto");
 const al = require("./answer-link");
 const pr = require("./prayer-request");
 const writes = require("./prayer-request-writes");
+const tw = require("./trade-writes");
+const {inviteeView, PURPOSE: PURPOSE_TRADE} =
+  require("./trade-invitation-text");
+const {tradeReads} = require("./trade-invitation-firestore");
 
 const LINKS = "answer_links";
 const LOOKUPS = "answer_link_lookups";
@@ -63,15 +67,17 @@ function expiredLink() {
 /**
  * Mint a link. The raw token is returned to the caller and never stored.
  * @param {FirebaseFirestore.Firestore} db
- * @param {Object} args purpose, personId, thing, now, randomBytes
- * @return {Promise<{token: string, url: string, id: string}>}
+ * @param {Object<string, *>} args purpose, personId, thing, now,
+ *   randomBytes, and endDate (YYYY-MM-DD) when the thing is not itself the
+ *   date the link dies with, as for a Trade invitation
+ * @return {Promise<{token: string, url: string, id: string, expiresAt: Date}>}
  */
 async function mintAnswerLink(db, args) {
   const bytes = args.randomBytes || crypto.randomBytes(16);
   const token = al.mintAnswerToken(bytes);
   const id = al.tokenDocumentId(token);
   const now = args.now || new Date();
-  const expiresAt = al.linkExpiryAt(args.thing, now);
+  const expiresAt = al.linkExpiryAt(args.endDate || args.thing, now);
   await db.collection(LINKS).doc(id).set({
     purpose: args.purpose,
     personId: args.personId,
@@ -222,7 +228,101 @@ async function dispatchPurpose(db, args) {
   if (purpose === PURPOSE_PRAYER) {
     return prayerPurpose(db, args);
   }
+  if (purpose === PURPOSE_TRADE) {
+    return tradeInvitationPurpose(tradeDeps(db), args);
+  }
   return closed();
+}
+
+/**
+ * What the Trade invitation purpose reads and moves, from Firestore.
+ * @param {FirebaseFirestore.Firestore} db
+ * @return {*}
+ */
+function tradeDeps(db) {
+  return Object.assign({}, tradeReads(db), {
+    offer: (/** @type {*} */ spec) => tw.offer(db, spec),
+    refuse: (/** @type {*} */ spec) => tw.refuse(db, spec),
+  });
+}
+
+/**
+ * Spend one of a link's saves around a write: refuse when the link has had
+ * too many, and stamp the save only once the write went through. One order
+ * for every purpose.
+ * @param {*} linkRef the answer_links document, or null when signed in
+ * @param {Date} now
+ * @param {function(): Promise<*>} write returns {ok}
+ * @return {Promise<*>} the write's result, or RATE_LIMITED
+ */
+async function withSave(linkRef, now, write) {
+  if (!linkRef) return write();
+  const linkSnap = await linkRef.get();
+  const save = al.saveRateDecision(linkSnap.data() || {}, now);
+  if (!save.ok) return Object.assign({}, RATE_LIMITED);
+  const result = await write();
+  if (result && result.ok) {
+    await linkRef.set({saveTimestamps: save.saveTimestamps}, {merge: true});
+  }
+  return result;
+}
+
+/**
+ * A Trade invitation answered through its link (MS-249). The invitee can
+ * take the place or say no, and nothing else: offering one of their own
+ * places would show the link holder their other Assignments. Both answers
+ * are the existing Trade moves, with the invitee off the link as the actor,
+ * so every eligibility and visibility check still runs.
+ * @param {*} deps loadTrade, holderFirstName, eventTime, offer, refuse
+ * @param {*} args op, link, answer, now, linkRef
+ * @return {Promise<Object<string, *>>}
+ */
+async function tradeInvitationPurpose(deps, args) {
+  const personId = args.link.personId;
+  const tradeId = args.link.thing;
+  const today = pr.churchDateParts(args.now).date;
+
+  const viewNow = async () => {
+    const trade = await deps.loadTrade(tradeId);
+    if (!trade || trade.counterpartyId !== personId) return null;
+    return inviteeView(trade, {
+      inviteeId: personId,
+      holderFirstName: await deps.holderFirstName(trade.holderId),
+      today: today,
+      time: await deps.eventTime(trade),
+    });
+  };
+
+  const before = await viewNow();
+  if (!before) return closed();
+  const shown = (/** @type {*} */ view) =>
+    ({ok: true, purpose: PURPOSE_TRADE, thing: tradeId, view: view});
+  if (args.op === "read") return shown(before);
+
+  const answer = String(args.answer || "");
+  if (answer !== "take" && answer !== "refuse") {
+    return {ok: false, code: "invalid-argument",
+      message: "Say yes or no."};
+  }
+  // Nothing left to answer: show where it stands rather than a refusal.
+  if (before.canAnswer.indexOf(answer) === -1) return shown(before);
+
+  const spec = {tradeId: tradeId, actorId: personId, today: today,
+    now: args.now};
+  // An empty reply to an invitation settles it: they were asked, so their
+  // answer is the agreement (CONTEXT.md, Trade).
+  const result = await withSave(args.linkRef, args.now, () =>
+    answer === "take" ?
+      deps.offer(Object.assign({offered: []}, spec)) :
+      deps.refuse(spec));
+  if (result && result.code === RATE_LIMITED.code) return result;
+  // ⚠ NOT THE MOVE'S OWN CODE. The page reads failed-precondition as an
+  // expired link, so "the Role does not allow you" would show as a dead link.
+  if (!result || !result.ok) {
+    return {ok: false, code: "refused",
+      message: (result && result.message) || "That did not work."};
+  }
+  return shown(await viewNow() || before);
 }
 
 /**
@@ -249,33 +349,13 @@ async function prayerPurpose(db, args) {
     return {ok: false, code: "invalid-argument", message: "Write something."};
   }
 
-  if (args.linkRef) {
-    const linkSnap = await args.linkRef.get();
-    const link = linkSnap.exists ? linkSnap.data() : {};
-    const save = al.saveRateDecision(link, now);
-    if (!save.ok) {
-      return Object.assign({}, RATE_LIMITED);
-    }
-    const result = await writes.saveFormAnswer(db, {
+  const result = await withSave(args.linkRef, now, () =>
+    writes.saveFormAnswer(db, {
       personId, serviceDate, todayDate,
       answerText: args.answer,
       now,
-      viaAnswerLink: true,
-    });
-    if (result.ok) {
-      await args.linkRef.set({saveTimestamps: save.saveTimestamps},
-          {merge: true});
-    }
-    if (!result.ok && result.code === "closed") return closed();
-    return result;
-  }
-
-  const result = await writes.saveFormAnswer(db, {
-    personId, serviceDate, todayDate,
-    answerText: args.answer,
-    now,
-    viaAnswerLink: false,
-  });
+      viaAnswerLink: !!args.linkRef,
+    }));
   if (!result.ok && result.code === "closed") return closed();
   return result;
 }
@@ -289,4 +369,5 @@ module.exports = {
   RATE_LIMITED,
   mintAnswerLink,
   handleAnswerLink,
+  tradeInvitationPurpose,
 };

@@ -35,6 +35,15 @@ const {
   buildDeps: buildNudgeDeps,
   runNudgeTick,
 } = require("./assignment-nudge-firestore");
+const {
+  templatesForSendPath: invitationTemplates,
+  PURPOSE: invitationPurpose,
+} = require("./trade-invitation-text");
+const {buildInviteDeps} = require("./trade-invitation-firestore");
+const {
+  tellInvitee,
+  sweepHeldInvitations,
+} = require("./trade-invitation-send");
 const ac = require("./assignment-conversion");
 const si = require("./service-involvement");
 const siRun = require("./service-involvement-run");
@@ -1099,7 +1108,7 @@ async function tradeMove(request, run) {
 }
 
 exports.inviteToTrade = onCall(
-    {cors: true, region: "us-central1"},
+    {cors: true, region: "us-central1", secrets: [TEXTBELT_KEY]},
     async (request) => {
       const {occurrenceId, roleSlug, slotId, counterpartyId} =
         request.data || {};
@@ -1115,6 +1124,14 @@ exports.inviteToTrade = onCall(
 
       log(`inviteToTrade: ${counterpartyId} asked about ${roleSlug} ` +
           `on ${occurrenceId}`);
+
+      // Somebody with no account is texted an Answer link (MS-249). A text
+      // that does not go must never undo the invitation.
+      try {
+        await tellInvitee(inviteDeps(admin.firestore()), result.tradeId);
+      } catch (err) {
+        log(`inviteToTrade: text to ${counterpartyId} failed: ${err}`);
+      }
       return {success: true, tradeId: result.tradeId, state: result.state};
     },
 );
@@ -2390,6 +2407,7 @@ function notifierDeps(db) {
       const purposes = [
         eventAnnWording.templatesForSendPath(loaded.raw),
         nudgeTemplates(loaded.raw),
+        invitationTemplates(loaded.raw),
       ];
       /**
        * @param {string} part text, textFallback, push or pushFallback
@@ -3155,6 +3173,51 @@ exports.sendEventAnnouncementTells = onSchedule(
       if (result.ran && result.sent) {
         log(`sendEventAnnouncementTells: sent ${result.sent} notification(s).`);
       }
+    },
+);
+
+/**
+ * What texting a Trade invitee needs (MS-249). The send goes through the one
+ * send path, which picks a text for somebody with no account.
+ * @param {FirebaseFirestore.Firestore} db
+ * @return {*}
+ */
+function inviteDeps(db) {
+  return buildInviteDeps(db, {
+    churchNow: () => pr.churchDateParts(new Date()),
+    now: () => admin.firestore.Timestamp.now(),
+    log: log,
+    tellPerson: notify.tellPerson,
+    notifierDeps: notifierDeps(db),
+    deleteField: () => admin.firestore.FieldValue.delete(),
+    mintLink: async (args) => {
+      const minted = await answerDoor.mintAnswerLink(db, {
+        purpose: invitationPurpose,
+        personId: args.personId,
+        thing: args.tradeId,
+        endDate: args.endDate,
+        now: new Date(),
+      });
+      return minted.url;
+    },
+  });
+}
+
+/**
+ * Hourly sweep for Trade invitation texts held overnight (MS-249). Sends
+ * each once the church's 8am-8pm window opens, if the Trade is still
+ * waiting on that person and its date has not passed.
+ */
+exports.sendHeldTradeInvitations = onSchedule(
+    {
+      schedule: "every 60 minutes",
+      timeZone: pr.CHURCH_TIMEZONE,
+      region: "us-central1",
+      secrets: [TEXTBELT_KEY],
+    },
+    async () => {
+      const sent = await sweepHeldInvitations(inviteDeps(admin.firestore()));
+      if (sent) log(`sendHeldTradeInvitations: texted ${sent} invitee(s).`);
     },
 );
 

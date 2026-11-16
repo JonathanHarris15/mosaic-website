@@ -204,6 +204,8 @@ test('every purpose the functions write has a row in the registry', () => {
     written.add(require('../functions/assignment-nudge.js').notifyRequest(
         {personId: 'p', assignments: [], escalate: false, previousChannel: null,
             values: {places: ''}}, 'https://x').purpose);
+    // And the Trade invitation text (MS-249).
+    written.add(require('../functions/trade-invitation-text.js').PURPOSE);
 
     const known = new Set(core.NOTIFICATION_TYPES.map((type) => type.purpose));
     for (const purpose of written) {

@@ -348,3 +348,37 @@ test('a Linked User who can see a members-only Event stays selectable', () => {
     assert.equal(eve.selectable, true);
     assert.equal(eve.disabledReason, null);
 });
+
+// MS-249 / MS-527: the inviter learns who will be texted, and whether it went.
+
+test('the picker says who will be texted when they have no account', () => {
+    assert.strictEqual(View.reachLabel({ userId: 'u1', contact: { phone: '5550001' } }), null);
+    assert.strictEqual(View.reachLabel({ contact: { phone: '5550001' } }), "No account — we'll text them");
+    assert.strictEqual(View.reachLabel({ contact: { phone: '  ' } }), 'No account and no phone — ask them yourself');
+    assert.strictEqual(View.reachLabel({}), 'No account and no phone — ask them yourself');
+});
+
+test('a sent invitation shows its text status, each on its own line', () => {
+    const base = {
+        id: 't9', origin: Core.ORIGINS.INVITATION, state: Core.STATES.INVITED,
+        holderId: BOB, counterpartyId: SARAH, assignment: KIDS,
+        eventName: 'Sunday Service', roleName: 'Kids',
+    };
+    const line = (/** @type {*} */ status) => View.rowFor(
+        Object.assign({}, base, status ? { invitationText: { status } } : {}),
+        { personId: BOB, nameOf: () => 'Sarah' }).textLine;
+    assert.strictEqual(line('sent'), 'Texted');
+    assert.strictEqual(line('held'), 'Will text them in the morning');
+    assert.strictEqual(line('failed'), "Couldn't text them — ask them yourself");
+    assert.strictEqual(line('unreachable'), 'No phone — ask them yourself');
+    assert.strictEqual(line(null), null);
+});
+
+test('the person invited never sees the text status line', () => {
+    const t = {
+        id: 't9', origin: Core.ORIGINS.INVITATION, state: Core.STATES.INVITED,
+        holderId: BOB, counterpartyId: SARAH, assignment: KIDS,
+        invitationText: { status: 'sent' },
+    };
+    assert.strictEqual(View.rowFor(t, { personId: SARAH, nameOf: () => 'Bob' }).textLine, null);
+});
