@@ -37,3 +37,11 @@ test('the scheduler names the same collection the rules close', () => {
         path.join(__dirname, '..', 'functions', 'assignment-nudge-firestore.js'), 'utf8');
     assert.match(src, /["']assignment_nudges["']/);
 });
+
+// MS-824: the same closed door for the Trade tell records.
+test('nobody reads or writes a Trade tell record from a client', () => {
+    const m = rules.match(/match \/trade_tells\/\{recordId\}\s*\{([\s\S]*?)\n {4}\}/);
+    assert.ok(m, 'MS-824 needs a /trade_tells collection');
+    const allows = m[1].match(/allow [^;]*;/g) || [];
+    assert.deepEqual(allows, ['allow read, write: if false;']);
+});

@@ -561,6 +561,32 @@
                 'an account answers on Commitments instead.',
         },
         {
+            id: 'trade_update',
+            name: 'Trade update',
+            purpose: 'trade_update',
+            wording: 'trade',
+            channels: ['push', 'text'],
+            audience: 'The people in a Trade who have a Mosaic account',
+            firedBy: [
+                {
+                    kind: 'trigger',
+                    name: 'tellTradeParties',
+                    how: 'Whenever a Trade is written: invited, offered, or ended.',
+                },
+                {
+                    kind: 'schedule',
+                    name: 'sendHeldTradeTells',
+                    how: 'Hourly, for a message held outside the church\'s hours.',
+                },
+            ],
+            killSwitch: 'None. Somebody acting on a Trade is the switch.',
+            window: 'church',
+            wordingSource: 'The Commitments row itself; not editable',
+            live: true,
+            note: 'Says what the reader\'s Commitments row says. Whoever ' +
+                'ended a Trade is not told their own news back.',
+        },
+        {
             id: 'sms_test',
             name: 'SMS test',
             purpose: 'test',

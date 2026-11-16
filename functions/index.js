@@ -40,6 +40,12 @@ const {
   PURPOSE: invitationPurpose,
 } = require("./trade-invitation-text");
 const {buildInviteDeps} = require("./trade-invitation-firestore");
+const {templatesForSendPath: tradeTellTemplates} = require("./trade-tell");
+const {
+  tellParties,
+  sweepHeldTells,
+  buildTellDeps,
+} = require("./trade-tell-firestore");
 const {
   tellInvitee,
   sweepHeldInvitations,
@@ -2408,6 +2414,7 @@ function notifierDeps(db) {
         eventAnnWording.templatesForSendPath(loaded.raw),
         nudgeTemplates(loaded.raw),
         invitationTemplates(loaded.raw),
+        tradeTellTemplates(),
       ];
       /**
        * @param {string} part text, textFallback, push or pushFallback
@@ -3202,6 +3209,65 @@ function inviteDeps(db) {
     },
   });
 }
+
+/**
+ * What telling a Trade's parties needs (MS-824).
+ * @param {FirebaseFirestore.Firestore} db
+ * @return {*}
+ */
+function tellDeps(db) {
+  return buildTellDeps(db, {
+    churchNow: () => pr.churchDateParts(new Date()),
+    now: () => admin.firestore.Timestamp.now(),
+    origin: SITE_ORIGIN,
+    log: log,
+    tellPerson: notify.tellPerson,
+    notifierDeps: notifierDeps(db),
+  });
+}
+
+/**
+ * Tell a Trade's parties what a write owes them (MS-824): the invitee when
+ * invited, the holder when an offer waits, and whoever did not end it when
+ * it ends. Only people with a Linked User; the send path picks push or
+ * text, and keeps the church's hours.
+ */
+exports.tellTradeParties = onDocumentWritten(
+    {
+      document: "trades/{tradeId}",
+      region: "us-central1",
+      secrets: [TEXTBELT_KEY],
+    },
+    async (event) => {
+      const data = event.data;
+      const before = data && data.before && data.before.exists ?
+        data.before.data() : null;
+      const after = data && data.after && data.after.exists ?
+        data.after.data() : null;
+      await tellParties(tellDeps(admin.firestore()), {
+        tradeId: event.params.tradeId,
+        before: before,
+        after: after,
+      });
+    },
+);
+
+/**
+ * Hourly sweep for Trade messages held overnight (MS-824). Sends each once
+ * the church's hours open, if the Trade has not moved since.
+ */
+exports.sendHeldTradeTells = onSchedule(
+    {
+      schedule: "every 60 minutes",
+      timeZone: pr.CHURCH_TIMEZONE,
+      region: "us-central1",
+      secrets: [TEXTBELT_KEY],
+    },
+    async () => {
+      const sent = await sweepHeldTells(tellDeps(admin.firestore()));
+      if (sent) log(`sendHeldTradeTells: told ${sent} person(s).`);
+    },
+);
 
 /**
  * Hourly sweep for Trade invitation texts held overnight (MS-249). Sends

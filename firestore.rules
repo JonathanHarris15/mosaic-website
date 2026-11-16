@@ -1543,5 +1543,13 @@ service cloud.firestore {
     match /assignment_nudges/{recordId} {
       allow read, write: if false;
     }
+
+    // Trade tells (MS-824). One record per Trade, state and Person, so a
+    // retried trigger sends once and a message held overnight is sent by
+    // the hourly sweep. Server-only: it names who was told what about
+    // somebody else's Trade.
+    match /trade_tells/{recordId} {
+      allow read, write: if false;
+    }
   }
 }
