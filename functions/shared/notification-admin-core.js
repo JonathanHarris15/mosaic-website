@@ -516,9 +516,31 @@
             killSwitch: 'Per announcement, on the Event.',
             window: 'church',
             wordingSource: 'Event announcement tells (this page)',
-            live: false,
-            note: 'Not wired to the send path yet (MS-623). The tick runs ' +
-                'and records nothing.',
+            live: true,
+            note: 'Goes through the send path: push to the app, or a text. ' +
+                'One per person per tell moment.',
+        },
+        {
+            id: 'assignment_nudge',
+            name: 'Nudge',
+            purpose: 'assignment_nudge',
+            wording: 'nudge',
+            channels: ['push', 'text'],
+            audience: 'Somebody whose Assignment is still Unconfirmed as its date nears',
+            firedBy: [
+                {
+                    kind: 'schedule',
+                    name: 'sendAssignmentNudges',
+                    how: 'Hourly. A first nudge at 5 days out, a second at ' +
+                        '3 days by the other route.',
+                },
+            ],
+            killSwitch: 'Nudges, on System tools. Off until turned on.',
+            window: 'church',
+            wordingSource: 'Nudges (System tools)',
+            live: true,
+            note: 'Two at most per Assignment, one message per person per ' +
+                'day. Editors are not sent one.',
         },
         {
             id: 'sms_test',
