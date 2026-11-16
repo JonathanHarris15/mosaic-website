@@ -173,7 +173,7 @@ async function resolveOccurrenceId(db, parent, moment) {
  * @param {FirebaseFirestore.Firestore} db
  * @param {?Function} tellPerson MS-189 send path when present
  * @param {string} [baseUrl] hosting origin for event links
- * @return {Object}
+ * @return {Object<string, *>}
  */
 function buildDeps(db, tellPerson, baseUrl) {
   return {

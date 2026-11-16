@@ -225,3 +225,43 @@ test('a text with no link does not invent one', async () => {
     await tellPerson(deps, Object.assign({}, base, {url: null}));
     assert.strictEqual(calls.text[0].body, 'Hi Jane. ');
 });
+
+// Event announcements (MS-623) use the same path with their own wording.
+// Their templates name {title} and {prose}, which the path has to fill.
+const annWording = require('../functions/event-announcement-notification.js');
+const Tell = require('../functions/shared/event-tell-core.js');
+
+function announcementHarness(person) {
+    return harness({
+        loadPerson: async () => person,
+        loadTemplates: async () => annWording.templatesForSendPath({}),
+    });
+}
+
+const announcement = Tell.notifyRequest({
+    personId: 'person-1',
+    firstName: 'Jane',
+    title: 'Men’s breakfast',
+    prose: 'Saturday at 8. Bring a friend.',
+    url: 'https://example.test/event/occ-1',
+});
+
+test('an event announcement push carries its title and prose', async () => {
+    const {deps, calls} = announcementHarness(
+        {uid: 'user-1', phone: '+15551212', firstName: 'Jane'});
+    const result = await tellPerson(deps, announcement);
+    assert.strictEqual(result.channel, 'push');
+    assert.strictEqual(calls.push[0].title, 'Men’s breakfast');
+    assert.strictEqual(calls.push[0].body, 'Saturday at 8. Bring a friend.');
+    assert.strictEqual(calls.push[0].url, 'https://example.test/event/occ-1');
+});
+
+test('an event announcement text carries title, prose and the link, and wants no reply', async () => {
+    const {deps, calls} = announcementHarness(
+        {uid: null, phone: '+15551212', firstName: 'Jane'});
+    const result = await tellPerson(deps, announcement);
+    assert.strictEqual(result.channel, 'text');
+    assert.strictEqual(calls.text[0].body,
+        'Men’s breakfast\n\nSaturday at 8. Bring a friend.\nhttps://example.test/event/occ-1');
+    assert.strictEqual(calls.text[0].expectReply, false);
+});

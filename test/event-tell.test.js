@@ -64,3 +64,68 @@ test('joinedAnnouncement refuses without told going-out', () => {
     assert.equal(eventTell.joinedAnnouncement('id', { title: 'T', prose: 'P' }, null), null);
     assert.equal(eventTell.joinedAnnouncement('id', { title: 'T', prose: 'P' }, { way: Ann.PRINTED }), null);
 });
+
+// The hourly job used to hand the send path an empty object, so the first
+// due person threw "deps.loadPerson is not a function" and nothing went out.
+const fs = require('fs');
+const path = require('path');
+
+function sliceBetween(src, startMark, endMark) {
+    const start = src.indexOf(startMark);
+    assert.ok(start !== -1, startMark);
+    const end = src.indexOf(endMark, start + startMark.length);
+    assert.ok(end !== -1, endMark);
+    return src.slice(start, end);
+}
+
+test('the hourly announcement job sends through the real send path deps', () => {
+    const index = fs.readFileSync(
+        path.join(__dirname, '../functions/index.js'), 'utf8');
+    const job = sliceBetween(index,
+        'exports.sendEventAnnouncementTells', 'exports.sendPrayerRequestTexts');
+    assert.match(job, /notifierDeps\(db\)/);
+    assert.doesNotMatch(job, /notifierDeps\s*=\s*\{\}/);
+    assert.match(job, /notify\.tellPerson/);
+});
+
+test('the send path loads event announcement wording beside the prayer wording', () => {
+    const index = fs.readFileSync(
+        path.join(__dirname, '../functions/index.js'), 'utf8');
+    const deps = sliceBetween(index,
+        'function notifierDeps(db)', 'function tell(db, request)');
+    assert.match(deps, /templatesForSendPath/);
+});
+
+test('a due tell goes out through tellPerson with the deps it needs', async () => {
+    const {tellPerson} = require('../functions/notification-send.js');
+    const wording = require('../functions/event-announcement-notification.js');
+    const pushes = [];
+    const notifierDeps = {
+        now: () => new Date('2026-06-15T15:00:00Z'),
+        loadPerson: async () => ({uid: 'u1', phone: '+15551212', firstName: 'Ada'}),
+        loadTokens: async () => [{id: 'd1', token: 't1'}],
+        loadTemplates: async () => wording.templatesForSendPath({}),
+        sendPush: async (msg) => { pushes.push(msg); return {accepted: true}; },
+        sendText: async () => ({accepted: true, textId: 'x'}),
+        deleteToken: async () => {},
+        writeLog: async () => {},
+    };
+    const outcome = await eventTell.sendOne({
+        hasSentMarker: async () => false,
+        writeSentMarker: async () => {},
+        tellPerson,
+        notifierDeps,
+    }, {
+        announcementId: 'a1',
+        moment: { date: '2026-06-15', time: '10:00' },
+        personId: 'p1',
+        person: { contact: { phone: '555' }, userId: 'u1' },
+        firstName: 'Ada',
+        title: 'Title',
+        prose: 'Prose',
+        url: 'https://example.test/e',
+    });
+    assert.equal(outcome.sent, true);
+    assert.equal(pushes[0].title, 'Title');
+    assert.equal(pushes[0].body, 'Prose');
+});
