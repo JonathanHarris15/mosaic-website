@@ -40,21 +40,21 @@ const EVENT_ANNOUNCEMENT_DEFAULTS = {
 // equal, so a blank field means the same words on the page and the server.
 /** @type {Object<string, string>} */
 const NUDGE_DEFAULTS = {
-    text: "Hi {name}, you're down for {places} and haven't said yet whether you can make it. Let the church know here: {link}",
+    text: "You still have not confirmed or traded your service role for {date} and it is {days} away. Please do so now: {link}",
     pushTitle: "Can you make it?",
-    pushBody: "You're down for {places}. Tap to answer.",
+    pushBody: "You still have not confirmed or traded your service role for {date}. Tap to answer.",
 };
 /** @type {Object<string, string>} */
-const NUDGE_STORED = { text: 'nudgeText', pushTitle: 'pushNudgeTitle', pushBody: 'pushNudgeBody' };
+const NUDGE_STORED = { text: 'reminderNudgeText', pushTitle: 'reminderNudgePushTitle', pushBody: 'reminderNudgePushBody' };
 // Trade invitation text (MS-249). Mirrors DEFAULT_TEXT in
 // functions/trade-invitation-text.js; test/admin-invitation-wording.test.js
 // holds them equal.
 /** @type {Object<string, string>} */
 const INVITATION_DEFAULTS = {
-    text: "Hi {name}, {inviter} from Mosaic Church asked if you could take their place: {role} at {event} on {date}. Tap to answer: {link}",
+    text: "{inviter} has asked you to trade service roles with them. See the trade here: {link}",
 };
 /** @type {Object<string, string>} */
-const INVITATION_STORED = { text: 'tradeInvitationText' };
+const INVITATION_STORED = { text: 'tradeInviteText' };
 
 /** @type {Object<string, string>} */
 const ANNOUNCEMENT_STORED = { text: 'eventAnnouncementText', pushTitle: 'pushEventAnnouncementTitle', pushBody: 'pushEventAnnouncementBody' };
@@ -228,6 +228,8 @@ document.addEventListener('alpine:init', () => {
         // Nudges (MS-248): the wording, and the switch that turns them on.
         nudgeWording: { ...NUDGE_DEFAULTS },
         nudgeEnabled: false,
+        pushEnabled: false,
+        pushSwitchSaving: false,
         nudgeSwitchSaving: false,
         /** @type {*} */
         nudgeLive: null,
@@ -537,6 +539,7 @@ document.addEventListener('alpine:init', () => {
                     const data = snap.exists ? snap.data() : {};
                     const opts = { pendingWrites: !!(snap.metadata && snap.metadata.hasPendingWrites) };
                     if (this.nudgeLive && !this.nudgeSwitchSaving) this.nudgeEnabled = data.nudgeEnabled === true;
+                    if (!this.pushSwitchSaving) this.pushEnabled = data.pushEnabled === true;
                     Object.keys(WORDING_BLOCKS).forEach(name => {
                         const b = WORDING_BLOCKS[name];
                         if (!self[b.live]) return;
@@ -560,6 +563,7 @@ document.addEventListener('alpine:init', () => {
         async loadNudgeSettings() {
             const data = await this.loadBlock('nudge');
             if (data) this.nudgeEnabled = data.nudgeEnabled === true;
+            if (data) this.pushEnabled = data.pushEnabled === true;
         },
         startLiveNudge() { this.startBlock('nudge'); },
         /** @param {string} f @param {string} v */
@@ -577,6 +581,29 @@ document.addEventListener('alpine:init', () => {
         saveInvitationWording() { return this.saveBlock('invitation'); },
         resetInvitationWording() { this.resetBlock('invitation'); },
 
+        // The push switch: off, every Notification goes by text. Saves the
+        // moment it is flipped, and flips back if the save fails.
+        /** @param {boolean} on */
+        async setPushEnabled(on) {
+            const was = this.pushEnabled;
+            this.pushEnabled = !!on;
+            this.pushSwitchSaving = true;
+            try {
+                await db.collection('app_config').doc('prayer_request_sms').set({
+                    pushEnabled: !!on,
+                    updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+                    updatedBy: /** @type {*} */ (this.currentUser).uid,
+                }, { merge: true });
+                this.showToast(on ? 'Push notifications are on' : 'Everything goes by text');
+            } catch (e) {
+                console.error('Error saving the push switch:', e);
+                this.pushEnabled = was;
+                this.showToast('Could not change push. Try again.', 'error');
+            } finally {
+                this.pushSwitchSaving = false;
+            }
+        },
+
         // The nudge switch saves the moment it is flipped, and flips back if
         // the save fails. Off unless somebody turned it on.
         /** @param {boolean} on */
@@ -590,7 +617,7 @@ document.addEventListener('alpine:init', () => {
                     updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
                     updatedBy: /** @type {*} */ (this.currentUser).uid,
                 }, { merge: true });
-                this.showToast(on ? 'Nudges are on' : 'Nudges are off');
+                this.showToast(on ? 'Assignment texts are on' : 'Assignment texts are off');
             } catch (e) {
                 console.error('Error saving the nudge switch:', e);
                 this.nudgeEnabled = was;

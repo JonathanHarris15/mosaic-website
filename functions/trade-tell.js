@@ -123,21 +123,100 @@ function wordsFor(trade, personId, nameOf) {
   return {headline: w.headline, detail: w.detail};
 }
 
+const WEEKDAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday",
+  "Friday", "Saturday"];
+const MONTHS = ["January", "February", "March", "April", "May", "June",
+  "July", "August", "September", "October", "November", "December"];
+
+/**
+ * "Sunday, November 22", or "" when there is no date.
+ * @param {?string} dateStr YYYY-MM-DD
+ * @return {string}
+ */
+function longDate(dateStr) {
+  if (!dateStr) return "";
+  const [y, m, d] = String(dateStr).split("-").map(Number);
+  const day = new Date(Date.UTC(y, m - 1, d));
+  if (isNaN(day.getTime())) return "";
+  return `${WEEKDAYS[day.getUTCDay()]}, ${MONTHS[day.getUTCMonth()]} ${
+    day.getUTCDate()}`;
+}
+
+/**
+ * "Sound on Sunday, November 22".
+ * @param {*} trade
+ * @return {string}
+ */
+function placeWords(trade) {
+  const a = (trade && trade.assignment) || {};
+  const role = (trade && trade.roleName) || a.roleSlug || "service role";
+  const date = longDate(a.date);
+  return date ? `${role} on ${date}` : role;
+}
+
+/**
+ * The text for a place taken with nothing asked in return — from the
+ * cover list, or as the reply to an invitation.
+ * @param {string} takerName
+ * @param {*} trade a Trade, or anything with assignment and roleName
+ * @return {string}
+ */
+function takenText(takerName, trade) {
+  return `${takerName || "Somebody"} has taken your ${placeWords(trade)} ` +
+    "without asking for anything in return. Make sure to thank them!";
+}
+
+/**
+ * The text a message carries. The three the church wrote its own words
+ * for — an invitation, an offer, and a place taken for nothing — use them;
+ * everything else says the reader's own Commitments row.
+ * @param {*} trade
+ * @param {Tell} t
+ * @param {{headline: string, detail: string}} words
+ * @param {NameOf} fullNameOf
+ * @param {string} url
+ * @return {string}
+ */
+function textFor(trade, t, words, fullNameOf, url) {
+  if (t.kind === KIND.INVITED) {
+    return `${fullNameOf(trade.holderId)} has asked you to trade service ` +
+      `roles with them. See the trade here: ${url}`;
+  }
+  if (t.kind === KIND.OFFERED) {
+    return `${fullNameOf(trade.counterpartyId)} has sent you a trade offer ` +
+      `for the ${placeWords(trade)} service role. See it here: ${url}`;
+  }
+  if (t.kind === KIND.ENDED && trade.state === Trade.STATES.SETTLED &&
+      !trade.chosen && t.personId === trade.holderId) {
+    return takenText(fullNameOf(trade.counterpartyId), trade);
+  }
+  return `${words.headline}. ${words.detail} ${url}`;
+}
+
 /**
  * What the send path is asked. Who, what and where — never push or text.
  * @param {Tell} t
  * @param {{headline: string, detail: string}} words
  * @param {string} origin the site Commitments lives on
+ * @param {*} [trade] the Trade, for the church's own sentences
+ * @param {NameOf} [fullNameOf] full names, for the same
  * @return {Object<string, *>}
  */
-function notifyRequest(t, words, origin) {
+function notifyRequest(t, words, origin, trade, fullNameOf) {
+  const url = `${origin}/commitments.html`;
+  const names = fullNameOf || (() => "Somebody");
   return {
     personId: t.personId,
     purpose: PURPOSE,
     wording: WORDING,
-    url: `${origin}/commitments.html`,
+    url: url,
     expectReply: false,
-    values: {headline: words.headline, detail: words.detail},
+    values: {
+      headline: words.headline,
+      detail: words.detail,
+      message: trade ? textFor(trade, t, words, names, url) :
+        `${words.headline}. ${words.detail} ${url}`,
+    },
   };
 }
 
@@ -147,7 +226,9 @@ function notifyRequest(t, words, origin) {
  * @return {Object<string, *>}
  */
 function templatesForSendPath() {
-  const text = "{headline}. {detail} {link}";
+  // The whole sentence is built in textFor, link and all: one of them
+  // ends without a link, so the template cannot add one.
+  const text = "{message}";
   const push = {title: "{headline}", body: "{detail}"};
   return {
     text: {[WORDING]: text},
@@ -158,6 +239,7 @@ function templatesForSendPath() {
 }
 
 module.exports = {
+  takenText,
   tellsFor,
   recordId,
   stillTrue,

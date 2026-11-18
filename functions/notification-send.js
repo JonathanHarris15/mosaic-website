@@ -163,7 +163,7 @@ async function deliverText(deps, request, person, words) {
  * values its wording needs, and a URL. `escalate` asks for the other route.
  * `manual` bypasses the church's send window.
  * @param {Object} deps loadPerson, loadTokens, loadTemplates, sendPush,
- *   sendText, deleteToken, writeLog, now
+ *   sendText, deleteToken, writeLog, now, and optionally pushAllowed
  * @param {Object} request personId, purpose, wording, values, url, escalate,
  *   manual, serviceDate, expectReply
  * @return {Promise<Object>} what happened
@@ -180,7 +180,12 @@ async function tellPerson(deps, request) {
 
   const person = await deps.loadPerson(request.personId);
   const uid = person && person.uid;
-  const loaded = uid ? await deps.loadTokens(uid) : [];
+  // The church's push switch. Off, a Person with the app is texted exactly
+  // as one without it; absent from deps (a test, an older caller) is on.
+  /** @type {*} */
+  const d = deps;
+  const pushOn = d.pushAllowed ? !!(await d.pushAllowed()) : true;
+  const loaded = uid && pushOn ? await deps.loadTokens(uid) : [];
   const live = (loaded || []).filter((t) => t && t.token);
   const hasPhone = !!(person && person.phone);
   const route = nc.chooseRoute({

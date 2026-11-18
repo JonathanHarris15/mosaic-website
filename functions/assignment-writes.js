@@ -439,7 +439,16 @@ async function take(db, spec) {
     tx.update(occurrenceRef, plan.derived);
     tx.delete(db.collection(COVER).doc(plan.cover.id));
 
-    return plan;
+    // What the decliner's "taken" text names (outside the race; only words).
+    /** @type {*} */
+    const told = plan;
+    /** @type {*} */
+    const ctx = context;
+    told.date = occurrence.date || null;
+    told.roleName = told.assignment.roleSlug === place.ONE_OFF_SLUG ?
+      (told.assignment.label || "job") :
+      ((ctx.roleDef && ctx.roleDef.name) || s.roleSlug);
+    return told;
   }, "Somebody has already sorted that one out.");
 }
 

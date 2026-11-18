@@ -55,10 +55,10 @@ test('the page default is the server default', () => {
 });
 
 test('a saved wording loads; a blank one shows the default', async () => {
-    const a = mount({ stored: { tradeInvitationText: 'Can you do {role}? {link}' } });
+    const a = mount({ stored: { tradeInviteText: 'Can you do {role}? {link}' } });
     await a.comp.loadInvitationWording();
     assert.strictEqual(a.comp.invitationWording.text, 'Can you do {role}? {link}');
-    const b = mount({ stored: { tradeInvitationText: '  ' } });
+    const b = mount({ stored: { tradeInviteText: '  ' } });
     await b.comp.loadInvitationWording();
     assert.strictEqual(b.comp.invitationWording.text, DEFAULT_TEXT);
 });
@@ -69,15 +69,15 @@ test('blur saves the wording, trimmed and merged, and nothing else', async () =>
     comp.editInvitationWording('text', '  {inviter} asked: {role}. {link} ');
     await comp.saveInvitationWording();
     assert.strictEqual(writes.length, 1);
-    assert.deepStrictEqual(Object.keys(writes[0].data).sort(), ['tradeInvitationText', 'updatedAt', 'updatedBy']);
-    assert.strictEqual(writes[0].data.tradeInvitationText, '{inviter} asked: {role}. {link}');
+    assert.deepStrictEqual(Object.keys(writes[0].data).sort(), ['tradeInviteText', 'updatedAt', 'updatedBy']);
+    assert.strictEqual(writes[0].data.tradeInviteText, '{inviter} asked: {role}. {link}');
     assert.strictEqual(writes[0].merge, true);
 });
 
 test('another admin’s change lands here', async () => {
     const { comp, push } = mount();
     await comp.loadInvitationWording();
-    push({ tradeInvitationText: 'From elsewhere {link}' });
+    push({ tradeInviteText: 'From elsewhere {link}' });
     assert.strictEqual(comp.invitationWording.text, 'From elsewhere {link}');
 });
 

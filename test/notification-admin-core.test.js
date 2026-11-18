@@ -201,9 +201,16 @@ test('every purpose the functions write has a row in the registry', () => {
     // above cannot see it. Ask the module.
     written.add(require('../public/event-tell-core.js').PURPOSE);
     // So does the nudge request (MS-248). Ask what it actually sends.
-    written.add(require('../functions/assignment-nudge.js').notifyRequest(
-        {personId: 'p', assignments: [], escalate: false, previousChannel: null,
-            values: {places: ''}}, 'https://x').purpose);
+    // So do the nudge and the day-before reminder.
+    const nudgeCore = require('../functions/assignment-nudge.js');
+    for (const kind of ['nudge', 'reminder']) {
+        written.add(nudgeCore.notifyRequest(
+            {kind: kind, personId: 'p', date: '', assignments: [], values: {}}, 'https://x').purpose);
+    }
+    // And the assigned / taken-off texts.
+    const assigned = require('../functions/assignment-assigned.js');
+    written.add(assigned.notifyRequest('p', 'https://x').purpose);
+    written.add(assigned.removedRequest('p', 'x', 'https://x', null).purpose);
     // And the Trade invitation text (MS-249).
     written.add(require('../functions/trade-invitation-text.js').PURPOSE);
     written.add(require('../functions/trade-tell.js').notifyRequest(

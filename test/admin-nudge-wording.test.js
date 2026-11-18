@@ -68,7 +68,7 @@ test('nudging reads as off when nothing is saved', async () => {
 });
 
 test('saved wording and the switch load from the shared config', async () => {
-    const { comp } = mount({ stored: { nudgeEnabled: true, nudgeText: 'Hey {name}: {places} {link}' } });
+    const { comp } = mount({ stored: { nudgeEnabled: true, reminderNudgeText: 'Hey {name}: {places} {link}' } });
     await comp.loadNudgeSettings();
     assert.strictEqual(comp.nudgeEnabled, true);
     assert.strictEqual(comp.nudgeWording.text, 'Hey {name}: {places} {link}');
@@ -83,8 +83,8 @@ test('blur saves only the changed nudge field, trimmed and merged', async () => 
     assert.strictEqual(writes.length, 1);
     assert.strictEqual(writes[0].path, 'app_config/prayer_request_sms');
     assert.strictEqual(writes[0].merge, true);
-    assert.strictEqual(writes[0].data.pushNudgeTitle, 'Still on?');
-    assert.ok(!('nudgeText' in writes[0].data));
+    assert.strictEqual(writes[0].data.reminderNudgePushTitle, 'Still on?');
+    assert.ok(!('reminderNudgeText' in writes[0].data));
     assert.strictEqual(writes[0].data.updatedBy, 'admin1');
 });
 
@@ -120,21 +120,23 @@ test('editing nudge wording leaves event announcement wording alone', async () =
     comp.editNudgeWording('text', 'X {places} {link}');
     await comp.saveNudgeWording();
     assert.strictEqual(writes.length, 1);
-    assert.deepStrictEqual(Object.keys(writes[0].data).sort(), ['nudgeText', 'updatedAt', 'updatedBy']);
+    assert.deepStrictEqual(Object.keys(writes[0].data).sort(), ['reminderNudgeText', 'updatedAt', 'updatedBy']);
 });
 
 test('Reset to defaults saves the defaults', async () => {
-    const { comp, writes } = mount({ stored: { nudgeText: 'custom' } });
+    const { comp, writes } = mount({ stored: { reminderNudgeText: 'custom' } });
     await comp.loadNudgeSettings();
     comp.resetNudgeWording();
     await new Promise((r) => setTimeout(r, 20));
     assert.strictEqual(writes.length, 1);
-    assert.strictEqual(writes[0].data.nudgeText, DEFAULT_TEXT);
+    assert.strictEqual(writes[0].data.reminderNudgeText, DEFAULT_TEXT);
 });
 
-test('the page has the switch and three live boxes naming {places}', () => {
+test('the page has both switches and three live boxes naming {date} and {days}', () => {
     assert.match(HTML, /data-nudge-switch[^>]*@change="setNudgeEnabled\(\$event\.target\.checked\)"/);
-    assert.match(HTML, /\{places\}/);
+    assert.match(HTML, /data-push-switch[^>]*@change="setPushEnabled\(\$event\.target\.checked\)"/);
+    assert.match(HTML, /\{date\}/);
+    assert.match(HTML, /\{days\}/);
     for (const f of ['text', 'pushTitle', 'pushBody']) {
         const at = HTML.indexOf(`data-live-nudge="${f}"`);
         assert.ok(at > 0, f);

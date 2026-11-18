@@ -1,16 +1,21 @@
 /**
- * @fileoverview The nudge core (MS-248). Who to nudge, about which places,
- * and when. Pure: no Firestore, no send, and no clock of its own — the
- * scheduler passes today's church-local date in.
+ * @fileoverview The assignment reminder core (MS-248, reworked). Who to
+ * text about which places, and when. Pure: no Firestore, no send, and no
+ * clock of its own — the scheduler passes today's church-local date in.
  *
- * A NUDGE is a Notification to somebody still Unconfirmed as their date
- * nears. Two at most per Assignment: a first at 5 days out, a second at 3 if
- * they still have not answered, by the other route from the first
- * (ADR-0036: a feature's own second chance is how it copes with a push
- * that never landed). Any answer stops them. Editors are never sent one.
+ * Two kinds of message come out of one plan:
  *
- * Assignment states, "is this date happening" and the Assignment's key are read
- * through the shared occurrence model, never restated here.
+ *  - A NUDGE to somebody who has not settled a place: still Unconfirmed, or
+ *    Declined with nobody having taken it yet. The first goes when the date
+ *    is 6 days away (the Monday before a Sunday), then every other day until
+ *    the date — 6, 4, 2 — and it stops the moment they confirm or somebody
+ *    else takes the place. Never on the day the Assignment was made, and
+ *    never on the date itself.
+ *  - A REMINDER the morning before, to somebody who has confirmed, naming
+ *    the Role and who else is serving in it.
+ *
+ * Assignment states, "is this date happening" and the Assignment's key are
+ * read through the shared occurrence model, never restated here.
  */
 
 const Occ = require("./shared/events-occurrence-core.js");
@@ -19,16 +24,17 @@ const {churchDateParts} = require("./notification-core");
 const {shiftDate} = require("./assignment-conversion");
 
 const PURPOSE = "assignment_nudge";
+const REMINDER_PURPOSE = "assignment_reminder";
 const WORDING = "nudge";
+const REMINDER_WORDING = "reminder";
 
 /** The first nudge goes when the date is this many days away. */
-const FIRST_DAYS_OUT = 5;
-/** The second goes at this many days away or fewer. */
-const SECOND_DAYS_OUT = 3;
+const FIRST_DAYS_OUT = 6;
+/** Days between one nudge and the next. */
+const NUDGE_EVERY = 2;
 
-/** Which of an Assignment's two nudges is due. */
-const FIRST = "first";
-const SECOND = "second";
+/** Which message a send is. */
+const KIND = Object.freeze({NUDGE: "nudge", REMINDER: "reminder"});
 
 /**
  * One row of an occurrence's roster.
@@ -61,7 +67,9 @@ const SECOND = "second";
  */
 
 /**
- * What the scheduler remembers about one Assignment's nudges.
+ * What the scheduler remembers about one Assignment. `firstDate` and
+ * `secondDate` are the older two-nudge shape, still read so a place nudged
+ * before the rework is not nudged again the same week.
  * @typedef {{
  *   id?: string,
  *   personId?: string,
@@ -69,15 +77,18 @@ const SECOND = "second";
  *   roleSlug?: ?string,
  *   slotId?: ?string,
  *   oneOffId?: ?string,
+ *   lastNudgeDate?: ?string,
+ *   lastNudgeChannel?: ?string,
+ *   nudgeCount?: number,
+ *   reminderDate?: ?string,
+ *   reminderChannel?: ?string,
  *   firstDate?: ?string,
- *   firstChannel?: ?string,
  *   secondDate?: ?string,
- *   secondChannel?: ?string,
  * }} NudgeRecord
  */
 
 /**
- * One Assignment a nudge names.
+ * One Assignment a send is about.
  * @typedef {{
  *   recordId: string,
  *   occurrenceId: string,
@@ -85,33 +96,39 @@ const SECOND = "second";
  *   slotId: ?string,
  *   oneOffId: ?string,
  *   date: string,
- *   stage: string,
- *   previousChannel: ?string,
- *   words: string,
  * }} DueAssignment
  */
 
 /**
- * One Notification to one Person, naming every Assignment due for them.
+ * One message to one Person.
  * @typedef {{
+ *   kind: string,
  *   personId: string,
+ *   date: string,
  *   assignments: Array<DueAssignment>,
- *   escalate: boolean,
- *   previousChannel: ?string,
- *   values: {places: string},
+ *   values: Object<string, string>,
  * }} NudgeSend
  */
 
-const DEFAULT_TEXT = "Hi {name}, you're down for {places} and haven't " +
-  "said yet whether you can make it. Let the church know here: {link}";
+const DEFAULT_TEXT = "You still have not confirmed or traded your service " +
+  "role for {date} and it is {days} away. Please do so now: {link}";
 const DEFAULT_PUSH = {
   title: "Can you make it?",
-  body: "You're down for {places}. Tap to answer.",
+  body: "You still have not confirmed or traded your service role for " +
+    "{date}. Tap to answer.",
 };
 
-const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun",
-  "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+const REMINDER_TEXT = "This is a reminder for your upcoming service role " +
+  "tomorrow: {role}.{serving} Thank you for serving!";
+const REMINDER_PUSH = {
+  title: "Serving tomorrow",
+  body: "{role}. Thank you for serving!",
+};
+
+const WEEKDAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday",
+  "Friday", "Saturday"];
+const MONTHS = ["January", "February", "March", "April", "May", "June",
+  "July", "August", "September", "October", "November", "December"];
 
 /**
  * @param {string} dateStr YYYY-MM-DD
@@ -133,9 +150,8 @@ function daysBetween(from, to) {
     86400000);
 }
 
-
 /**
- * The dates the scheduler reads: tomorrow to 5 days out.
+ * The dates the scheduler reads: tomorrow to 6 days out.
  * @param {string} today church-local YYYY-MM-DD
  * @return {{from: string, to: string}}
  */
@@ -165,26 +181,35 @@ function churchDateOf(at) {
 }
 
 /**
- * "Sun 20 Sep".
+ * "Sunday, November 22".
  * @param {string} dateStr YYYY-MM-DD
  * @return {string}
  */
-function shortDate(dateStr) {
+function longDate(dateStr) {
   const d = utcDay(dateStr);
-  return `${WEEKDAYS[d.getUTCDay()]} ${d.getUTCDate()} ${
-    MONTHS[d.getUTCMonth()]}`;
+  return `${WEEKDAYS[d.getUTCDay()]}, ${MONTHS[d.getUTCMonth()]} ${
+    d.getUTCDate()}`;
 }
 
 /**
- * The record an Assignment's nudges are remembered under: the Assignment's
- * own key (occurrence, Role, slot or one-off job, and Person — the same key
- * its Involvement is later written under). The Person in it is what gives
+ * "1 day", "4 days".
+ * @param {number} n
+ * @return {string}
+ */
+function daysLabel(n) {
+  return n === 1 ? "1 day" : `${n} days`;
+}
+
+/**
+ * The record an Assignment is remembered under: the Assignment's own key
+ * (occurrence, Role, slot or one-off job, and Person — the same key its
+ * Involvement is later written under). The Person in it is what gives
  * somebody taking over an Assignment their own clock.
  *
  * A moved date is the same instance on another day (ADR-0018), so it keeps
- * the key of the date the pattern first put it on, and with it the count of
- * nudges it has already had. ⚠ `originalDate`, not `movedFrom`: that is only
- * the last hop, so a date moved twice used to start its count again.
+ * the key of the date the pattern first put it on, and with it what it has
+ * already been sent. ⚠ `originalDate`, not `movedFrom`: that is only the
+ * last hop.
  * @param {Occurrence} occurrence
  * @param {Assignment} assignment
  * @return {string}
@@ -198,24 +223,15 @@ function nudgeRecordId(occurrence, assignment) {
 }
 
 /**
- * How one Assignment reads in a message: "Sound on Sun 20 Sep (Sunday
- * Service)".
- * @param {Occurrence} occurrence
+ * A Role's name as a person reads it.
  * @param {Assignment} assignment
  * @param {Object<string, string>} roleNames slug → name
  * @return {string}
  */
-function assignmentWords(occurrence, assignment, roleNames) {
+function roleName(assignment, roleNames) {
   const slug = assignment.roleSlug || "";
-  const role = slug === Occ.ONE_OFF_SLUG ?
-    (assignment.label || "A job") :
-    ((roleNames && roleNames[slug]) || slug);
-  const when = `${role} on ${shortDate(occurrence.date || "")}`;
-  // A lock screen is seen by more people than a participant-rung Event
-  // admits, so its title stays off it.
-  if (Occ.visibilityOf(occurrence) === "participant") return when;
-  const event = occurrence.name || occurrence.seriesName || "";
-  return event ? `${when} (${event})` : when;
+  if (slug === Occ.ONE_OFF_SLUG) return assignment.label || "A job";
+  return (roleNames && roleNames[slug]) || slug;
 }
 
 /**
@@ -229,65 +245,118 @@ function joinWithAnd(items) {
 }
 
 /**
+ * Whether two roster rows are the same Role (and, for a one-off, the same
+ * job) — what "serving in this role with you" means.
+ * @param {Assignment} a
+ * @param {Assignment} b
+ * @return {boolean}
+ */
+function sameRole(a, b) {
+  if ((a.roleSlug || "") !== (b.roleSlug || "")) return false;
+  if (a.roleSlug === Occ.ONE_OFF_SLUG) {
+    return (a.oneOffId || null) === (b.oneOffId || null);
+  }
+  return true;
+}
+
+/**
+ * Who else is down for this Role on this date, by name. Somebody who has
+ * declined is not serving.
+ * @param {Occurrence} occurrence
+ * @param {Assignment} mine
+ * @param {Object<string, string>} names personId → name
+ * @return {Array<string>}
+ */
+function servingWith(occurrence, mine, names) {
+  return (occurrence.assignments || [])
+      .filter((a) => a && a.personId && a.personId !== mine.personId &&
+        sameRole(a, mine) &&
+        Occ.stateOf(a) !== Occ.STATES.DECLINED)
+      .map((a) => (names && names[a.personId || ""]) || "")
+      .filter(Boolean);
+}
+
+/**
  * What nudgePlan is asked. today is church-local YYYY-MM-DD; roleNames
- * maps a Role's slug to its name.
+ * maps a Role's slug to its name; names maps a Person's id to their name.
  * @typedef {{
  *   occurrences?: Array<Occurrence>,
  *   records?: Array<NudgeRecord>,
  *   today: string,
  *   roleNames?: Object<string, string>,
+ *   names?: Object<string, string>,
  * }} NudgePlanArgs
  */
 
 /**
- * What a record is stamped with. channel is push, text or none.
- * @typedef {{
- *   assignment: Partial<DueAssignment>,
- *   personId: string,
- *   today: string,
- *   channel?: ?string,
- * }} StampArgs
+ * The last day this Assignment was nudged, in either record shape.
+ * @param {?NudgeRecord} rec
+ * @return {?string}
  */
+function lastNudged(rec) {
+  if (!rec) return null;
+  return rec.lastNudgeDate || rec.secondDate || rec.firstDate || null;
+}
 
 /**
- * Whether this Assignment can be nudged at all today.
- * @param {Occurrence} occurrence
+ * Whether this Assignment is still waiting on its holder: Unconfirmed, or
+ * Declined and not yet taken by anybody.
  * @param {Assignment} assignment
+ * @return {boolean}
+ */
+function unsettled(assignment) {
+  const state = Occ.stateOf(assignment);
+  return state === Occ.STATES.PENDING || state === Occ.STATES.DECLINED;
+}
+
+/**
+ * Whether a nudge is due on this Assignment today.
+ * @param {Assignment} assignment
+ * @param {?NudgeRecord} rec
+ * @param {number} daysOut
  * @param {string} today
  * @return {boolean}
  */
-function nudgeable(occurrence, assignment, today) {
-  if (!assignment || !assignment.personId) return false;
-  if (Occ.stateOf(assignment) !== Occ.STATES.PENDING) return false;
-  if (Roles.LITURGICAL_SLUGS.indexOf(assignment.roleSlug || "") !== -1) {
-    return false;
-  }
+function nudgeDue(assignment, rec, daysOut, today) {
+  if (daysOut < 1 || daysOut > FIRST_DAYS_OUT) return false;
+  if (!unsettled(assignment)) return false;
+  // The day they were put on the place they were told so already, and the
+  // day they declined it they know.
   if (churchDateOf(assignment.stateSetAt) === today) return false;
-  return true;
+  const last = lastNudged(rec);
+  if (!last) return true;
+  return daysBetween(last, today) >= NUDGE_EVERY;
 }
 
 /**
- * Which of its two nudges, if any, an Assignment is due.
- * @param {?NudgeRecord} rec its record
+ * Whether the day-before reminder is due on this Assignment today.
+ * @param {Assignment} assignment
+ * @param {?NudgeRecord} rec
  * @param {number} daysOut
- * @param {string} today
- * @return {?string} first, second, or null
+ * @return {boolean}
  */
-function stageDue(rec, daysOut, today) {
-  if (!rec || !rec.firstDate) return FIRST;
-  if (rec.secondDate) return null;
-  if (daysOut > SECOND_DAYS_OUT) return null;
-  if (!(rec.firstDate < today)) return null;
-  return SECOND;
+function reminderDue(assignment, rec, daysOut) {
+  if (daysOut !== 1) return false;
+  if (Occ.stateOf(assignment) !== Occ.STATES.CONFIRMED) return false;
+  return !(rec && rec.reminderDate);
 }
 
 /**
- * Who to nudge now, about what. One entry per Person, naming every
- * Assignment due for them in this run; it escalates when any of them is on
- * its second nudge.
- *
- * Nobody is nudged twice on one church-local day: a Person with any record
- * stamped today waits for tomorrow.
+ * The key of one row: who, and what. Grouping a person's places on one
+ * date into one message.
+ * @param {string} kind
+ * @param {string} personId
+ * @param {string} date
+ * @return {string}
+ */
+function groupKey(kind, personId, date) {
+  return `${kind}|${personId}|${date}`;
+}
+
+/**
+ * Who to text now, about what. A nudge names every unsettled place a
+ * Person has on one date; a reminder is one per confirmed place, since
+ * each names the people serving in that Role.
  *
  * @param {NudgePlanArgs} args
  * @return {Array<NudgeSend>}
@@ -297,69 +366,110 @@ function nudgePlan(args) {
   const today = a.today;
   /** @type {Object<string, NudgeRecord>} */
   const records = {};
-  const stampedToday = new Set();
   (a.records || []).forEach((r) => {
-    if (!r || !r.id) return;
-    records[r.id] = r;
-    if (r.firstDate === today || r.secondDate === today) {
-      stampedToday.add(r.personId);
-    }
+    if (r && r.id) records[r.id] = r;
   });
 
-  /** @type {Map<string, Array<DueAssignment>>} */
-  const byPerson = new Map();
+  /** @type {Map<string, NudgeSend>} */
+  const nudges = new Map();
+  /** @type {Array<NudgeSend>} */
+  const reminders = [];
+
   (a.occurrences || []).forEach((occurrence) => {
     if (!occurrence || !occurrence.date) return;
     if (Occ.notHappening(occurrence)) return;
     const daysOut = daysBetween(today, occurrence.date);
-    if (daysOut < 1 || daysOut > FIRST_DAYS_OUT) return;
 
     (occurrence.assignments || []).forEach((assignment) => {
-      if (!nudgeable(occurrence, assignment, today)) return;
-      const personId = assignment.personId || "";
-      if (stampedToday.has(personId)) return;
+      if (!assignment || !assignment.personId) return;
+      if (Roles.LITURGICAL_SLUGS.indexOf(assignment.roleSlug || "") !== -1) {
+        return;
+      }
+      const personId = assignment.personId;
       const recordId = nudgeRecordId(occurrence, assignment);
       const rec = records[recordId] || null;
-      const stage = stageDue(rec, daysOut, today);
-      if (!stage) return;
-
-      const list = byPerson.get(personId) || [];
-      byPerson.set(personId, list);
-      list.push({
+      /** @type {DueAssignment} */
+      const due = {
         recordId: recordId,
         occurrenceId: occurrence.id || "",
         roleSlug: assignment.roleSlug || "",
         slotId: assignment.slotId || null,
         oneOffId: assignment.oneOffId || null,
         date: occurrence.date || "",
-        stage: stage,
-        previousChannel: stage === SECOND && rec ?
-          (rec.firstChannel || null) : null,
-        words: assignmentWords(occurrence, assignment, a.roleNames || {}),
-      });
+      };
+
+      if (nudgeDue(assignment, rec, daysOut, today)) {
+        const key = groupKey(KIND.NUDGE, personId, occurrence.date || "");
+        const send = nudges.get(key) || {
+          kind: KIND.NUDGE,
+          personId: personId,
+          date: occurrence.date || "",
+          assignments: [],
+          values: {
+            date: longDate(occurrence.date || ""),
+            days: daysLabel(daysOut),
+          },
+        };
+        send.assignments.push(due);
+        nudges.set(key, send);
+        return;
+      }
+
+      if (reminderDue(assignment, rec, daysOut)) {
+        const others = servingWith(occurrence, assignment, a.names || {});
+        reminders.push({
+          kind: KIND.REMINDER,
+          personId: personId,
+          date: occurrence.date || "",
+          assignments: [due],
+          values: {
+            role: roleName(assignment, a.roleNames || {}),
+            serving: others.length ?
+              ` You will be serving with ${joinWithAnd(others)}.` : "",
+          },
+        });
+      }
     });
   });
 
-  /** @type {Array<NudgeSend>} */
-  const out = [];
-  byPerson.forEach((due, personId) => {
-    due.sort((x, y) => (x.date < y.date ? -1 : x.date > y.date ? 1 : 0));
-    const seconds = due.filter((d) => d.stage === SECOND);
-    out.push({
-      personId: personId,
-      assignments: due,
-      escalate: seconds.length > 0,
-      previousChannel: seconds.length ? seconds[0].previousChannel : null,
-      // {places} is the wording's name for this list (MS-248's PRD).
-      values: {places: joinWithAnd(due.map((d) => d.words))},
-    });
-  });
+  const out = Array.from(nudges.values()).concat(reminders);
+  out.sort((x, y) => (x.date < y.date ? -1 : x.date > y.date ? 1 : 0));
   return out;
 }
 
 /**
- * An Assignment's record after this run's nudge. Every attempt is stamped
- * whatever the outcome; the second nudge is the retry.
+ * The people a reminder names who are not already known by name: every
+ * other holder of a confirmed Assignment's Role on a date tomorrow.
+ * @param {Array<Occurrence>} occurrences
+ * @param {string} today
+ * @return {Array<string>} person ids
+ */
+function namesNeeded(occurrences, today) {
+  const ids = new Set();
+  (occurrences || []).forEach((o) => {
+    if (!o || !o.date || daysBetween(today, o.date) !== 1) return;
+    (o.assignments || []).forEach((x) => {
+      if (x && x.personId) ids.add(x.personId);
+    });
+  });
+  return Array.from(ids);
+}
+
+/**
+ * What a record is stamped with. channel is push, text or none.
+ * @typedef {{
+ *   kind: string,
+ *   assignment: Partial<DueAssignment>,
+ *   personId: string,
+ *   today: string,
+ *   channel?: ?string,
+ * }} StampArgs
+ */
+
+/**
+ * An Assignment's record after this run's message. Every attempt is
+ * stamped whatever the outcome, so a failing text is not repeated every
+ * hour; the next nudge two days on is the retry.
  * @param {?NudgeRecord} existing the record before
  * @param {StampArgs} s
  * @return {NudgeRecord}
@@ -373,17 +483,19 @@ function stampedRecord(existing, s) {
     roleSlug: p.roleSlug || null,
     slotId: p.slotId || null,
     oneOffId: p.oneOffId || null,
-    firstDate: null,
-    firstChannel: null,
-    secondDate: null,
-    secondChannel: null,
+    lastNudgeDate: null,
+    lastNudgeChannel: null,
+    nudgeCount: 0,
+    reminderDate: null,
+    reminderChannel: null,
   }, existing || {});
-  if (p.stage === SECOND) {
-    base.secondDate = s.today;
-    base.secondChannel = s.channel || null;
+  if (s.kind === KIND.REMINDER) {
+    base.reminderDate = s.today;
+    base.reminderChannel = s.channel || null;
   } else {
-    base.firstDate = s.today;
-    base.firstChannel = s.channel || null;
+    base.lastNudgeDate = s.today;
+    base.lastNudgeChannel = s.channel || null;
+    base.nudgeCount = (Number(base.nudgeCount) || 0) + 1;
   }
   return base;
 }
@@ -395,15 +507,15 @@ function stampedRecord(existing, s) {
  * @return {Object<string, *>}
  */
 function notifyRequest(send, origin) {
+  const reminder = send.kind === KIND.REMINDER;
   return {
     personId: send.personId,
-    purpose: PURPOSE,
-    wording: WORDING,
+    purpose: reminder ? REMINDER_PURPOSE : PURPOSE,
+    wording: reminder ? REMINDER_WORDING : WORDING,
     url: `${origin}/commitments.html`,
-    escalate: !!send.escalate,
-    previousChannel: send.previousChannel || null,
+    serviceDate: send.date || null,
     expectReply: false,
-    values: {places: send.values.places},
+    values: Object.assign({}, send.values),
   };
 }
 
@@ -416,26 +528,43 @@ function trimmed(v) {
 }
 
 /**
- * Nudge wording in the shape the send path loads, saved values over the
- * defaults, each field on its own.
+ * Wording in the shape the send path loads. The nudge's saved values win
+ * over its defaults, each field on its own; the reminder is fixed.
+ *
+ * ⚠ The saved nudge keys are new (`reminderNudge…`). The older `nudgeText`
+ * filled {places}, which this wording no longer has, so it is not read.
  * @param {?Object<string, *>} config app_config/prayer_request_sms
  * @return {Object<string, *>}
  */
 function templatesForSendPath(config) {
   const c = config || {};
   return {
-    text: {[WORDING]: trimmed(c.nudgeText) || DEFAULT_TEXT},
-    textFallback: {[WORDING]: DEFAULT_TEXT},
-    push: {[WORDING]: {
-      title: trimmed(c.pushNudgeTitle) || DEFAULT_PUSH.title,
-      body: trimmed(c.pushNudgeBody) || DEFAULT_PUSH.body,
-    }},
-    pushFallback: {[WORDING]: DEFAULT_PUSH},
+    text: {
+      [WORDING]: trimmed(c.reminderNudgeText) || DEFAULT_TEXT,
+      [REMINDER_WORDING]: REMINDER_TEXT,
+    },
+    textFallback: {
+      [WORDING]: DEFAULT_TEXT,
+      [REMINDER_WORDING]: REMINDER_TEXT,
+    },
+    push: {
+      [WORDING]: {
+        title: trimmed(c.reminderNudgePushTitle) || DEFAULT_PUSH.title,
+        body: trimmed(c.reminderNudgePushBody) || DEFAULT_PUSH.body,
+      },
+      [REMINDER_WORDING]: REMINDER_PUSH,
+    },
+    pushFallback: {
+      [WORDING]: DEFAULT_PUSH,
+      [REMINDER_WORDING]: REMINDER_PUSH,
+    },
   };
 }
 
 /**
- * The admin switch. Off unless somebody turned it on.
+ * The admin switch. Off unless somebody turned it on. It covers every
+ * assignment message: the "you have been assigned" text, the nudges and
+ * the day-before reminder.
  * @param {?Object<string, *>} config app_config/prayer_request_sms
  * @return {boolean}
  */
@@ -445,8 +574,10 @@ function nudgingOn(config) {
 
 module.exports = {
   lookAhead,
+  longDate,
   nudgeRecordId,
   nudgePlan,
+  namesNeeded,
   stampedRecord,
   notifyRequest,
   templatesForSendPath,

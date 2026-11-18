@@ -10,6 +10,7 @@
 
 const {
   lookAhead,
+  namesNeeded,
   nudgePlan,
   nudgeRecordId,
   nudgingOn,
@@ -34,6 +35,7 @@ const RolesCore = require("./shared/roles-core.js");
  *   loadConfig: () => Promise<Object<string, *>>,
  *   loadOccurrences: (from: string, to: string) => Promise<Array<Occurrence>>,
  *   loadRoleNames: () => Promise<Object<string, string>>,
+ *   loadNames?: (ids: Array<string>) => Promise<Object<string, string>>,
  *   loadRecords: (ids: Array<string>) => Promise<Array<NudgeRecord>>,
  *   writeRecord: (id: string, row: NudgeRecord) => Promise<void>,
  * }} NudgeDeps
@@ -74,11 +76,15 @@ async function runNudgeTick(deps) {
     if (r.id) byId[r.id] = r;
   });
 
+  const wanted = namesNeeded(occurrences, today);
+  const names = wanted.length && deps.loadNames ?
+    await deps.loadNames(wanted) : {};
   const plan = nudgePlan({
     occurrences: occurrences,
     records: records,
     today: today,
     roleNames: await deps.loadRoleNames(),
+    names: names,
   });
 
   let sent = 0;
@@ -88,7 +94,9 @@ async function runNudgeTick(deps) {
       result = await deps.tellPerson(
           deps.notifierDeps, notifyRequest(send, deps.origin));
     } catch (err) {
-      if (deps.log) deps.log(`Nudge to ${send.personId} failed: ${err}`);
+      if (deps.log) {
+        deps.log(`${send.kind} to ${send.personId} failed: ${err}`);
+      }
       result = {accepted: false, channel: null};
     }
     if (result && result.skipped === "window") continue;
@@ -98,6 +106,7 @@ async function runNudgeTick(deps) {
     for (const due of send.assignments) {
       const id = due.recordId;
       const stamped = stampedRecord(byId[id] ? stripId(byId[id]) : null, {
+        kind: send.kind,
         assignment: due,
         personId: send.personId,
         today: today,
@@ -180,6 +189,28 @@ async function loadRoleNames(db) {
 }
 
 /**
+ * Full names for these People, as the reminder lists them.
+ * @param {Firestore} db
+ * @param {Array<string>} ids
+ * @return {Promise<Object<string, string>>}
+ */
+async function loadNames(db, ids) {
+  if (!ids.length) return {};
+  const refs = ids.map((id) => db.collection("people").doc(id));
+  const snaps = await db.getAll(...refs);
+  /** @type {Object<string, string>} */
+  const out = {};
+  snaps.forEach((s) => {
+    if (!s.exists) return;
+    const name = (s.data() || {}).name;
+    const text = typeof name === "string" ? name.trim() :
+      [name && name.first, name && name.last].filter(Boolean).join(" ");
+    if (text) out[s.id] = text;
+  });
+  return out;
+}
+
+/**
  * The records for these ids. Missing ones are simply absent.
  * @param {Firestore} db
  * @param {Array<string>} ids
@@ -227,6 +258,7 @@ function buildDeps(db, opts) {
     },
     loadOccurrences: (from, to) => loadOccurrences(db, from, to),
     loadRoleNames: () => loadRoleNames(db),
+    loadNames: (ids) => loadNames(db, ids),
     loadRecords: (ids) => loadRecords(db, ids),
     writeRecord: async (id, row) => {
       /** @type {Object<string, *>} */
@@ -240,4 +272,5 @@ function buildDeps(db, opts) {
 module.exports = {
   runNudgeTick,
   buildDeps,
+  loadRoleNames,
 };

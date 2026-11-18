@@ -508,22 +508,32 @@
 
         <section class="m-section">
             <div class="m-section__head">
-                <h2 class="m-section__title">Nudges</h2>
-                <p class="m-section__hint">Somebody who has not answered an Assignment is nudged 5 days before its date, and again at 3 days if they still have not. Nobody else is told.</p>
+                <h2 class="m-section__title">Assignment texts</h2>
+                <p class="m-section__hint">Somebody an editor puts on a Role is told straight away. If they have not confirmed it, or nobody has taken it after they declined, they are nudged 6 days before its date and every other day after. Once confirmed, they get a reminder the morning before. Nobody else is told.</p>
             </div>
             <div class="m-card flex flex-col gap-md">
                 <div class="m-setting">
                     <div>
-                        <div class="m-setting__title">Send nudges</div>
-                        <p class="m-setting__hint">Off until you turn it on. Each one goes by push to the Mosaic app, or by text without it.</p>
+                        <div class="m-setting__title">Send assignment texts</div>
+                        <p class="m-setting__hint">Off until you turn it on. Covers the "you have been assigned" text, the nudges, and the day-before reminder.</p>
                     </div>
                     <label class="m-check">
                         <input type="checkbox" data-nudge-switch :checked="nudgeEnabled" :disabled="nudgeSwitchSaving" @change="setNudgeEnabled($event.target.checked)" />
                         <span x-text="nudgeEnabled ? 'On' : 'Off'"></span>
                     </label>
                 </div>
+                <div class="m-setting">
+                    <div>
+                        <div class="m-setting__title">Send push notifications</div>
+                        <p class="m-setting__hint">Off until the app launches. While off, everything (prayer requests, trades, nudges) goes by text, even to somebody with the app.</p>
+                    </div>
+                    <label class="m-check">
+                        <input type="checkbox" data-push-switch :checked="pushEnabled" :disabled="pushSwitchSaving" @change="setPushEnabled($event.target.checked)" />
+                        <span x-text="pushEnabled ? 'On' : 'Off'"></span>
+                    </label>
+                </div>
                 <p class="m-input-hint">
-                    Use <code>{name}</code>, <code>{places}</code> for what they are down for, and <code>{link}</code> for their Commitments page.
+                    The nudge wording. Use <code>{date}</code> for the date, <code>{days}</code> for how far away it is ("4 days"), and <code>{link}</code> for their Commitments page.
                 </p>
                 <label class="m-field">
                     <span class="m-label">Text message</span>
@@ -548,7 +558,7 @@
         <section class="m-section">
             <div class="m-section__head">
                 <h2 class="m-section__title">Trade invitation text</h2>
-                <p class="m-section__hint">Sent when a member asks somebody with no Mosaic account to take a place they declined. One text, between 8am and 8pm, with a link to answer.</p>
+                <p class="m-section__hint">Sent when a member asks somebody with no Mosaic account to trade a place they declined. One text, between 8am and 8pm, with a link to answer.</p>
             </div>
             <div class="m-card flex flex-col gap-md">
                 <p class="m-input-hint">

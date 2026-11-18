@@ -32,6 +32,15 @@ const notify = require("./notification-send");
 const eventAnnWording = require("./event-announcement-notification");
 const {templatesForSendPath: nudgeTemplates} = require("./assignment-nudge");
 const {
+  templatesForSendPath: assignedTemplates,
+} = require("./assignment-assigned");
+const {
+  noticePlacement,
+  noticeRemoval,
+  sweepHeldNotices,
+} = require("./assignment-assigned-firestore");
+const {takenText} = require("./trade-tell");
+const {
   buildDeps: buildNudgeDeps,
   runNudgeTick,
 } = require("./assignment-nudge-firestore");
@@ -970,7 +979,7 @@ exports.unlinkDirectoryPerson = onCall({
  * the loser is told plainly rather than overwriting whoever got there first.
  */
 exports.takeAssignment = onCall(
-    {cors: true, region: "us-central1"},
+    {cors: true, region: "us-central1", secrets: [TEXTBELT_KEY]},
     async (request) => {
       if (!request.auth) {
         throw new HttpsError("unauthenticated", "Sign in to take a place.");
@@ -1008,6 +1017,37 @@ exports.takeAssignment = onCall(
       log(`takeAssignment: ${personId} took ${roleSlug} on ` +
           `${occurrenceId}` +
           (result.warning ? ` (warned: ${result.warning})` : ""));
+
+      // The decliner hears who took it. Best effort: the take has landed
+      // whatever happens to the text.
+      /** @type {*} */
+      const took = result;
+      if (took.previousHolderId && took.previousHolderId !== personId) {
+        try {
+          /** @type {*} */
+          const deps = notifierDeps(db);
+          const taker = await deps.loadPerson(personId);
+          await notify.tellPerson(deps, {
+            personId: took.previousHolderId,
+            purpose: "cover_taken",
+            wording: "taken",
+            url: `${SITE_ORIGIN}/commitments.html`,
+            expectReply: false,
+            serviceDate: took.date || null,
+            values: {
+              message: takenText(
+                  (taker && (taker.fullName || taker.firstName)) || "",
+                  {
+                    roleName: took.roleName,
+                    assignment: {date: took.date, roleSlug: roleSlug},
+                  }),
+            },
+          });
+        } catch (err) {
+          log(`takeAssignment: telling ${took.previousHolderId} ` +
+              `failed: ${err}`);
+        }
+      }
       return {success: true, warning: result.warning || null};
     },
 );
@@ -1353,6 +1393,65 @@ exports.endTradesOnFilledPlace = onDocumentWritten(
       }
     },
 );
+
+/**
+ * "You have been assigned new service roles" the moment an editor puts
+ * somebody on a place, and "An Admin has taken you off" the moment one takes
+ * them off it — by whichever door. Hangs off the roster write for the
+ * same reason the cover cleanup above does. One text per burst; outside the
+ * church's hours it is held for the hourly job. Off with the nudge switch.
+ */
+exports.textNewAssignment = onDocumentWritten(
+    {
+      document: "event_occurrences/{occurrenceId}/roster/{assignmentId}",
+      region: "us-central1",
+      secrets: [TEXTBELT_KEY],
+    },
+    async (event) => {
+      /** @type {*} */
+      const snap = event.data || {};
+      const before = snap.before && snap.before.exists ?
+        snap.before.data() : null;
+      const after = snap.after && snap.after.exists ? snap.after.data() : null;
+      const db = admin.firestore();
+      const change = {
+        occurrenceId: event.params.occurrenceId,
+        before: before,
+        after: after,
+      };
+      const deps = assignedDeps(db);
+      const placed = await noticePlacement(db, deps, change);
+      if (placed === "sent") {
+        log(`textNewAssignment: texted ${after && after.personId} about ` +
+            `${event.params.occurrenceId}`);
+      }
+      const removed = await noticeRemoval(db, deps, change);
+      if (removed === "sent") {
+        log(`textNewAssignment: told ${before && before.personId} they ` +
+            `were taken off ${event.params.occurrenceId}`);
+      }
+    },
+);
+
+/**
+ * Deps for the "you have been assigned" text.
+ * @param {*} db Firestore instance.
+ * @return {*}
+ */
+function assignedDeps(db) {
+  return {
+    origin: SITE_ORIGIN,
+    configDoc: PRAYER_CONFIG_DOC,
+    today: () => pr.churchDateParts(new Date()).date,
+    nowMs: () => Date.now(),
+    now: () => admin.firestore.Timestamp.now(),
+    arrayUnion: (/** @type {Array<*>} */ ...items) =>
+      admin.firestore.FieldValue.arrayUnion(...items),
+    log: log,
+    tellPerson: notify.tellPerson,
+    notifierDeps: notifierDeps(db),
+  };
+}
 
 /**
  * Keep the cover list true when the OCCURRENCE changes (PlaceCore).
@@ -2427,6 +2526,17 @@ async function loadDeviceTokens(db, uid) {
 }
 
 /**
+ * The "taken from the cover list" text: its sentence is built by the
+ * caller (trade-tell.js takenText), so the template only carries it.
+ */
+const takenTemplates = {
+  text: {taken: "{message}"},
+  textFallback: {taken: "{message}"},
+  push: {taken: {title: "Your place was taken", body: "{message}"}},
+  pushFallback: {taken: {title: "Your place was taken", body: "{message}"}},
+};
+
+/**
  * Dependencies the send path needs. The path decides the route; this only
  * fetches and delivers.
  * @param {Object} db Firestore instance.
@@ -2443,9 +2553,14 @@ function notifierDeps(db) {
         uid: data.userId || null,
         phone: toE164US(data.contact && data.contact.phone),
         firstName: pr.firstNameOf(data.name),
+        fullName: typeof data.name === "string" ? data.name.trim() : "",
       };
     },
     loadTokens: (uid) => loadDeviceTokens(db, uid),
+    // Push stays off until an admin turns it on (texts only until the app
+    // launches). Off, every Notification goes by text.
+    pushAllowed: async () =>
+      (await loadPrayerConfig(db)).raw.pushEnabled === true,
     loadTemplates: async () => {
       const loaded = await loadPrayerConfig(db);
       const includeLink = loaded.includeAnswerLinkInSms;
@@ -2453,6 +2568,8 @@ function notifierDeps(db) {
       const purposes = [
         eventAnnWording.templatesForSendPath(loaded.raw),
         nudgeTemplates(loaded.raw),
+        assignedTemplates(),
+        takenTemplates,
         invitationTemplates(loaded.raw),
         tradeTellTemplates(),
       ];
@@ -3328,8 +3445,10 @@ exports.sendHeldTradeInvitations = onSchedule(
 );
 
 /**
- * Hourly nudge to somebody still Unconfirmed as their date nears (MS-248).
- * Off until an admin turns `nudgeEnabled` on. The rules live in
+ * Hourly assignment texts (MS-248, reworked): a nudge every other day from
+ * 6 days out to somebody who has not confirmed or been covered, and a
+ * reminder the morning before to somebody who has confirmed. Off until an
+ * admin turns `nudgeEnabled` on. The rules live in
  * assignment-nudge.js; every send goes through the one send path, which
  * keeps the church's 8am–8pm window.
  */
@@ -3353,8 +3472,12 @@ exports.sendAssignmentNudges = onSchedule(
       });
       const result = await runNudgeTick(deps);
       if (result.ran && result.sent) {
-        log(`sendAssignmentNudges: nudged ${result.sent} person(s).`);
+        log(`sendAssignmentNudges: sent ${result.sent} message(s).`);
       }
+      // "You have been assigned" texts held overnight go out with the
+      // first run inside the church's hours.
+      const held = await sweepHeldNotices(db, assignedDeps(db));
+      if (held) log(`sendAssignmentNudges: sent ${held} held text(s).`);
     },
 );
 

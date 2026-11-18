@@ -1553,6 +1553,12 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    // "You have been assigned" / "taken off" texts: a burst claim and the
+    // texts held overnight. Written and read only by Cloud Functions.
+    match /assignment_notices/{personId} {
+      allow read, write: if false;
+    }
+
     // Trade tells (MS-824). One record per Trade, state and Person, so a
     // retried trigger sends once and a message held overnight is sent by
     // the hourly sweep. Not a log: what went out is in `notifications`.

@@ -129,6 +129,8 @@ function planTake(spec) {
     // Delete first, then create. The id carries the person, so these are two
     // different documents and the old one would otherwise simply remain.
     removeRosterId: place.rosterIdFor(held),
+    // Who declined it, so they can be told who took it for nothing.
+    previousHolderId: held.personId || null,
     rosterId: place.rosterIdFor(assignment),
     assignment: assignment,
     derived: place.derivedFields(s.occurrence, after),

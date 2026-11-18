@@ -27,15 +27,15 @@ const {tradeReads} = require("./trade-invitation-firestore");
 /** @typedef {import("./trade-tell").NameOf} NameOf */
 
 /**
- * A Trade's two parties: who has a Linked User, and their first names.
- * @typedef {{linked: Set<string>, nameOf: NameOf}} Parties
+ * A Trade's two parties: who has a Linked User, and their names.
+ * @typedef {{linked: Set<string>, nameOf: NameOf, fullNameOf: NameOf}} Parties
  */
 
 const RECORDS = "trade_tells";
 
 /**
  * Who a Person is to the send path.
- * @typedef {{uid?: ?string, firstName?: string}} PersonInfo
+ * @typedef {{uid?: ?string, firstName?: string, fullName?: string}} PersonInfo
  */
 
 /**
@@ -65,16 +65,20 @@ const RECORDS = "trade_tells";
 async function partiesOf(deps, trade) {
   /** @type {Object<string, string>} */
   const names = {};
+  /** @type {Object<string, string>} */
+  const fullNames = {};
   const linked = new Set();
   for (const id of [trade.holderId, trade.counterpartyId]) {
     if (!id) continue;
     const p = await deps.loadPerson(id);
     names[id] = (p && p.firstName) || "Somebody";
+    fullNames[id] = (p && (p.fullName || p.firstName)) || "Somebody";
     if (p && p.uid) linked.add(id);
   }
   return {
     linked: linked,
     nameOf: (personId) => names[personId] || "Somebody",
+    fullNameOf: (personId) => fullNames[personId] || "Somebody",
   };
 }
 
@@ -84,15 +88,15 @@ async function partiesOf(deps, trade) {
  * @param {string} id the record
  * @param {*} trade
  * @param {Tell} t
- * @param {NameOf} nameOf
+ * @param {Parties} parties
  * @return {Promise<string>}
  */
-async function deliver(deps, id, trade, t, nameOf) {
+async function deliver(deps, id, trade, t, parties) {
   let status = "failed";
   try {
-    const words = wordsFor(trade, t.personId, nameOf);
+    const words = wordsFor(trade, t.personId, parties.nameOf);
     status = statusFromSend(await deps.tellPerson(deps.notifierDeps,
-        notifyRequest(t, words, deps.origin)));
+        notifyRequest(t, words, deps.origin, trade, parties.fullNameOf)));
   } catch (err) {
     if (deps.log) deps.log(`Trade tell ${id}: ${err}`);
   }
@@ -120,7 +124,7 @@ async function tellParties(deps, change) {
     const claimed = await deps.claimRecord(id, Object.assign(
         {tradeId: change.tradeId, status: "sending", at: deps.now()}, t));
     if (!claimed) continue;
-    const status = await deliver(deps, id, after, t, parties.nameOf);
+    const status = await deliver(deps, id, after, t, parties);
     if (status === TEXT_STATUS.SENT) {
       sent += 1;
     }
@@ -143,7 +147,7 @@ async function sweepHeldTells(deps) {
       continue;
     }
     const parties = await partiesOf(deps, trade);
-    const status = await deliver(deps, r.id, trade, r, parties.nameOf);
+    const status = await deliver(deps, r.id, trade, r, parties);
     if (status === TEXT_STATUS.SENT) {
       sent += 1;
     }
