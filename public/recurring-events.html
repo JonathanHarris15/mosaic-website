@@ -1103,30 +1103,30 @@
                         </template>
                     </div>
 
-                    <!-- ── The two doors out ──────────────────────────────────
-                         The pane's own footer, drawn ONCE. The ticks are made on
-                         the rota and the count rides on the buttons, so the
-                         buttons cannot be a tab away — and a long list of roles
-                         would scroll a header pair off, which is why the old
-                         page drew them twice. Editor-only (MS-287): the Dates
-                         tab now shares this pane with a member, and this
-                         footer is the drafting door a member may never open. -->
-                    <div class="m-actionbar re-desktop-only" x-show="editorLanes && hasRoles">
+                    <!-- ── The door out ──────────────────────────────────────
+                         The pane's own footer, drawn ONCE, and on the Rota tab
+                         only: the ticks are made on the rota and the count rides
+                         on the button, so it belongs beside the grid that made
+                         them. ONE button — it opens the setup step of the draft
+                         room, and the choice between drafting and filling in by
+                         hand is made THERE, with the range in front of you.
+                         Editor-only (MS-287): the Dates tab shares this pane with
+                         a member, and this footer is the drafting door a member
+                         may never open. -->
+                    <div class="m-actionbar re-desktop-only" x-show="editorLanes && hasRoles && tab === 'rota'">
                         <div class="m-actionbar__said">
                             <template x-if="!range">
                                 <p class="m-actionbar__note">
-                                    Both buttons open the next stretch of dates from tomorrow — auto-assign
-                                    with a rota drafted for you, by hand with the grid empty. Tick columns
-                                    <span x-text="tab === 'rota' ? 'below' : 'on the rota'"></span>
-                                    to open exactly those dates instead.
+                                    Opens the next stretch of dates from tomorrow, where you choose to draft
+                                    the rota or fill it in by hand. Tick columns below to open exactly those
+                                    dates instead.
                                 </p>
                             </template>
                             <template x-if="range">
                                 <div>
                                     <p class="m-actionbar__count">
                                         <span x-text="range.count"></span><span
-                                            x-text="range.count === 1 ? ' date ticked' : ' dates ticked'"></span><span
-                                            x-show="tab !== 'rota'"> on the rota</span>
+                                            x-text="range.count === 1 ? ' date ticked' : ' dates ticked'"></span>
                                     </p>
                                     <p x-show="sweepNote" class="m-actionbar__note" x-text="sweepNote"></p>
                                     <!-- Why the emptying button is dead, when it is. A
@@ -1137,10 +1137,6 @@
                             </template>
                         </div>
                         <div class="m-actionbar__acts">
-                            <button x-show="range && tab !== 'rota'" @click="tab = 'rota'"
-                                    class="m-btn m-btn--ghost m-btn--sm re-motion re-focus">
-                                <span class="m-btn__label">Show the rota</span>
-                            </button>
                             <!-- "Clear" unticks; "Take everybody off" empties. They
                                  cannot both be called clearing, and the words have to
                                  do the separating because the two sit an inch apart. -->
@@ -1155,19 +1151,15 @@
                                       :class="clearing ? 'm-spinner' : ''"></span>
                                 <span class="m-btn__label" x-text="wipeLabel"></span>
                             </button>
-                            <a :href="byHandHref" class="m-btn m-btn--secondary m-btn--sm re-motion re-press re-focus">
-                                <span class="material-symbols-outlined text-[18px]">edit_note</span>
-                                <span class="m-btn__label" x-text="byHandLabel"></span>
-                            </a>
                             <a :href="draftHref" class="m-btn m-btn--primary m-btn--sm re-motion re-press re-focus">
-                                <span class="material-symbols-outlined text-[18px]">auto_awesome_motion</span>
+                                <span class="material-symbols-outlined text-[18px]">edit_calendar</span>
                                 <span class="m-btn__label" x-text="draftLabel"></span>
                             </a>
                         </div>
                     </div>
 
                     <!-- The phone gets the reason rather than a dead button. -->
-                    <div class="m-actionbar re-phone-only" x-show="editorLanes && hasRoles">
+                    <div class="m-actionbar re-phone-only" x-show="editorLanes && hasRoles && tab === 'rota'">
                         <div class="m-actionbar__said">
                             <p class="m-actionbar__note">
                                 Drafting a rota is a wide grid of dates against roles, so it waits for a
