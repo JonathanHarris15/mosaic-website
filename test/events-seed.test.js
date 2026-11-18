@@ -129,3 +129,50 @@ test('whatever reconciling returns is a valid series', () => {
         assert.equal(Events.validateSeries(series).valid, true, 'input ' + i);
     });
 });
+
+// ── A Role retired from the liturgy (ADR 0033) ───────────────────────────────
+//
+// `sermonette` was locked to the Sunday while it was liturgical. Stored series
+// written then still list it as locked, so the Roles & rules tab showed it as
+// a Role that could not be taken off. Reconciling takes it off the Sunday.
+
+const withRetiredSermonette = () => Object.assign(fresh(), {
+    roleSlugs: LITURGICAL.concat(['sermonette', 'coffee']),
+    lockedRoleSlugs: LITURGICAL.concat(['sermonette']),
+});
+
+test('a retired liturgical Role is no longer locked to the Sunday', () => {
+    const result = Events.reconcileSundayService(withRetiredSermonette(), LITURGICAL);
+
+    assert.equal(result.changed, true);
+    assert.deepEqual(result.series.lockedRoleSlugs, LITURGICAL.slice());
+    assert.match(result.reason, /sermonette/);
+});
+
+test('a retired liturgical Role is taken off the Sunday; Servant Roles stay', () => {
+    const { series } = Events.reconcileSundayService(withRetiredSermonette(), LITURGICAL);
+
+    assert.ok(!series.roleSlugs.includes('sermonette'));
+    assert.deepEqual(series.roleSlugs, LITURGICAL.concat(['coffee']));
+});
+
+test('cross-Role rules naming a retired Role go with it', () => {
+    const stored = Object.assign(withRetiredSermonette(), {
+        crossRoleRules: [
+            { kind: 'notSameGroup', typeId: 'marriage', roleSlugs: ['sermonette', 'coffee'] },
+            { kind: 'notSameGroup', typeId: 'marriage', roleSlugs: ['preacher', 'coffee'] },
+        ],
+    });
+    const { series } = Events.reconcileSundayService(stored, LITURGICAL);
+
+    assert.deepEqual(series.crossRoleRules.map((/** @type {*} */ r) => r.roleSlugs), [['preacher', 'coffee']]);
+});
+
+test('once retired, a Servant Role of that slug can be put back on the Sunday', () => {
+    const { series } = Events.reconcileSundayService(withRetiredSermonette(), LITURGICAL);
+    const readded = Events.addRole(series, 'sermonette');
+    const again = Events.reconcileSundayService(readded, LITURGICAL);
+
+    assert.equal(again.changed, false);
+    assert.ok(again.series.roleSlugs.includes('sermonette'));
+});

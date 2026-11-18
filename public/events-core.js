@@ -176,6 +176,21 @@
 
         const reasons = [];
 
+        // A Role locked here that is no longer liturgical was RETIRED from the
+        // liturgy — `sermonette` (ADR 0033). Only reconcile ever writes
+        // `lockedRoleSlugs`, and only with liturgical slugs, so a Servant Role
+        // the user added can never be in this list. A retired one is not
+        // merely unlocked but taken off the Sunday: it was only ever on it
+        // because it was locked there, and leaving it behind as a removable
+        // row would keep a Sunday "carrying" something it does not include.
+        // One-time by construction: once unlocked it is never retired again,
+        // so a Servant Role of the same name can be put back on by hand.
+        const lockedNow = lockedRolesOf(stored);
+        const retired = lockedNow.filter((/** @type {string} */ slug) => slugs.indexOf(slug) === -1);
+        if (retired.length) {
+            reasons.push('took retired liturgical Roles off the Sunday: ' + retired.join(', '));
+        }
+
         // Liturgical Roles the stored series has lost. Restored at the FRONT, in
         // liturgical order, so the user's Servant Roles keep their own order
         // behind them.
@@ -184,17 +199,27 @@
         if (missing.length) {
             reasons.push('restored liturgical Roles: ' + missing.join(', '));
         }
-        const servant = existing.filter(slug => slugs.indexOf(slug) === -1);
+        const servant = existing.filter((/** @type {string} */ slug) => (
+            slugs.indexOf(slug) === -1 && retired.indexOf(slug) === -1
+        ));
         const roleSlugs = slugs.concat(servant);
 
         if (stored.locked !== true) reasons.push('re-locked the series');
 
-        const lockedNow = lockedRolesOf(stored);
         const lockDrifted = slugs.some(slug => lockedNow.indexOf(slug) === -1);
         if (lockDrifted) reasons.push('re-marked the liturgical Roles undeletable');
 
+        // A Cross-Role Rule naming a Role the Sunday no longer runs could never
+        // fire — dropped with it, as setSeriesRoles does.
+        const extra = {};
+        if (retired.length && Array.isArray(stored.crossRoleRules)) {
+            extra.crossRoleRules = crossRoleRulesOf(stored).filter((/** @type {*} */ rule) => (
+                ((rule && rule.roleSlugs) || []).every((/** @type {string} */ slug) => retired.indexOf(slug) === -1)
+            ));
+        }
+
         return {
-            series: Object.assign({}, stored, {
+            series: Object.assign({}, stored, extra, {
                 locked: true,
                 roleSlugs: roleSlugs,
                 lockedRoleSlugs: slugs,
