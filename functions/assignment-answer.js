@@ -153,6 +153,12 @@ function planAnswer(spec) {
   if (!date || !s.today || date < s.today) {
     return refuse("failed-precondition", "That date has already passed.");
   }
+  // A cancelled or moved date is not happening on this day. Its roster is
+  // kept (so un-cancelling restores it), but a place on it cannot be
+  // answered or taken — the same gate the nudge job reads.
+  if (occurrences.notHappening(s.occurrence)) {
+    return refuse("failed-precondition", "That date is not happening.");
+  }
 
   // ⚠ ONE-OFF JOBS SHARE A SLUG AND HAVE NO SLOT (MS-818). Every one-off on an
   // Event is `one_off` with a null slot, so slug and slot alone found the FIRST

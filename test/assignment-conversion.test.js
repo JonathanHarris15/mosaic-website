@@ -222,3 +222,18 @@ test('the server and the browser derive the same Involvement id', () => {
     const a = assignment('p1', 'confirmed');
     assert.strictEqual(ac.involvementIdFor(occurrence, a), Core.involvementIdFor(occurrence, a));
 });
+
+test('a cancelled or moved date converts into nothing — a confirmed place on it is not a serve', () => {
+    const assignments = [
+        { personId: 'p1', roleSlug: 'coffee', slotId: 's1', state: 'confirmed' },
+        { personId: 'p2', roleSlug: 'coffee', slotId: 's2', state: 'pending' },
+    ];
+    for (const marker of [{ cancelled: true }, { movedTo: '2099-01-01' }]) {
+        const out = ac.conversion(Object.assign({ id: 'o1', date: '2026-01-04', assignments }, marker));
+        assert.deepStrictEqual(out, { serves: [], questions: [] }, JSON.stringify(marker));
+    }
+    assert.equal(ac.conversion({ id: 'o1', date: '2026-01-04', assignments }).serves.length, 1,
+        'a date that happened still converts');
+    assert.strictEqual(ac.conversion, require('../functions/shared/events-occurrence-core.js').conversion,
+        'one statement of the rule, not two');
+});

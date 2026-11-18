@@ -315,6 +315,7 @@
     <script src="events-core.js"></script>
     <script src="live-read.js"></script>
     <script src="live-fields-core.js"></script>
+    <script src="role-editor-core.js"></script>
     <script src="roles-manager.js"></script>
     <script defer src="vendor/alpine-3.15.12.min.js"></script>
 </head>
@@ -406,7 +407,7 @@
                          inside the WebView a tap on the row still arrived as a
                          synthesized click on the hidden button. -->
                     <ul x-show="hasServantRoles" class="m-picklist rm-role-list">
-                        <template x-for="role in servantRoles" :key="role.slug">
+                        <template x-for="role in servantRoles" :key="role.id">
                             <li>
                                 <button type="button"
                                         class="m-picklist__item rm-role-row"

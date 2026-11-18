@@ -126,6 +126,12 @@ function planTake(spec) {
   if (!date || !s.today || date < s.today) {
     return refuse("failed-precondition", "That date has already passed.");
   }
+  // A cancelled or moved date is not happening on this day. Its roster is
+  // kept (so un-cancelling restores it), but a place on it cannot be
+  // answered or taken — the same gate the nudge job reads.
+  if (occurrences.notHappening(s.occurrence)) {
+    return refuse("failed-precondition", "That date is not happening.");
+  }
 
   const held = roster.find((a) =>
     a && a.roleSlug === s.roleSlug &&

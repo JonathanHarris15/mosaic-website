@@ -289,3 +289,11 @@ test('the rung still wins over the person’s choice', () => {
     assert.equal(result.cover.action, 'delete');
     assert.equal(result.cover.entry, undefined);
 });
+
+test('a place on a cancelled or moved date cannot be answered', () => {
+    for (const marker of [{ cancelled: true }, { movedTo: '2099-01-01' }]) {
+        const result = plan({ occurrence: Object.assign({}, OCCURRENCE, marker) });
+        assert.equal(result.ok, false, JSON.stringify(marker));
+        assert.equal(result.code, 'failed-precondition');
+    }
+});

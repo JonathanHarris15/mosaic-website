@@ -869,6 +869,11 @@
     function conversion(occurrence) {
         const serves = [];
         const questions = [];
+        // ⚠ A date that did not happen converts into nothing. A cancelled
+        // date keeps its roster (so un-cancelling restores it), and a
+        // confirmed place on it is not somebody who served — counting it
+        // would tell fairness they did.
+        if (notHappening(occurrence)) return { serves: serves, questions: questions };
 
         assignmentsOf(occurrence).forEach(assignment => {
             const state = stateOf(assignment);
