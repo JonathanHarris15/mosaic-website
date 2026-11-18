@@ -75,8 +75,9 @@
         return {
             loading: true,
             error: '',
-            busy: null,          // the key currently being written, so one row
-                                 // can show it is working without freezing all
+            // The key currently being written, so one control can show it is
+            // working without freezing all.
+            busy: /** @type {string|null} */ (null),
             toast: '',
 
             rank: null,
@@ -160,6 +161,7 @@
                 return !!this.busy || (this.loading && this.rows.length > 0);
             },
 
+            /** @param {{occurrenceId: string, roleSlug: string, slotId?: string|null}} put */
             acceptKey(put) {
                 return 'accept:' + put.occurrenceId + '|' + put.roleSlug + '|' +
                     (put.slotId || '');
