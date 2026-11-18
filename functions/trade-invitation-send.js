@@ -21,7 +21,8 @@ const {
 
 /**
  * Who a Person is to the send path.
- * @typedef {{uid?: ?string, phone?: string, firstName?: string}} PersonInfo
+ * @typedef {{uid?: ?string, phone?: string, firstName?: string,
+ *   fullName?: string}} PersonInfo
  */
 
 /**
@@ -99,12 +100,16 @@ async function tellInvitee(deps, tradeId) {
       tradeId: tradeId,
       endDate: linkEndDate(trade),
     });
-    const result = await deps.tellPerson(deps.notifierDeps, notifyRequest(
-        trade, {
-          inviteeId: inviteeId,
-          holderFirstName: holder.firstName || "",
-          url: url,
-        }));
+    /** @type {*} */
+    const ctx = {
+      inviteeId: inviteeId,
+      holderFirstName: holder.firstName || "",
+      // The text names the inviter in full (trade-invitation-text.js).
+      holderName: holder.fullName || holder.firstName || "",
+      url: url,
+    };
+    const result = await deps.tellPerson(deps.notifierDeps,
+        notifyRequest(trade, ctx));
     const status = statusFromSend(result);
     await deps.writeStatus(tradeId, stamped(deps, status));
     return status;

@@ -162,23 +162,25 @@ test('a Role with no stored name reads by its slug, not as nothing', () => {
 
 const VALUES = {inviter: 'Bob', role: 'Sound', event: 'Sunday Service', date: 'Sunday 20 September'};
 
-test('the default wording names who asked, the Role, the Event, the date and the link', () => {
+test('the default wording is the church\'s sentence: who asked, and the link', () => {
     const t = inv.templatesForSendPath({});
     assert.equal(t.text.invitation,
-        'Hi {name}, {inviter} from Mosaic Church asked if you could take their place: ' +
-        '{role} at {event} on {date}. Tap to answer: {link}');
+        '{inviter} has asked you to trade service roles with them. See the trade here: {link}');
+    // A saved wording from before the rework is not read.
+    assert.equal(inv.templatesForSendPath({tradeInvitationText: 'Old {link}'}).text.invitation,
+        t.text.invitation);
     assert.deepEqual(inv.notifyRequest(trade(), {inviteeId: 'invitee', holderFirstName: 'Bob', url: 'u'}).values, VALUES);
 });
 
 test('a saved wording replaces the default; a blank one falls back', () => {
-    assert.equal(inv.templatesForSendPath({tradeInvitationText: 'Yo {name}: {role}? {link}'}).text.invitation,
+    assert.equal(inv.templatesForSendPath({tradeInviteText: 'Yo {name}: {role}? {link}'}).text.invitation,
         'Yo {name}: {role}? {link}');
-    assert.equal(inv.templatesForSendPath({tradeInvitationText: '   '}).text.invitation,
+    assert.equal(inv.templatesForSendPath({tradeInviteText: '   '}).text.invitation,
         inv.templatesForSendPath({}).text.invitation);
 });
 
 test('a saved wording with no {link} still sends the link, on its own line', () => {
-    assert.equal(inv.templatesForSendPath({tradeInvitationText: 'Can you do {role}?'}).text.invitation,
+    assert.equal(inv.templatesForSendPath({tradeInviteText: 'Can you do {role}?'}).text.invitation,
         'Can you do {role}?\n{link}');
 });
 

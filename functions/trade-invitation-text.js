@@ -17,9 +17,8 @@ const {isInsideSendWindow} = require("./notification-core");
 const PURPOSE = "trade_invitation";
 const WORDING = "invitation";
 
-const DEFAULT_TEXT = "Hi {name}, {inviter} from Mosaic Church asked if " +
-  "you could take their place: {role} at {event} on {date}. " +
-  "Tap to answer: {link}";
+const DEFAULT_TEXT = "{inviter} has asked you to trade service roles with " +
+  "them. See the trade here: {link}";
 
 /** What is written on a Trade about its invitation text. */
 const TEXT_STATUS = Object.freeze({
@@ -207,12 +206,13 @@ function inviteeView(trade, ctx) {
 /**
  * The words a text fills in besides {name} and {link}.
  * @param {TradeDoc} trade
- * @param {{holderFirstName: string}} ctx
+ * @param {{holderFirstName: string}} ctx also holderName, the full name
  * @return {Object<string, string>}
  */
 function requestValues(trade, ctx) {
   return {
-    inviter: ctx.holderFirstName || "Somebody",
+    inviter: /** @type {*} */ (ctx).holderName || ctx.holderFirstName ||
+      "Somebody",
     role: roleNameOf(trade),
     event: trade.eventName || "",
     date: longDate(linkEndDate(trade)),
@@ -223,6 +223,7 @@ function requestValues(trade, ctx) {
  * What the send path is asked. Who, what and where — never push or text.
  * @param {TradeDoc} trade
  * @param {{inviteeId: string, holderFirstName: string, url: string}} ctx
+ *   also holderName, the full name
  * @return {Object<string, *>}
  */
 function notifyRequest(trade, ctx) {
@@ -256,8 +257,10 @@ function statusFromSend(result) {
  */
 function templatesForSendPath(config) {
   const c = config || {};
-  const saved = typeof c.tradeInvitationText === "string" ?
-    c.tradeInvitationText.trim() : "";
+  // ⚠ `tradeInviteText`, not the older `tradeInvitationText`: a wording
+  // saved before the rework is not the sentence the church now sends.
+  const saved = typeof c.tradeInviteText === "string" ?
+    c.tradeInviteText.trim() : "";
   let text = saved || DEFAULT_TEXT;
   if (text.indexOf("{link}") === -1) text = `${text}\n{link}`;
   // An invitee has no account, so the path always picks a text. The push

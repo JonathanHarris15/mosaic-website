@@ -71,7 +71,7 @@ test('switched on, a Pending Assignment 5 days out gets one push linking to Comm
     assert.equal(w.calls.push.length, 1);
     assert.equal(w.calls.push[0].title, 'Can you make it?');
     assert.equal(w.calls.push[0].body,
-        "You're down for Sound on Sun 20 Sep (Sunday Service). Tap to answer.");
+        'You still have not confirmed or traded your service role for Sunday, September 20. Tap to answer.');
     assert.equal(w.calls.push[0].url, 'https://example.test/commitments.html');
     assert.equal(w.calls.logs.length, 1);
     assert.equal(w.calls.logs[0].purpose, 'assignment_nudge');
@@ -107,17 +107,47 @@ test('an editor re-saving the roster does not cause a second nudge', async () =>
     assert.equal(w.calls.push.length, 1);
 });
 
-test('the second nudge, at 3 days, goes by the other route from the first', async () => {
+test('with push switched off, the nudge is the church\'s text, every other day', async () => {
     const w = world();
+    w.deps.notifierDeps.pushAllowed = async () => false;
     await runNudgeTick(w.deps);
-    assert.equal(w.calls.push.length, 1);
-    w.setNow(new Date('2026-09-17T15:00:00Z')); // 3 days out
-    await runNudgeTick(w.deps);
-    assert.equal(w.calls.push.length, 1, 'no second push');
-    assert.equal(w.calls.text.length, 1, 'the second went by text');
-    assert.match(w.calls.text[0].body, /Sound on Sun 20 Sep \(Sunday Service\)/);
-    assert.match(w.calls.text[0].body, /https:\/\/example\.test\/commitments\.html/);
+    assert.equal(w.calls.push.length, 0, 'no push while it is off');
+    assert.equal(w.calls.text.length, 1);
+    assert.equal(w.calls.text[0].body,
+        'You still have not confirmed or traded your service role for Sunday, September 20 ' +
+        'and it is 5 days away. Please do so now: https://example.test/commitments.html');
     assert.equal(w.calls.text[0].expectReply, false);
+    w.setNow(new Date('2026-09-16T15:00:00Z')); // the next day: nothing
+    await runNudgeTick(w.deps);
+    assert.equal(w.calls.text.length, 1);
+    w.setNow(new Date('2026-09-17T15:00:00Z')); // two days on: again
+    await runNudgeTick(w.deps);
+    assert.equal(w.calls.text.length, 2);
+    assert.match(w.calls.text[1].body, /it is 3 days away/);
+});
+
+test('the morning before, somebody confirmed is reminded who they serve with', async () => {
+    const w = world({
+        now: new Date('2026-09-19T14:00:00Z'), // 9am Saturday
+        people: {
+            p1: {uid: null, phone: '+15550001', firstName: 'Ada'},
+            p2: {uid: null, phone: '+15550002', firstName: 'Bo'},
+        },
+        occurrences: [{
+            id: 'o1', seriesId: 'sunday_service', date: '2026-09-20', name: 'Sunday Service',
+            assignments: [
+                {personId: 'p1', roleSlug: 'sound', slotId: 's1', state: 'confirmed'},
+                {personId: 'p2', roleSlug: 'sound', slotId: 's2', state: 'confirmed'},
+            ],
+        }],
+    });
+    w.deps.loadNames = async () => ({p1: 'Ada Lovelace', p2: 'Bo Diddley'});
+    await runNudgeTick(w.deps);
+    const toAda = w.calls.text.find((m) => m.to === '+15550001');
+    assert.equal(toAda.body, 'This is a reminder for your upcoming service role tomorrow: Sound. ' +
+        'You will be serving with Bo Diddley. Thank you for serving!');
+    await runNudgeTick(w.deps);
+    assert.equal(w.calls.text.length, 2, 'once each');
 });
 
 test('an Assignment answered between nudges gets nothing more', async () => {
@@ -146,8 +176,8 @@ test('a send nobody can receive is still stamped, so it is not retried hourly', 
     await runNudgeTick(w.deps);
     assert.equal(w.records.size, 1);
     const [row] = [...w.records.values()];
-    assert.equal(row.firstDate, '2026-09-15');
-    assert.equal(row.firstChannel, 'none');
+    assert.equal(row.lastNudgeDate, '2026-09-15');
+    assert.equal(row.lastNudgeChannel, 'none');
     await runNudgeTick(w.deps);
     assert.equal(w.calls.logs.length, 1, 'one attempt, one log row');
 });

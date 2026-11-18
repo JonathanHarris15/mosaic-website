@@ -917,18 +917,24 @@ One message to one Person, sent by whichever channel can actually reach them. **
 - **Whether a push landed is not knowable, and nothing pretends it is** ([ADR 0036](docs/adr/0036-a-notification-picks-its-channel-and-delivery-is-best-effort.md)). A revoked permission and a flat battery look exactly like a delivered message. So delivery is **best effort**: no token means text now; a token the provider rejects is deleted and the message texted now; a token the provider accepts ends the matter. **The feature's own second chance is the escalation** — pastoral prayer already re-asks at three days if the request is still empty, so the first ask goes by push and the re-ask by text. An unanswered request is a truer signal than any delivery receipt, and it is already written.
 - **It carries a URL, not a screen name.** One string that a push, a text and a browser all understand: the app parses its path into a route through the mobile shell's `nav()`, and a text carries the same link for a browser because a text has no shell to talk to. **A Mosaic link in a text opens the browser, not the app** — Universal Links and App Links are a **deliberate non-goal**, not a later phase.
 - **Logged once per send, in `notifications`** — Person, channel, purpose, and whether the provider took it. This is what ADR-0009's `sms_messages` becomes now that a text is one channel rather than the only one. Correlating an inbound reply to the message that prompted it stays a *field* on the row and an SMS-only concern: a push has no reply.
+- **Push has a church-wide switch, off until the app launches.** Off, somebody with the app is texted exactly as somebody without it.
 - **It obeys the church's hours** — 8am–8pm church-local, the same window and the same code the prayer texts already use. A push at 6am is worse than a text at 6am, because a text waits quietly.
 - **A Person with no Device token *and* no phone number cannot be told anything by anybody**, and an editor is shown so. Nothing else about delivery is surfaced: the Prayer Request already reads as filled or unfilled, and that is the honest signal.
 _Avoid_: alert, reminder, message (unqualified), and **push** / **SMS** for the thing itself — each is one channel of a Notification
 
 ### Nudge — MS-248
-A [[Notification]] to somebody whose [[Assignment]] is still **Unconfirmed** as its date nears, landing them on their [[Commitment]]s. **Two at most per Assignment**: a first when the date is 5 days away, and a second at 3 days if they still have not answered, by the **other route** from the first, because the second is how the feature copes with a push nobody saw. Each Assignment's two nudges are remembered on the server, apart from the roster, and a nudge counts as sent whether or not it landed.
-- **Any answer stops it.** Confirming or declining both count. An Assignment that goes to somebody else starts that person's own count.
-- **One message per Person per day**, naming every Assignment due. Never on the day the Assignment was made, on the date itself, or for a date that is skipped. A moved date keeps the count it had.
-- **Only the Person who holds the Assignment is told.** No editor is sent a Notification about somebody else's silence. An editor who holds an Assignment of their own is nudged like anyone else.
+A [[Notification]] to somebody who has not settled an [[Assignment]] as its date nears — still **Unconfirmed**, or **Declined** with nobody having taken it yet — landing them on their [[Commitment]]s. **From 6 days out, every other day** (the Monday, Wednesday and Friday before a Sunday), until they confirm or somebody else takes the place. Each Assignment's last nudge is remembered on the server, apart from the roster, and a nudge counts as sent whether or not it landed.
+- **Any confirmation stops it, and so does the place changing hands.** A decline does not: declining asks for [[Cover]], and until somebody covers it the place is still theirs. An Assignment that goes to somebody else starts that person's own count.
+- **Never on the day the Assignment was made or answered**, never on the date itself, never for a date that is skipped. A moved date keeps the count it had. Two places on one date are one message.
+- **Only the Person who holds the Assignment is told.** No editor is sent a Notification about somebody else's silence.
 - **Liturgical Roles are never nudged.** They are fields on the Service and carry no state to answer.
-- **Off until an admin turns it on.** A participant-rung Event is named by Role and date only, because a lock screen is seen by more people than the Event admits.
-_Avoid_: reminder, chase, confirmation request
+- **Off until an admin turns on Assignment texts**, the same switch as the rest of the family below.
+
+**The rest of the family**, all off with the same switch:
+- **Assigned** — the moment an editor puts somebody on a place, by any door, one text with a link to their Commitments. A burst (a whole auto-assign) is one text. A place somebody takes for themselves sends nothing.
+- **Taken off** — the moment an editor empties or refills somebody's place. Not for a take, a [[Trade]] or a moved date.
+- **Day-before reminder** — the morning before, to somebody who has confirmed, naming the Role and who else is serving in it.
+_Avoid_: chase, confirmation request
 
 ### Device token
 The handle one signed-in device is reachable at, held in `users/{uid}/push_tokens/{id}` — on the **User**, never on the [[Person]], because it belongs to a phone somebody signed in on and one person has a phone *and* a tablet. A send addressed to a Person resolves through the existing `people.userId` link. Rewritten on every launch that has permission (the provider rotates them unasked), deleted when the provider rejects it, and **deleted on sign-out** — leave one behind and the next person to sign in on that phone gets the last person's pastoral prayer on their lock screen.

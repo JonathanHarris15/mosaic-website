@@ -521,26 +521,117 @@
                 'One per person per tell moment.',
         },
         {
+            id: 'assignment_assigned',
+            name: 'Assigned',
+            purpose: 'assignment_assigned',
+            wording: 'assigned',
+            channels: ['push', 'text'],
+            audience: 'Somebody an editor has just put on a Role',
+            firedBy: [
+                {
+                    kind: 'trigger',
+                    name: 'textNewAssignment',
+                    how: 'Whenever an editor puts somebody on a place, by any door.',
+                },
+                {
+                    kind: 'schedule',
+                    name: 'sendAssignmentNudges',
+                    how: 'Hourly, for a text held outside the church\'s hours.',
+                },
+            ],
+            killSwitch: 'Assignment texts, on System tools. Off until turned on.',
+            window: 'church',
+            wordingSource: 'Fixed in functions/assignment-assigned.js',
+            live: true,
+            note: 'One text per burst: a whole auto-assign is one message. ' +
+                'A place somebody takes for themselves sends nothing.',
+        },
+        {
+            id: 'assignment_removed',
+            name: 'Taken off',
+            purpose: 'assignment_removed',
+            wording: 'removed',
+            channels: ['push', 'text'],
+            audience: 'Somebody an editor has taken off a Role',
+            firedBy: [
+                {
+                    kind: 'trigger',
+                    name: 'textNewAssignment',
+                    how: 'Whenever an editor empties or refills somebody\'s place.',
+                },
+                {
+                    kind: 'schedule',
+                    name: 'sendAssignmentNudges',
+                    how: 'Hourly, for a text held outside the church\'s hours.',
+                },
+            ],
+            killSwitch: 'Assignment texts, on System tools. Off until turned on.',
+            window: 'church',
+            wordingSource: 'Fixed in functions/assignment-assigned.js',
+            live: true,
+            note: 'Not sent for a take, a Trade, or a moved date — only when ' +
+                'an editor did it. One per place.',
+        },
+        {
             id: 'assignment_nudge',
             name: 'Nudge',
             purpose: 'assignment_nudge',
             wording: 'nudge',
             channels: ['push', 'text'],
-            audience: 'Somebody whose Assignment is still Unconfirmed as its date nears',
+            audience: 'Somebody who has not confirmed a place, or declined it and nobody has taken it',
             firedBy: [
                 {
                     kind: 'schedule',
                     name: 'sendAssignmentNudges',
-                    how: 'Hourly. A first nudge at 5 days out, a second at ' +
-                        '3 days by the other route.',
+                    how: 'Hourly. From 6 days out, every other day until the date.',
                 },
             ],
-            killSwitch: 'Nudges, on System tools. Off until turned on.',
+            killSwitch: 'Assignment texts, on System tools. Off until turned on.',
             window: 'church',
-            wordingSource: 'Nudges (System tools)',
+            wordingSource: 'Assignment texts (System tools)',
             live: true,
-            note: 'Two at most per Assignment, one message per person per ' +
-                'day. Editors are not sent one.',
+            note: 'Stops when they confirm or somebody takes the place. ' +
+                'Never on the day they were put on it.',
+        },
+        {
+            id: 'assignment_reminder',
+            name: 'Day-before reminder',
+            purpose: 'assignment_reminder',
+            wording: 'reminder',
+            channels: ['push', 'text'],
+            audience: 'Somebody who has confirmed a place tomorrow',
+            firedBy: [
+                {
+                    kind: 'schedule',
+                    name: 'sendAssignmentNudges',
+                    how: 'Hourly; the first run inside the church\'s hours the day before.',
+                },
+            ],
+            killSwitch: 'Assignment texts, on System tools. Off until turned on.',
+            window: 'church',
+            wordingSource: 'Fixed in functions/assignment-nudge.js',
+            live: true,
+            note: 'Names the Role and whoever else is serving in it.',
+        },
+        {
+            id: 'cover_taken',
+            name: 'Place taken',
+            purpose: 'cover_taken',
+            wording: 'taken',
+            channels: ['push', 'text'],
+            audience: 'Somebody who declined a place that a member has just taken from the cover list',
+            firedBy: [
+                {
+                    kind: 'manual',
+                    name: 'takeAssignment',
+                    how: 'A member takes the place from the cover list.',
+                },
+            ],
+            killSwitch: 'None. Somebody taking the place is the switch.',
+            window: 'church',
+            wordingSource: 'Fixed in functions/trade-tell.js',
+            live: true,
+            note: 'Inside the church\'s hours only; a take at night is not told.',
         },
         {
             id: 'trade_invitation',
@@ -822,9 +913,10 @@
                     kind: 'decision',
                     icon: 'smartphone',
                     title: 'Does their Linked User hold a Device token?',
-                    detail: 'Push if a live token exists, a text if not. A ' +
-                        're-ask escalates deliberately to the other route ' +
-                        'from the one that already went.',
+                    detail: 'Push if a live token exists and push is switched ' +
+                        'on (System tools); a text otherwise. A re-ask ' +
+                        'escalates deliberately to the other route from the ' +
+                        'one that already went.',
                     branches: [
                         {
                             label: 'A token',

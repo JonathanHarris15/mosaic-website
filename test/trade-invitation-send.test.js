@@ -32,7 +32,7 @@ function world(over) {
     };
     /** @type {Object<string, *>} */
     const people = Object.assign({
-        holder: {uid: 'u-holder', phone: '+15550001', firstName: 'Bob'},
+        holder: {uid: 'u-holder', phone: '+15550001', firstName: 'Bob', fullName: 'Bob Stone'},
         invitee: {uid: null, phone: '+15550002', firstName: 'Ann'},
     }, o.people || {});
     /** @type {{text: Array<*>, push: Array<*>, logs: Array<*>, links: Array<*>, status: Array<*>}} */
@@ -77,8 +77,8 @@ test('an in-window invite to somebody with no account texts them one Answer link
     assert.equal(w.calls.text.length, 1);
     assert.equal(w.calls.text[0].to, '+15550002');
     assert.equal(w.calls.text[0].body,
-        'Hi Ann, Bob from Mosaic Church asked if you could take their place: ' +
-        'Sound at Sunday Service on Sunday 20 September. Tap to answer: https://x.test/a/TOKEN1');
+        'Bob Stone has asked you to trade service roles with them. ' +
+        'See the trade here: https://x.test/a/TOKEN1');
     assert.equal(w.calls.text[0].expectReply, false);
     assert.deepEqual(w.calls.links[0], {personId: 'invitee', tradeId: 't1', endDate: '2026-09-20'});
     assert.equal(w.trades.t1.invitationText.status, 'sent');

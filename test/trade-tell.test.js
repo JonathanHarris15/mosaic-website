@@ -115,14 +115,49 @@ test('the request lands on Commitments, wants no reply, and names no channel', (
     assert.equal(req.purpose, 'trade_update');
     assert.equal(req.url, 'https://x.test/commitments.html');
     assert.equal(req.expectReply, false);
-    assert.deepEqual(req.values, {headline: 'Bob asked you', detail: 'They cannot make Sound.'});
+    assert.equal(req.values.headline, 'Bob asked you');
+    assert.equal(req.values.detail, 'They cannot make Sound.');
     assert.equal(req.channel, undefined);
 });
 
-test('the push is the headline over the detail; the text is both and the link', () => {
+test('the push is the headline over the detail; the text is the whole sentence', () => {
     const t = tell.templatesForSendPath();
     assert.deepEqual(t.push.trade, {title: '{headline}', body: '{detail}'});
-    assert.equal(t.text.trade, '{headline}. {detail} {link}');
+    assert.equal(t.text.trade, '{message}');
+});
+
+/** @param {string} id @return {string} */
+const FULL = (id) => ({bob: 'Bob Stone', ann: 'Ann Lee'})[id] || 'Somebody';
+const WORDS = {headline: 'h', detail: 'd'};
+const PLACE = {holderId: 'bob', counterpartyId: 'ann', roleName: 'Sound',
+    assignment: {date: '2026-11-22', roleSlug: 'sound'}};
+
+test('an invitation says who asked and links to the trade', () => {
+    const req = tell.notifyRequest({personId: 'ann', kind: 'invited', state: 'invited'},
+        WORDS, 'https://x.test', Object.assign({state: 'invited'}, PLACE), FULL);
+    assert.equal(req.values.message, 'Bob Stone has asked you to trade service roles with them. ' +
+        'See the trade here: https://x.test/commitments.html');
+});
+
+test('an offer says who offered, for which place, and links to it', () => {
+    const req = tell.notifyRequest({personId: 'bob', kind: 'offered', state: 'offered'},
+        WORDS, 'https://x.test', Object.assign({state: 'offered'}, PLACE), FULL);
+    assert.equal(req.values.message, 'Ann Lee has sent you a trade offer for the Sound on ' +
+        'Sunday, November 22 service role. See it here: https://x.test/commitments.html');
+});
+
+test('taking an invitation for nothing tells the holder to say thanks', () => {
+    const req = tell.notifyRequest({personId: 'bob', kind: 'ended', state: 'settled'},
+        WORDS, 'https://x.test', Object.assign({state: 'settled', chosen: null, closedBy: 'ann'}, PLACE), FULL);
+    assert.equal(req.values.message, 'Ann Lee has taken your Sound on Sunday, November 22 ' +
+        'without asking for anything in return. Make sure to thank them!');
+});
+
+test('any other ending says the Commitments row and the link', () => {
+    const req = tell.notifyRequest({personId: 'ann', kind: 'ended', state: 'refused'},
+        {headline: 'Bob said no', detail: 'Nothing changed.'}, 'https://x.test',
+        Object.assign({state: 'refused'}, PLACE), FULL);
+    assert.equal(req.values.message, 'Bob said no. Nothing changed. https://x.test/commitments.html');
 });
 
 test('the holder is not told "You kept it" about keeping their own place', () => {

@@ -2128,7 +2128,9 @@
                     const out = await Store.acceptDraft(db, this.draft, {
                         seriesId: this.seriesId,
                         roleSlugs: this.ownedSlugs,
-                        actor: { actorUid: (auth.currentUser && auth.currentUser.uid) || null },
+                        // `at` is what tells the "you have been assigned" text a
+                        // place is new, rather than a row copied from elsewhere.
+                        actor: { actorUid: (auth.currentUser && auth.currentUser.uid) || null, at: new Date().toISOString() },
                     });
                     this.accepted = out;
                     this.forgetDraft();
