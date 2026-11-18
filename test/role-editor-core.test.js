@@ -275,3 +275,13 @@ test('leaving stops at a refused save rather than retrying for ever', async () =
     assert.equal(store.writes.length, 1);
     assert.equal(failed.length, 1, 'and the page is told, so it can say which Role was not saved');
 });
+
+test('two stored Roles reading as one slug are both listed, and named as sharing it', () => {
+    const coffee = def('r1', 'Coffee');
+    const legacy = def('r2', 'coffee!');
+    delete legacy.slug;
+    const out = RoleEditor.partition([coffee, legacy, def('r3', 'Setup')]);
+    assert.deepStrictEqual(out.definitions.map(d => d.id).sort(), ['r1', 'r2', 'r3'],
+        'both stay, so one can be deleted');
+    assert.deepStrictEqual(out.sharedSlugs, [{ slug: 'coffee', names: ['Coffee', 'coffee!'] }]);
+});

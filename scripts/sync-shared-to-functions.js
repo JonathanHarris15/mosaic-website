@@ -48,6 +48,10 @@ const MODULES = [
     // blanks would not have produced.
     'person-name.js',
     'events-occurrence-core.js',
+    // One place on an Event: its identity, its roster and cover ids, the cover
+    // list it should produce, and the derived fields. Every door that touches
+    // a place — answer, take, trade, cover, nudge — reads it from here.
+    'place-core.js',
     // MS-79. Every rule about a Task — when one is overdue, which dates a
     // repeat produces, what an occurrence may override — and the writes in
     // functions/ have to agree with the page about all of it. It reads its

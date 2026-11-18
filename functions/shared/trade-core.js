@@ -140,13 +140,25 @@
     // ── Reading one ──────────────────────────────────────────────────────────
 
     // One Assignment's identity. The slot is part of it because the same person
-    // can legitimately hold two Roles at one Event.
+    // can legitimately hold two Roles at one Event — and a one-off job's own id
+    // is, because every one-off shares a slug and has no slot. The same string
+    // as PlaceCore.placeKey (test/place-core.test.js holds them together); it
+    // is said here too only so the pages loading this need no second script.
     function assignmentKey(ref) {
         const a = ref || {};
-        return [a.occurrenceId, a.roleSlug, a.slotId || 'x'].join('__');
+        const oneOffId = a.roleSlug === 'one_off' && a.oneOffId ? a.oneOffId : null;
+        return [a.occurrenceId || null, a.roleSlug || null, oneOffId || a.slotId || 'x'].join('__');
     }
 
-    const sameAssignment = (a, b) => assignmentKey(a) === assignmentKey(b);
+    // A Trade written before one-offs carried their own id names a one-off by
+    // slug alone; it still means the one-off on that Event that the other side
+    // names, so a missing id on EITHER side falls back to that.
+    const sameAssignment = (a, b) => {
+        if (assignmentKey(a) === assignmentKey(b)) return true;
+        return !!a && !!b && a.roleSlug === 'one_off' && b.roleSlug === 'one_off' &&
+            (!a.oneOffId || !b.oneOffId) &&
+            (a.occurrenceId || null) === (b.occurrenceId || null);
+    };
 
     // Strictly past. The day itself has not happened yet, and killing a Trade on
     // the morning somebody is still trying to sort it out would be the wrong

@@ -34,6 +34,8 @@ const tradeCore = require("./shared/trade-core.js");
 const coverCore = require("./shared/cover-core.js");
 const occurrences = require("./shared/events-occurrence-core.js");
 const aw = require("./assignment-writes");
+const place = require("./shared/place-core.js");
+const {loadRoleRegistry} = require("./roles-read");
 
 /** @typedef {import("firebase-admin/firestore").Firestore} Firestore */
 /** @typedef {import("firebase-admin/firestore").Transaction} Transaction */
@@ -79,11 +81,7 @@ const TRADES = "trades";
 const OCCURRENCES = "event_occurrences";
 const COVER = "cover";
 
-const STATES = {
-  PENDING: "pending",
-  CONFIRMED: "confirmed",
-  DECLINED: "declined",
-};
+const STATES = place.STATES;
 
 const refuse = (code, message, reason) =>
   ({ok: false, code: code, message: message, reason: reason || null});
@@ -168,9 +166,8 @@ async function readAssignment(tx, db, ref) {
   if (!occSnap.exists) return null;
 
   const rows = rosterSnap.docs.map((d) => d.data());
-  const held = rows.find((a) =>
-    a && a.roleSlug === ref.roleSlug &&
-    (a.slotId || null) === (ref.slotId || null));
+  // A one-off is told apart by its own id (PlaceCore.samePlace).
+  const held = rows.find((a) => place.samePlace(a, ref));
   if (!held) return null;
   return {
     personId: held.personId,
@@ -344,23 +341,24 @@ async function describeAssignment(db, ref) {
   const r = ref || {};
   if (!r.occurrenceId || !r.roleSlug) return null;
 
-  const [occSnap, roleSnap] = await Promise.all([
+  const [occSnap, registry] = await Promise.all([
     db.collection(OCCURRENCES).doc(r.occurrenceId).get(),
-    db.collection("roles").where("slug", "==", r.roleSlug).limit(1).get(),
+    loadRoleRegistry(db),
   ]);
   if (!occSnap.exists) return null;
 
   const occurrence = occSnap.data();
-  const role = roleSnap.empty ? null : roleSnap.docs[0].data();
+  const p = place.placeOf(r);
   return {
     assignment: {
       occurrenceId: r.occurrenceId,
       roleSlug: r.roleSlug,
-      slotId: r.slotId || null,
+      slotId: p.slotId,
+      oneOffId: p.oneOffId,
       date: occurrence.date,
     },
     eventName: occurrence.name || occurrence.seriesName || "Event",
-    roleName: (role && role.name) || null,
+    roleName: registry.nameOf(r.roleSlug),
     occurrence: Object.assign({id: occSnap.id}, occurrence),
   };
 }
@@ -784,12 +782,7 @@ async function settle(tx, db, s) {
 
     const after = source.roster.map((a) => (a === source.row ? moved : a));
     const occRef = db.collection(OCCURRENCES).doc(move.assignment.occurrenceId);
-    tx.update(occRef, {
-      participantIds: participantIdsOf(after),
-      needsAttention: after.some((a) => a && a.state === STATES.DECLINED),
-      outForCover: occurrences.outForCover(
-          Object.assign({}, source.occurrence, {assignments: after})),
-    });
+    tx.update(occRef, place.derivedFields(source.occurrence, after));
 
     tx.delete(db.collection(COVER).doc(coverId(move.assignment)));
   });
@@ -829,37 +822,15 @@ async function settle(tx, db, s) {
   };
 }
 
-/**
- * The roster document id, as events-store.js builds it.
- * @param {Object} a the Assignment
- * @return {string} its document id
- */
-function rosterIdFor(a) {
-  return [a.roleSlug, a.oneOffId || a.slotId || "x", a.personId].join("__");
-}
+const rosterIdFor = place.rosterIdFor;
 
 /**
- * The cover document id, as assignment-answer.js builds it.
+ * The cover document id for a Trade's reference (PlaceCore.coverIdFor).
  * @param {Object} ref the Assignment reference
  * @return {string} the cover document id
  */
 function coverId(ref) {
-  return [ref.occurrenceId, ref.roleSlug, ref.slotId || "one_off"].join("__");
-}
-
-/**
- * Everyone holding a place, which is what the participant rule reads.
- * @param {Array<Object>} roster the Assignments
- * @return {Array<string>} the Person ids
- */
-function participantIdsOf(roster) {
-  const seen = [];
-  (roster || []).forEach((a) => {
-    if (a && a.personId && seen.indexOf(a.personId) === -1) {
-      seen.push(a.personId);
-    }
-  });
-  return seen;
+  return place.coverIdFor(ref.occurrenceId, ref);
 }
 
 /**
@@ -924,16 +895,8 @@ async function setReach(db, spec) {
     if (s.quiet) {
       tx.delete(coverRef);
     } else {
-      tx.set(coverRef, {
-        occurrenceId: ref.occurrenceId,
-        seriesId: held.occurrence.seriesId || null,
-        date: ref.date,
-        eventName: said.eventName,
-        roleSlug: ref.roleSlug,
-        slotId: ref.slotId,
-        roleName: said.roleName,
-        visibility: occurrences.visibilityOf(held.occurrence),
-      });
+      tx.set(coverRef,
+          place.coverEntryFor(held.occurrence, held.row, said.roleName));
     }
 
     return {ok: true, quiet: s.quiet === true};
@@ -976,11 +939,7 @@ function causeFor(held, trade) {
  */
 function sweepAssignment(db, spec) {
   const s = spec || {};
-  const ref = {
-    occurrenceId: s.occurrenceId,
-    roleSlug: s.roleSlug,
-    slotId: s.slotId || null,
-  };
+  const ref = Object.assign(place.placeOf(s), {occurrenceId: s.occurrenceId});
 
   return runOrLose(db, async (tx) => {
     const held = await readAssignment(tx, db, ref);

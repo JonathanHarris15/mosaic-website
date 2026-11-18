@@ -2,6 +2,8 @@ const { test } = require('node:test');
 const assert = require('node:assert');
 
 const Store = require('../public/cover-store.js');
+// The entry and its id are PlaceCore's; the store only reads the list.
+const Place = require('../public/place-core.js');
 const Core = require('../public/events-occurrence-core.js');
 
 // The cover list's Firestore adapter (MS-20).
@@ -168,7 +170,7 @@ test('a row renders without opening the occurrence it points at', async () => {
 });
 
 test('a row does not name who declined — the list does not need it', async () => {
-    const built = Store.entryFor(
+    const built = Place.coverEntryFor(
         { id: 'o1', date: '2026-08-14', name: 'Midweek', visibility: 'member' },
         { personId: 'carl', roleSlug: 'kids', slotId: 's1' },
         'Kids Ministry'
@@ -180,7 +182,7 @@ test('a row does not name who declined — the list does not need it', async () 
 // ── Building an entry ────────────────────────────────────────────────────────
 
 test('an entry is stamped with its occurrence’s visibility at write time', () => {
-    const built = Store.entryFor(
+    const built = Place.coverEntryFor(
         { id: 'o1', date: '2026-08-14', name: 'Midweek', visibility: 'elder' },
         { roleSlug: 'kids', slotId: 's1' },
         'Kids Ministry'
@@ -189,7 +191,7 @@ test('an entry is stamped with its occurrence’s visibility at write time', () 
 });
 
 test('a Sunday is stamped public whatever the document happens to hold', () => {
-    const built = Store.entryFor(
+    const built = Place.coverEntryFor(
         {
             id: 'sunday_service_2026-08-16',
             seriesId: Core.SUNDAY_SERVICE_ID,
@@ -203,11 +205,11 @@ test('a Sunday is stamped public whatever the document happens to hold', () => {
 });
 
 test('the id is deterministic, so declining twice cannot ask twice', () => {
-    const first = Store.coverId('o1', 'kids', 's1');
-    const second = Store.coverId('o1', 'kids', 's1');
+    const first = Place.coverIdFor('o1', { roleSlug: 'kids', slotId: 's1' });
+    const second = Place.coverIdFor('o1', { roleSlug: 'kids', slotId: 's1' });
     assert.equal(first, second);
-    assert.notEqual(first, Store.coverId('o1', 'kids', 's2'));
-    assert.notEqual(first, Store.coverId('o1', 'coffee', 's1'));
+    assert.notEqual(first, Place.coverIdFor('o1', { roleSlug: 'kids', slotId: 's2' }));
+    assert.notEqual(first, Place.coverIdFor('o1', { roleSlug: 'coffee', slotId: 's1' }));
 });
 
 // ── Which places belong on it at all ─────────────────────────────────────────

@@ -1982,3 +1982,21 @@ test('a new name that slugs onto a Role stored without a slug is refused', async
 test('the Roles list is keyed by document, so two Roles can never share one row', () => {
     assert.match(rolesManagerHtml(), /x-for="role in servantRoles" :key="role\.id"/);
 });
+
+test('creating asks the store again, so a Role another editor just made is not duplicated', async () => {
+    const page = await mountPage({ roles: { r1: kidsDefinition() } });
+    // Another tab creates "Greeters" after this page loaded its list.
+    global.db._data.roles.other = Object.assign(coffeeDefinition(), { name: 'Greeters', slug: 'greeters' });
+    await page.createRole('Greeters');
+    assert.equal(Object.keys(stored('roles')).length, 2, 'no second Greeters');
+    assert.equal(page.toast.type, 'error');
+    assert.ok(page.roleDefinitions.some(d => d.id === 'other'), 'and the list now shows it');
+});
+
+test('Roles that share a slug are said out loud on the page', async () => {
+    const legacy = Object.assign(coffeeDefinition(), { name: 'coffee!', slug: undefined });
+    const page = await mountPage({ roles: { r1: coffeeDefinition(), r2: legacy } });
+    assert.equal(page.sharedSlugs.length, 1);
+    assert.match(page.sharedSlugSentence(page.sharedSlugs[0]), /“Coffee” and “coffee!”/);
+    assert.match(rolesManagerHtml(), /x-show="sharedSlugs\.length"/);
+});

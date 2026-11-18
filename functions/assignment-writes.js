@@ -28,6 +28,8 @@ const aa = require("./assignment-answer");
 const at = require("./assignment-take");
 const coverCore = require("./shared/cover-core.js");
 const awayCore = require("./shared/away-core.js");
+const place = require("./shared/place-core.js");
+const {loadRoleRegistry} = require("./roles-read");
 
 /** @typedef {import("firebase-admin/firestore").Firestore} Firestore */
 
@@ -81,84 +83,57 @@ function runOrLose(db, body, message) {
 }
 
 /**
- * Everything the eligibility rules need about one Person and one Role, read
- * before the transaction opens. None of it is contended: the race is over who
- * holds the slot, and that is re-read inside.
+ * Make the cover list for one occurrence say what is true of it NOW.
  *
- * ⚠ EVERY INPUT HERE IS PART OF THE WALL. A rule whose data is missing does not
- * fail loudly — `candidatesFor` simply finds nothing to object to and waves the
- * person through. An empty `groups` list silently disables every group
- * restriction; an empty `awayPersonIds` silently forgets that somebody said
- * they would not be there. So each one is either genuinely loaded, or the Role
- * genuinely has no rule that reads it.
+ * ⚠ THE COVER LIST IS A DERIVED VIEW. It is what PlaceCore.desiredCover says
+ * the occurrence and its roster produce, and this is the only thing that
+ * keeps it so. It used to be written by the doors that settle a place and
+ * swept, delete-only, by the roster trigger — so nothing put a moved date's
+ * declined places back on it, nothing took a cancelled date's off it, and
+ * nothing re-stamped an entry when its Event was made more private (the rule
+ * reads the entry's OWN `visibility`, so a stale stamp is a stale disclosure).
  *
- * @param {Object} db the Firestore handle
- * @param {?string} personId the caller's Person id, or null
- * @param {string} roleSlug the Role they want a place in
- * @param {string} date the occurrence's own date, which Away is judged on
- * @return {Promise<Object>} the person, the Role definition, and the rules
- */
-/**
- * Clear the cover entry for a place that is no longer looking for one.
+ * Now both triggers — a roster row written, or the occurrence itself written —
+ * reconcile the whole occurrence. The doors that answer, take, settle and
+ * change reach still write their own entry in their own transaction, so the
+ * list is right the moment they return; this is what makes it right whatever
+ * door the change came through.
  *
- * ⚠ THE COVER LIST IS DERIVED FROM THE ROSTER, AND HAD NO WAY TO KNOW WHEN THE
- * ROSTER CHANGED BY A DOOR IT DID NOT OWN.
- *
- * The entry is a denormalised document, written alongside a decline so the list
- * can render without opening the occurrence (cover-store.js). Every path that
- * SETTLES a place deleted it by hand: taking one, settling a Trade, going
- * quiet. Nothing deleted it when an editor simply removed the roster row — and
- * "empty the ticked dates" removes hundreds at once. The place was gone, the
- * decline was gone, and the advertisement was still up: people offering to
- * cover Sundays that no longer had a rota.
- *
- * So it hangs off the roster write, like the Trade sweep beside it, and so runs
- * whichever door the roster changed through.
- *
- * Deleting only. Writing one needs the occurrence's rung and the Role's name,
- * and the decline path has both — this knows when an advertisement has stopped
- * being true, which is a different and much smaller question.
+ * Read again inside a transaction, never trusted from the trigger's copy:
+ * triggers arrive late and out of order (MS-819). Writes only what differs, so
+ * a reconcile that finds the list right writes nothing.
  *
  * @param {Firestore} db the Firestore handle
- * @param {Object} spec the place, and what is on it now
- * @param {string} spec.occurrenceId the occurrence
- * @param {string} spec.roleSlug the Role
- * @param {?string} spec.slotId its slot
- * @param {?Object} spec.row the roster row as it now stands, or null if gone
- * @return {Promise<boolean>} whether an entry was cleared
+ * @param {string} occurrenceId the occurrence
+ * @param {Object} [opts]
+ * @param {function(string): ?string} [opts.roleNameOf] slug → Role name;
+ *   read from /roles when not given
+ * @param {boolean} [opts.dryRun] work out the changes and write nothing
+ * @return {Promise<{set: Array<*>, remove: Array<string>}>} what changed
  */
-async function sweepCover(db, spec) {
-  const s = spec || {};
-  const row = s.row || null;
-
-  // Still declined and still on the roster: the advertisement is still true.
-  // Whether it is OPEN or quiet is setReach's business, and it manages the
-  // entry itself — so a quiet one having no document here is correct, not a
-  // gap to fill.
-  if (row && (row.state || null) === aa.STATES.DECLINED) return false;
-
-  // ⚠ THE TRIGGER'S COPY IS ONLY WHAT WAS TRUE WHEN IT FIRED (MS-819).
-  // Triggers arrive late and out of order: a confirm's sweep delivered after
-  // the decline that followed it would delete the advertisement that decline
-  // just put up. So the place is read again, in a transaction with the delete,
-  // and the entry goes only if nothing on the place is declined NOW.
-  const ref = db.collection(COVER)
-      .doc(aa.coverId(s.occurrenceId, s.roleSlug, s.slotId));
-  const placeRows = db.collection(OCCURRENCES).doc(s.occurrenceId)
-      .collection("roster").where("roleSlug", "==", s.roleSlug);
+async function reconcileCover(db, occurrenceId, opts) {
+  const o = opts || {};
+  const roleNameOf = o.roleNameOf || (await loadRoleRegistry(db)).nameOf;
+  const occurrenceRef = db.collection(OCCURRENCES).doc(occurrenceId);
+  const listed = db.collection(COVER).where("occurrenceId", "==", occurrenceId);
 
   return db.runTransaction(async (tx) => {
-    const snap = await tx.get(ref);
-    if (!snap.exists) return false;
-    const now = await tx.get(placeRows);
-    const stillDeclined = now.docs.some((d) => {
-      const a = d.data() || {};
-      return (a.slotId || null) === (s.slotId || null) &&
-        a.state === aa.STATES.DECLINED;
-    });
-    if (stillDeclined) return false;
-    tx.delete(ref);
-    return true;
+    const occSnap = await tx.get(occurrenceRef);
+    const existing = await tx.get(listed);
+    let desired = {};
+    if (occSnap.exists) {
+      const rosterSnap = await tx.get(occurrenceRef.collection("roster"));
+      desired = place.desiredCover(
+          Object.assign({id: occSnap.id}, occSnap.data()),
+          rosterSnap.docs.map((d) => d.data()),
+          roleNameOf);
+    }
+    const changes = place.coverChanges(
+        existing.docs.map((d) => ({id: d.id, data: d.data()})), desired);
+    if (o.dryRun) return changes;
+    changes.set.forEach((c) => tx.set(db.collection(COVER).doc(c.id), c.entry));
+    changes.remove.forEach((id) => tx.delete(db.collection(COVER).doc(id)));
+    return changes;
   });
 }
 
@@ -204,13 +179,11 @@ async function takeContext(db, personId, roleSlug, date, seriesId) {
   if (!personSnap.exists) return empty;
   const person = Object.assign({id: personSnap.id}, personSnap.data());
 
-  // ⚠ THE COLLECTION IS `roles`. Named wrongly, this query returns nothing,
-  // roleDef is null, and every Role rule silently stops being checked — the
-  // eligibility wall would permit anything while looking like it worked.
-  const roleSnap = await db.collection("roles")
-      .where("slug", "==", roleSlug).limit(1).get();
-  const roleDef = roleSnap.empty ? null :
-    Object.assign({id: roleSnap.docs[0].id}, roleSnap.docs[0].data());
+  // ⚠ ONE RESOLVER (roles-read.js). A Role stored without a slug still
+  // resolves, and one whose slug another definition shares resolves to
+  // nothing — so the take is refused as a gone Role rather than judged
+  // against whichever of the two came back first.
+  const roleDef = (await loadRoleRegistry(db)).find(roleSlug);
 
   // ⚠ The Event's rules about a PAIR of Roles (MS-221). They live on the
   // SERIES, not on either Role, so a Role whose own definition has no group
@@ -304,7 +277,10 @@ async function takeContext(db, personId, roleSlug, date, seriesId) {
  * @return {Promise<Object>} the plan that was written, or a refusal
  */
 async function answer(db, spec) {
-  const s = spec || {};
+  const s = Object.assign({}, spec || {});
+  if (s.roleSlug && s.roleSlug !== place.ONE_OFF_SLUG) {
+    s.roleName = (await loadRoleRegistry(db)).nameOf(s.roleSlug);
+  }
   const occurrenceRef = db.collection(OCCURRENCES).doc(s.occurrenceId);
   const rosterCol = occurrenceRef.collection("roster");
 
@@ -318,11 +294,9 @@ async function answer(db, spec) {
     const rosterSnap = await tx.get(rosterCol);
     const roster = rosterSnap.docs.map((d) => d.data());
 
-    // `roleName` is deliberately not passed through from the caller.
-    // RolesCore.roleBySlug is the one way a slug becomes a human name and it
-    // lives in the browser; letting a caller send one up would put arbitrary
-    // text on other people's screens. A one-off Role carries its own label on
-    // the Assignment, and that is what gets used.
+    // `roleName` is never taken from the caller — that would put arbitrary
+    // text on other people's screens. It is resolved here, from /roles, the
+    // same way the reconcile names an entry; a one-off names itself.
     const plan = aa.planAnswer({
       occurrence: occurrence,
       roster: roster,
@@ -337,6 +311,7 @@ async function answer(db, spec) {
       quiet: s.quiet,
       today: s.today,
       now: s.now || null,
+      roleName: s.roleName || null,
     });
     if (!plan.ok) return plan;
 
@@ -346,11 +321,7 @@ async function answer(db, spec) {
     const filedAs = at === -1 ? plan.rosterId : rosterSnap.docs[at].id;
     delete plan.held;
     tx.set(rosterCol.doc(filedAs), plan.assignment, {merge: true});
-    tx.update(occurrenceRef, {
-      participantIds: plan.derived.participantIds,
-      needsAttention: plan.derived.needsAttention,
-      outForCover: plan.derived.outForCover,
-    });
+    tx.update(occurrenceRef, plan.derived);
 
     const coverRef = db.collection(COVER).doc(plan.cover.id);
     if (plan.cover.action === "set") {
@@ -385,6 +356,7 @@ async function answer(db, spec) {
  * @param {string} spec.occurrenceId the occurrence
  * @param {string} spec.roleSlug the Role of the place
  * @param {?string} spec.slotId its slot
+ * @param {?string} [spec.oneOffId] which one-off job, when it is one
  * @param {string} spec.today YYYY-MM-DD in the church's timezone
  * @param {*} spec.now a timestamp to stamp the new Assignment with
  * @return {Promise<Object>} the plan that was written, or a refusal
@@ -453,6 +425,7 @@ async function take(db, spec) {
       personId: s.personId,
       roleSlug: s.roleSlug,
       slotId: s.slotId || null,
+      oneOffId: s.oneOffId || null,
       verdict: verdict,
       today: s.today,
       now: s.now || null,
@@ -463,11 +436,7 @@ async function take(db, spec) {
     // different documents.
     tx.delete(rosterCol.doc(plan.removeRosterId));
     tx.set(rosterCol.doc(plan.rosterId), plan.assignment);
-    tx.update(occurrenceRef, {
-      participantIds: plan.derived.participantIds,
-      needsAttention: plan.derived.needsAttention,
-      outForCover: plan.derived.outForCover,
-    });
+    tx.update(occurrenceRef, plan.derived);
     tx.delete(db.collection(COVER).doc(plan.cover.id));
 
     return plan;
@@ -478,7 +447,7 @@ module.exports = {
   OCCURRENCES,
   COVER,
   takeContext,
-  sweepCover,
+  reconcileCover,
   answer,
   take,
 };

@@ -138,6 +138,18 @@ suite('Roles: what the rules actually let through', () => {
         await RT.assertSucceeds(db.doc('roles/g1').delete());
     });
 
+    test('a new Role must carry its slug, and the slot counter never goes back', async () => {
+        const db = ctx('uid-rolesmgr');
+        const def = RolesCore.newDefinition('Car park');
+        const noSlug = Object.assign({}, def);
+        delete noSlug.slug;
+        await RT.assertFails(db.doc('roles/cp').set(noSlug));
+        await RT.assertSucceeds(db.doc('roles/cp').set(def));
+        await RT.assertFails(db.doc('roles/cp').update({ nextSlotSeq: 1 }));
+        await RT.assertSucceeds(db.doc('roles/cp').update({ nextSlotSeq: 5 }));
+        await RT.assertSucceeds(db.doc('roles/cp').delete());
+    });
+
     test('a Role\'s slug never changes once set, and no write adds an unknown field', async () => {
         const db = ctx('uid-rolesmgr');
         await RT.assertFails(db.doc('roles/ushers').update({ slug: 'door_team' }));

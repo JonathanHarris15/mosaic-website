@@ -361,6 +361,21 @@
             </div>
         </div>
 
+        <!-- Two stored Roles filed under one short name. Both stay listed so one
+             can be deleted; until then neither can be taken, traded or
+             checked, because nothing will guess which of the two a place means. -->
+        <div x-show="sharedSlugs.length" class="m-notice m-notice--error" data-shared-slugs>
+            <span class="material-symbols-outlined m-notice__icon">warning</span>
+            <div class="m-notice__body">
+                <p class="m-notice__text">
+                    <template x-for="shared in sharedSlugs" :key="shared.slug">
+                        <span x-text="sharedSlugSentence(shared)"></span>
+                    </template>
+                    Delete the one that should not be there.
+                </p>
+            </div>
+        </div>
+
         <!-- Two sides: the Roles, and whatever is open. Below 1000px there is
              only room for one, so the side you are not using steps aside. -->
         <div class="m-split">

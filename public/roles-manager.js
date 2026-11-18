@@ -39,6 +39,10 @@ window.RolesManager = () => ({
     // but /roles is editor-writable, so one can arrive by hand. Held aside and
     // reported rather than left to throw on every render.
     conflictingDefinitions: [],
+    // Stored Roles that read as one slug: shown, but not takeable anywhere
+    // until one is deleted (RolesCore.registry refuses to guess between them).
+    /** @type {Array<{ slug: string, names: string[] }>} */
+    sharedSlugs: [],
 
     // Only the tags this account may see. The ids of the rest are held apart in
     // hiddenTagIds — an existing rule can say it is unavailable without the name
@@ -240,11 +244,16 @@ window.RolesManager = () => ({
 
     // ── Loading ──────────────────────────────────────────────────────────────
 
+    async readStoredDefinitions() {
+        const snap = await db.collection('roles').orderBy('name', 'asc').get();
+        return snap.docs.map(doc => Object.assign({ id: doc.id }, doc.data()));
+    },
+
     async loadRoleDefinitions() {
         try {
-            const snap = await db.collection('roles').orderBy('name', 'asc').get();
-            const split = RoleEditorCore.partition(snap.docs.map(doc => Object.assign({ id: doc.id }, doc.data())));
+            const split = RoleEditorCore.partition(await this.readStoredDefinitions());
             this.conflictingDefinitions = split.conflicting;
+            this.sharedSlugs = split.sharedSlugs;
             this.roleDefinitions = split.definitions;
         } catch (e) {
             console.error('Error loading Role Definitions:', e);
@@ -300,6 +309,12 @@ window.RolesManager = () => ({
             this.sharedRelationshipTypes = [];
             this.relationshipTypesDenied = true;
         }
+    },
+
+    /** @param {{ names: string[] }} shared */
+    sharedSlugSentence(shared) {
+        const names = ((shared && shared.names) || []).map(n => `“${n}”`).join(' and ');
+        return `${names} are saved under the same short name, so places in them cannot be taken or swapped. `;
     },
 
     // ── The one roles list ───────────────────────────────────────────────────
@@ -427,6 +442,16 @@ window.RolesManager = () => ({
         }
         const definition = proposal.definition;
         try {
+            // ⚠ The list on screen is the one loaded when the page opened. A
+            // Role another editor (or another tab) has created since is not
+            // in it, so the slug is asked about again, now, before the write.
+            const fresh = await this.readStoredDefinitions();
+            const recheck = RoleEditorCore.proposeNew(name, fresh);
+            if (!recheck.ok) {
+                this.showToast(recheck.error, 'error');
+                await this.loadRoleDefinitions();
+                return;
+            }
             const ref = await db.collection('roles').add(definition);
             this.roleDefinitions = RoleEditorCore.withStored(
                 this.roleDefinitions.concat([Object.assign({ id: ref.id }, definition)]), ref.id, {});

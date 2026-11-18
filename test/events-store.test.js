@@ -1648,6 +1648,20 @@ test('moving one instance writes the new date and marks the old one', async () =
     assert.deepStrictEqual(origin.data.participantIds, []);
 });
 
+test('a date moved twice remembers where the pattern first put it', async () => {
+    const stored = {
+        'firstsunday_2026-08-15': {
+            seriesId: 'firstsunday', date: '2026-08-15', visibility: 'member',
+            movedFrom: '2026-08-02', participantIds: [],
+        },
+    };
+    const db = fakeDb({ events: MONTHLY, event_occurrences: stored }, { rank: 'editor' });
+    await Store.moveOccurrence(db, 'firstsunday', '2026-08-15', '2026-08-20');
+    const moved = db._flatWrites().find(w => w.path === 'event_occurrences/firstsunday_2026-08-20');
+    assert.strictEqual(moved.data.movedFrom, '2026-08-15', 'the last hop');
+    assert.strictEqual(moved.data.originalDate, '2026-08-02', 'where it started — what the nudge count is kept under');
+});
+
 test('the roster travels with the instance', async () => {
     const stored = {
         'firstsunday_2026-08-02': {

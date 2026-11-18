@@ -505,6 +505,7 @@
                         occurrenceId: this.asking.occurrenceId,
                         roleSlug: this.asking.roleSlug,
                         slotId: this.asking.slotId || null,
+                        oneOffId: this.asking.oneOffId || null,
                         counterpartyId: person.id,
                     });
                     await this.loadTrades();
@@ -553,6 +554,8 @@
                     occurrenceId: row.occurrenceId,
                     roleSlug: row.roleSlug,
                     slotId: row.slotId || null,
+                    // Which one-off job — they share a slug and have no slot.
+                    oneOffId: row.oneOffId || null,
                 };
             },
 

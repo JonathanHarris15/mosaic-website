@@ -60,7 +60,7 @@
     // this is the one screen that must never show an id.
     /**
      * @param {Array<Record<string, *>>} all Stored definitions, as `{ id, ...doc }`.
-     * @returns {{ definitions: Array<Record<string, *>>, conflicting: Array<Record<string, *>> }}
+     * @returns {{ definitions: Array<Record<string, *>>, conflicting: Array<Record<string, *>>, sharedSlugs: Array<{ slug: string, names: string[] }> }}
      */
     function partition(all) {
         /** @type {Array<Record<string, *>>} */
@@ -76,7 +76,17 @@
             const builtIn = RolesCore.LITURGICAL_ROLES.find((/** @type {*} */ role) => role.slug === slug);
             conflicting.push(Object.assign({}, def, { slug, clashesWith: (builtIn && builtIn.name) || slug }));
         });
-        return { definitions: sortByName(definitions), conflicting };
+        // Two stored Roles that read as one slug. They stay in the list —
+        // deleting one is the only fix, and a Role you cannot see you cannot
+        // delete — but every reader of a slug now refuses to guess between
+        // them (RolesCore.registry), so the page has to say why both have
+        // stopped being takeable.
+        /** @type {Record<string, string[]>} */
+        const names = {};
+        definitions.forEach(def => { (names[slugOf(def)] = names[slugOf(def)] || []).push(String(def.name || '')); });
+        const sharedSlugs = Object.keys(names).filter(slug => names[slug].length > 1).sort()
+            .map(slug => ({ slug, names: names[slug].slice().sort() }));
+        return { definitions: sortByName(definitions), conflicting, sharedSlugs };
     }
 
     /** @param {Array<Record<string, *>>} defs */

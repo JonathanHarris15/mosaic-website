@@ -1189,6 +1189,10 @@
             date: toDate,
             visibility: visibility,
             movedFrom: fromDate,
+            // The date the pattern first put it on, however many times it
+            // has moved since. `movedFrom` is only the LAST hop, so anything
+            // keyed on it (the nudge count) started over on the second move.
+            originalDate: (source && (source.originalDate || source.movedFrom)) || fromDate,
             assignments: assignments,
         }));
         delete moved.movedTo;

@@ -41,33 +41,9 @@
 
     const COVER = 'cover';
 
-    // Deterministic, for the same reason occurrence ids are (ADR-0018 §3): a
-    // slot can be declined, re-confirmed and declined again, and two writes must
-    // not leave two rows asking for the same place.
-    function coverId(occurrenceId, roleSlug, slotId) {
-        return [occurrenceId, roleSlug, slotId || 'one_off'].join('__');
-    }
-
-    // What one open place looks like on the list. Everything here is
-    // denormalised on purpose — a row must render without opening the
-    // occurrence, because the reader may not be allowed to.
-    //
-    // `visibility` is stamped at write time from the occurrence, so the security
-    // rule can answer by rank without a lookup per document (MS-130).
-    function entryFor(occurrence, assignment, roleName) {
-        const o = occurrence || {};
-        const a = assignment || {};
-        return {
-            occurrenceId: o.id,
-            seriesId: o.seriesId || null,
-            date: o.date,
-            eventName: o.name || o.seriesName || 'Event',
-            roleSlug: a.roleSlug || null,
-            slotId: a.slotId || null,
-            roleName: roleName || a.label || null,
-            visibility: Core.visibilityOf(o) || null,
-        };
-    }
+    // The entry and its id are written by the server only (the cover rule
+    // refuses every client write) and are PlaceCore's (place-core.js). This
+    // module only reads the list.
 
     // Does this Assignment's Event belong on the list at all? One definition,
     // in the occurrence model, because the cover store and both server callables
@@ -102,8 +78,6 @@
 
     const CoverStore = {
         COVER,
-        coverId,
-        entryFor,
         belongsOnList,
         loadCoverList,
     };
