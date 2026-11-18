@@ -81,3 +81,11 @@ to prevent.
   already saved as irregular with a sermonette element keeps the element in its
   stored list, where it will no longer map to a canonical field — it reads as a
   free-text element, which is what an irregular service is for.
+- **The stored Sunday Service series kept `sermonette` locked.** Its
+  `lockedRoleSlugs` was written while the Role was liturgical, and the reconcile
+  only ever restored *missing* locks, so the Roles & rules tab went on showing
+  Sermonette as a Role that could not be taken off. `reconcileSundayService` now
+  treats a locked slug that is no longer liturgical as retired: it is unlocked
+  and taken off the Sunday (with any cross-Role rule naming it), the next time
+  an editor opens the Sunday Service. Once off, a Servant Role of that slug can
+  be added back by hand like any other.
