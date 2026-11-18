@@ -1541,17 +1541,17 @@ test('the Recurring Events page keeps every door it promises', () => {
     // you meant. With columns ticked it carries that range instead, and the
     // label is the only thing that says which of the two you are about to get.
     assert.strictEqual(page.draftHref, 'auto-assign.html?series=sunday_service');
-    assert.strictEqual(page.draftLabel, 'Auto-assign');
+    assert.strictEqual(page.draftLabel, 'Fill the rota');
 
     page.allDates = ['2026-08-09', '2026-08-16', '2026-08-23'];
     page.selected = ['2026-08-09', '2026-08-16'];
     assert.strictEqual(page.draftHref,
         'auto-assign.html?series=sunday_service&from=2026-08-09&to=2026-08-16');
-    assert.strictEqual(page.draftLabel, 'Auto-assign 2 dates');
+    assert.strictEqual(page.draftLabel, 'Fill 2 dates');
 
     // A scattered tick counts what will really open, not what was ticked.
     page.selected = ['2026-08-09', '2026-08-23'];
-    assert.strictEqual(page.draftLabel, 'Auto-assign 3 dates');
+    assert.strictEqual(page.draftLabel, 'Fill 3 dates');
 });
 
 test('the draft room takes the series and range it is handed', () => {
@@ -4047,8 +4047,8 @@ test('Auto-assign is offered beside a chosen event, to editors, and not on a pho
     // isEditor promise the Calendar makes with `x-show="canCreate"` is no
     // longer the whole page's — it is this footer's, stated here so a later
     // refactor that lifts the grid out cannot quietly drop it.
-    assert.match(html, /class="m-actionbar re-desktop-only" x-show="editorLanes && hasRoles"/,
-        'the drafting footer is offered to people who cannot use it');
+    assert.match(html, /class="m-actionbar re-desktop-only" x-show="editorLanes && hasRoles && tab === 'rota'"/,
+        'the drafting footer is offered to people who cannot use it, or off the Rota tab');
     // The room it opens is a wide grid and says so when you arrive. Better not
     // to offer the journey than to end it with a shrug — so the whole action
     // bar stands down on a phone, and the door goes with it (MS-229).
@@ -4058,45 +4058,27 @@ test('Auto-assign is offered beside a chosen event, to editors, and not on a pho
         'a phone is offered a page it will be refused');
 });
 
-// ── The other door into the same room (MS-219) ───────────────────────────────
+// ── One door, and the choice is made on the other side ──────────────────────
 
-test('by hand sits beside auto-assign, carrying the same dates', () => {
-    // An editor who already knows who they want does not want a rota to undo.
-    // The long way round to a blank grid was: draft eight dates, then take
-    // everybody off them one at a time.
+test('one button opens the setup step, where drafting or by hand is chosen', () => {
+    // There used to be two — "By hand" and "Auto-assign" — side by side, on
+    // every tab. The choice between them is made on the draft room's setup
+    // step now, with the range in front of the editor, so the Rota tab offers
+    // a single door that never skips that step.
     const page = loadComponent('recurring-events.js', 'recurringEventsPage');
     page.seriesId = 'sunday_service';
-
-    assert.strictEqual(page.byHandHref, 'auto-assign.html?series=sunday_service&by=hand');
-    assert.strictEqual(page.byHandLabel, 'By hand');
+    assert.strictEqual(page.byHandHref, undefined, 'a second door into the draft room is back');
+    assert.strictEqual(page.byHandLabel, undefined);
 
     page.allDates = ['2026-08-09', '2026-08-16', '2026-08-23'];
     page.selected = ['2026-08-09', '2026-08-16'];
+    assert.doesNotMatch(page.draftHref, /by=hand/, 'the door skips the setup step');
 
-    assert.strictEqual(page.byHandHref,
-        'auto-assign.html?series=sunday_service&from=2026-08-09&to=2026-08-16&by=hand');
-    // The count is on BOTH buttons. They open the same dates, so a count on one
-    // of them would read as the difference between them.
-    assert.strictEqual(page.byHandLabel, 'By hand, 2 dates');
-    assert.strictEqual(page.draftLabel, 'Auto-assign 2 dates');
-});
-
-test('both doors are drawn ONCE, in a footer that holds still', () => {
-    // They used to be drawn TWICE — once above the grid and once in the ticked
-    // panel — because a long list of Roles scrolls a header pair off, and the
-    // count on the buttons has to stay next to the ticks that produced it.
-    //
-    // A footer that belongs to the PANE solves that properly (MS-229): it holds
-    // still while the grid scrolls under it, so saying it twice is now just
-    // saying it twice.
     const html = readPage('recurring-events.html');
-    const byHand = html.match(/<a[^>]*:href="byHandHref"[\s\S]*?<\/a>/g) || [];
-    const draft = html.match(/<a[^>]*:href="draftHref"[\s\S]*?<\/a>/g) || [];
-
-    assert.strictEqual(byHand.length, 1, 'by hand is drawn ' + byHand.length + ' times, not once');
-    assert.strictEqual(draft.length, 1, 'auto-assign is drawn ' + draft.length + ' times, not once');
-    assert.match(byHand[0], /byHandLabel/, 'the label is written out rather than bound');
-    assert.match(draft[0], /draftLabel/, 'the label is written out rather than bound');
+    const doors = html.match(/<a[^>]*:href="(draftHref|byHandHref)"[\s\S]*?<\/a>/g) || [];
+    assert.strictEqual(doors.length, 1, 'the draft room has ' + doors.length + ' doors, not one');
+    assert.match(doors[0], /draftLabel/, 'the label is written out rather than bound');
+    assert.doesNotMatch(html, />\s*Show the rota\s*</, 'the footer still reaches off the Rota tab');
 
     // Sticky, or it is a footer in name only.
     const css = fs.readFileSync(path.join(__dirname, '..', 'build', 'design-components.mjs'), 'utf8');
@@ -4108,7 +4090,7 @@ test('the phone is told why it cannot draft, rather than given a dead button', (
     const html = readPage('recurring-events.html');
     const phone = html.match(/<div class="m-actionbar re-phone-only"[\s\S]*?<\/div>\s*<\/div>/);
     assert.ok(phone, 'a phone gets no action bar at all');
-    assert.ok(phone[0].indexOf('draftHref') === -1 && phone[0].indexOf('byHandHref') === -1,
+    assert.ok(phone[0].indexOf('draftHref') === -1,
         'a phone is offered a grid it will be refused on arrival');
     assert.match(phone[0].replace(/\s+/g, ' '),
         /Drafting a rota is a wide grid of dates against roles, so it waits for a computer\./);
@@ -6323,7 +6305,7 @@ test('emptying the ticked dates writes to those dates and no others', () => {
     const page = recurringPageWith(ROSTERED_WINDOW());
     page.selected = ['2026-08-09', '2026-08-30'];
 
-    assert.strictEqual(page.draftLabel, 'Auto-assign 4 dates', 'the sweep this is contrasted with is gone');
+    assert.strictEqual(page.draftLabel, 'Fill 4 dates', 'the sweep this is contrasted with is gone');
     assert.strictEqual(page.canWipe, true);
 
     return page.takeEverybodyOff().then(() => {
@@ -7303,7 +7285,7 @@ test('the browse lane offers nothing that writes', () => {
 
     const datesTab = html.slice(html.indexOf("tab === 'dates'"), html.indexOf("tab === 'roles'"));
     [
-        'takeEverybodyOff', 'draftHref', 'byHandHref', 'toggle(', 'clearSelection',
+        'takeEverybodyOff', 'draftHref', 'toggle(', 'clearSelection',
         'seriesDraft', 'setColour', 'setSeriesVisibility', 'askRemoveSeriesRole',
         'addPairRule', 'openPattern',
     ].forEach(control => {
