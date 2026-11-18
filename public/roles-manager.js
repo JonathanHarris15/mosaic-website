@@ -32,6 +32,7 @@ window.RolesManager = () => ({
     currentPermissionLevel: null,
 
     // The stored Servant Role Definitions, as `{ id, ...definition }`.
+    /** @type {Array<Record<string, *>>} */
     roleDefinitions: [],
     // Stored definitions that would take a liturgical slug. They cannot be shown
     // in the list — allRoles rightly refuses to mix two Roles' serve history —
@@ -453,9 +454,15 @@ window.RolesManager = () => ({
         // sent. Swapping the draft first is what used to write the next
         // Role's name, slots and rules over the one being left.
         this.endSession();
-        this.draft = RoleEditorCore.draftFrom(role);
-        this.draftId = role.id;
-        this.openSession(role);
+        // ⚠ The STORED document, not the row it was clicked from. A row in
+        // `servantRoles` has been through allRoles, which fills in a slug for
+        // a Role stored without one — so the session would believe the slug
+        // was stored and never write it, and the Role's slug would go on
+        // following its name.
+        const stored = this.roleDefinitions.find(def => def.id === role.id) || role;
+        this.draft = RoleEditorCore.draftFrom(stored);
+        this.draftId = stored.id;
+        this.openSession(stored);
         // One pane: opening a Role takes it back off whichever church-wide
         // destination was showing.
         this.pane = 'role';

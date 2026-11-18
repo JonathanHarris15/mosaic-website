@@ -32,8 +32,10 @@
     'use strict';
 
     const inNode = typeof require === 'function' && typeof module !== 'undefined' && module.exports;
-    const RolesCore = inNode ? require('./roles-core.js') : global.RolesCore;
-    const LiveFields = inNode ? require('./live-fields-core.js') : global.LiveFields;
+    /** @type {*} */
+    const g = global || {};
+    const RolesCore = inNode ? require('./roles-core.js') : g.RolesCore;
+    const LiveFields = inNode ? require('./live-fields-core.js') : g.LiveFields;
 
     // What an editor can change on a Role. The slot counter (`nextSlotSeq`)
     // is not one of them — it travels with the slots (MS-823).

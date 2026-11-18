@@ -1957,6 +1957,19 @@ test('renaming a Role stored without a slug keeps the slug its history is under'
     assert.equal(stored('roles').r1.name, 'Children');
 });
 
+test('a slugless Role opened from its row in the list still keeps its slug on rename', async () => {
+    // The template opens `role in servantRoles`, and those rows have been
+    // through allRoles — which fills in the slug the stored document lacks.
+    // Stored as JSON, so an undefined slug is a document without one.
+    const legacy = Object.assign(kidsDefinition(), { slug: undefined });
+    const page = await mountPage({ roles: { r1: legacy } });
+    page.startEdit(page.servantRoles.find((/** @type {*} */ r) => r.id === 'r1'));
+    page.draft.name = 'Prayer';
+    await page.saveDraft();
+    assert.equal(stored('roles').r1.slug, 'kids_ministry',
+        'unpinned, it would read as "prayer" — a liturgical slug — on the next load');
+});
+
 test('a new name that slugs onto a Role stored without a slug is refused', async () => {
     const legacy = coffeeDefinition();
     delete legacy.slug;
