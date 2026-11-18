@@ -62,9 +62,10 @@
     }
 
     // One Assignment, as a string. Ticking a box needs an identity and a
-    // commitment row carries no id of its own — it IS the three fields.
+    // commitment row carries no id of its own — it IS these fields, and a
+    // one-off job's own id is one of them (they share a slug, have no slot).
     function keyOf(row) {
-        return [row.occurrenceId, row.roleSlug, row.slotId || ''].join('|');
+        return [row.occurrenceId, row.roleSlug, row.oneOffId || row.slotId || ''].join('|');
     }
 
     function todayStr() {
@@ -318,6 +319,7 @@
                         occurrenceId: row.occurrenceId,
                         roleSlug: row.roleSlug,
                         slotId: row.slotId || null,
+                        oneOffId: row.oneOffId || null,
                     });
                     // It leaves the list because it is no longer needing anybody.
                     this.rows = this.rows.filter(r => r.key !== row.key);
@@ -415,6 +417,7 @@
                             occurrenceId: r.occurrenceId,
                             roleSlug: r.roleSlug,
                             slotId: r.slotId || null,
+                            oneOffId: r.oneOffId || null,
                         }));
 
                     const call = firebase.functions().httpsCallable('offerTrade');
@@ -422,6 +425,7 @@
                         occurrenceId: row.occurrenceId,
                         roleSlug: row.roleSlug,
                         slotId: row.slotId || null,
+                        oneOffId: row.oneOffId || null,
                         offered: offered,
                     });
                     this.offering = null;

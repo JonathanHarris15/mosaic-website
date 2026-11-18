@@ -178,3 +178,11 @@ test('nothing of the previous holder’s survives onto the new row', () => {
     assert.equal(result.assignment.label, 'Kids Ministry',
         'the place keeps its own label; only the person changes');
 });
+
+test('a place on a cancelled or moved date cannot be taken', () => {
+    for (const marker of [{ cancelled: true }, { movedTo: '2099-01-01' }]) {
+        const result = plan({ occurrence: Object.assign({}, OCCURRENCE, marker) });
+        assert.equal(result.ok, false, JSON.stringify(marker));
+        assert.equal(result.code, 'failed-precondition');
+    }
+});

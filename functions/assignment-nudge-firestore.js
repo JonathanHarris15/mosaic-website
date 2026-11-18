@@ -17,6 +17,7 @@ const {
   stampedRecord,
 } = require("./assignment-nudge");
 const Occ = require("./shared/events-occurrence-core.js");
+const RolesCore = require("./shared/roles-core.js");
 
 /** @typedef {import("firebase-admin/firestore").Firestore} Firestore */
 /** @typedef {import("./assignment-nudge").Occurrence} Occurrence */
@@ -163,12 +164,17 @@ async function loadOccurrences(db, from, to) {
  * @return {Promise<Object<string, string>>}
  */
 async function loadRoleNames(db) {
+  // Through the one resolver (roles-read.js): a Role stored without a slug
+  // is still named, and two that read as one slug are named by neither.
   const snap = await db.collection("roles").get();
+  const docs = snap.docs.map((d) => Object.assign({id: d.id}, d.data()));
+  const registry = RolesCore.registry(docs);
   /** @type {Object<string, string>} */
   const names = {};
-  snap.docs.forEach((doc) => {
-    const data = doc.data() || {};
-    if (data.slug && data.name) names[data.slug] = data.name;
+  docs.forEach((def) => {
+    const slug = def.slug || RolesCore.slugify(def.name);
+    const name = registry.nameOf(slug);
+    if (slug && name) names[slug] = name;
   });
   return names;
 }

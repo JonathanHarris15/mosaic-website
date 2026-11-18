@@ -165,6 +165,65 @@
         return allRoles(servantDefinitions).find(role => role.slug === slug) || null;
     }
 
+    // The stored Role Definitions, resolved the ONE way every reader must
+    // agree on — the browser and the functions alike. A slug is what an
+    // Assignment, a cover entry, a Trade and a serve record name a Role by, so
+    // two readers that turn a document into a slug differently are two readers
+    // that disagree about which Role a place is in.
+    //
+    //   • A definition stored without a slug reads as its name slugified
+    //     (`slugOf`) — the server used to need a stored one and found nothing.
+    //   • Two definitions that read as one slug are AMBIGUOUS, and resolve to
+    //     nothing rather than to whichever came back first: judging a take
+    //     against another Role's slots and rules is worse than refusing it.
+    //   • One that takes a liturgical slug is quarantined, never served as the
+    //     liturgical Role and never thrown about (allRoles throws, on purpose,
+    //     for the page that renders the list; a reader just needs an answer).
+    /**
+     * @param {Array<Record<string, *>>} docs Stored definitions, as `{ id, ...doc }`.
+     */
+    function registry(docs) {
+        /** @type {Record<string, Array<Record<string, *>>>} */
+        const bySlug = {};
+        /** @type {Array<Record<string, *>>} */
+        const quarantined = [];
+        (docs || []).forEach(def => {
+            if (!def) return;
+            const slug = slugOf(def);
+            if (!slug) return;
+            if (LITURGICAL_SLUGS.indexOf(slug) !== -1) {
+                quarantined.push(Object.assign({}, def, { slug: slug }));
+                return;
+            }
+            (bySlug[slug] = bySlug[slug] || []).push(Object.assign({}, def, {
+                slug: slug, family: FAMILIES.SERVANT, locked: false,
+            }));
+        });
+        const duplicates = Object.keys(bySlug).filter(slug => bySlug[slug].length > 1).sort();
+        /** @param {string} slug */
+        const find = slug => {
+            const found = bySlug[slug];
+            return found && found.length === 1 ? found[0] : null;
+        };
+        return {
+            duplicates: duplicates,
+            quarantined: quarantined,
+            /** @param {string} slug */
+            isAmbiguous: slug => duplicates.indexOf(slug) !== -1,
+            // The servant definition a slug names, or null — gone, or
+            // ambiguous.
+            find: find,
+            // The human name for any slug: liturgical, servant, or null.
+            /** @param {string} slug */
+            nameOf: slug => {
+                const liturgical = LITURGICAL_ROLES.find((/** @type {*} */ r) => r.slug === slug);
+                if (liturgical) return liturgical.name;
+                const def = find(slug);
+                return (def && def.name) || null;
+            },
+        };
+    }
+
     // ── Slot identity ─────────────────────────────────────────────────────────
 
     // Slot ids are `s<n>`. The next one is one past the highest `n` ever used in
@@ -1289,6 +1348,7 @@
         // the registry: both families, one list
         allRoles,
         roleBySlug,
+        registry,
         isLocked,
         assertEditable,
         assertDeletable,

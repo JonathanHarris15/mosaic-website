@@ -24,13 +24,14 @@
  * quietly concluding that nobody has served in months, and hands the most
  * overworked people another round.
  *
- * ── Kept honest ──────────────────────────────────────────────────────────────
- * These rules are stated twice: here, and in public/events-occurrence-core.js
- * for the browser. Cloud Functions deploy only the functions/ directory, so the
- * browser module cannot be required from here. A duplicated domain rule is a
- * rule that can drift, and drift here means the serve log lies — so
- * test/assignment-conversion.test.js asserts the two agree, exactly as
- * roles-core.js and relationship-group-core.js are pinned to each other.
+ * ── One statement of the rules ───────────────────────────────────────────────
+ * The rules themselves (the states, the Involvement id, the serve record, and
+ * what converts) are events-occurrence-core's, required from functions/shared.
+ * They used to be restated here, because the browser module could not be
+ * required from functions — it can (scripts/sync-shared-to-functions.js), and a
+ * domain rule stated twice is a rule that can drift: drift here means the serve
+ * log lies. This file keeps only what is the job's own: the church's clock and
+ * the window it looks back over.
  */
 
 /** The church's local timezone. "The date has passed" means passed HERE. */
@@ -46,23 +47,9 @@ const CHURCH_TIMEZONE = "America/Chicago";
  */
 const LOOKBACK_DAYS = 45;
 
-/** The three states an Assignment can be in. */
-const STATES = {
-  PENDING: "pending",
-  CONFIRMED: "confirmed",
-  DECLINED: "declined",
-};
+const Occ = require("./shared/events-occurrence-core.js");
 
-/**
- * The ONE reserved slug every one-off Role's Involvement is written under.
- * Never an invented slug per job: RolesCore.roleBySlug resolves names only for
- * liturgical Roles and stored Role Definitions, so an invented slug would
- * render as nothing on every surface showing serve history (ADR-0018 §4).
- */
-const ONE_OFF_SLUG = "one_off";
-
-/** The series a record with no series reads as (EventsCore.seriesIdOf). */
-const SUNDAY_SERVICE_ID = "sunday_service";
+const {STATES, ONE_OFF_SLUG, SUNDAY_SERVICE_ID} = Occ;
 
 /**
  * Today's date in the church's timezone, as YYYY-MM-DD. A job running at 1am
@@ -121,83 +108,9 @@ function hasPassed(date, today) {
   return !!date && date < today;
 }
 
-/**
- * A deterministic Involvement id, so running the job twice writes one record
- * rather than two. The slot (or the one-off job) is part of the key because one
- * person can legitimately hold two Roles at a single Event.
- * @param {Object} occurrence id and date
- * @param {Object} assignment roleSlug, slotId, oneOffId, personId
- * @return {string}
- */
-function involvementIdFor(occurrence, assignment) {
-  const o = occurrence || {};
-  const a = assignment || {};
-  const within = a.oneOffId || a.slotId || "x";
-  return [o.id || o.date, a.roleSlug, within, a.personId].join("__");
-}
-
-/**
- * The Involvement an Assignment becomes. Carries the Event series, because
- * fairness is counted per series (ADR-0016 §5) — someone can be overdue for
- * Sunday setup and fresh for a midweek Role at the same time.
- *
- * A one-off Role writes under the reserved slug with its label preserved in
- * metadata, so the person who quietly unlocks the hall every week reads as
- * somebody who serves rather than somebody who never helps.
- *
- * @param {object} occurrence
- * @param {object} assignment
- * @return {object}
- */
-function serveRecordFor(occurrence, assignment) {
-  const o = occurrence || {};
-  const a = assignment || {};
-  const record = {
-    involvementId: involvementIdFor(o, a),
-    personId: a.personId,
-    type: a.roleSlug,
-    serviceDate: o.date,
-    seriesId: o.seriesId || SUNDAY_SERVICE_ID,
-  };
-  if (a.roleSlug === ONE_OFF_SLUG) {
-    record.metadata = {
-      label: a.label || null,
-      oneOffId: a.oneOffId || null,
-    };
-  }
-  return record;
-}
-
-/**
- * Split one past Event's assignments into what converts and what stays a
- * question. Safe against an Event with no assignments at all.
- *
- * @param {Object} occurrence id, date, seriesId, assignments
- * @return {Object} {serves, questions}
- */
-function conversion(occurrence) {
-  const serves = [];
-  const questions = [];
-
-  ((occurrence && occurrence.assignments) || []).forEach((assignment) => {
-    const state = (assignment && assignment.state) || STATES.PENDING;
-
-    if (state === STATES.CONFIRMED) {
-      serves.push(serveRecordFor(occurrence, assignment));
-    } else if (state === STATES.PENDING) {
-      questions.push({
-        personId: assignment.personId,
-        roleSlug: assignment.roleSlug,
-        label: assignment.label || null,
-        assignment: assignment,
-      });
-    }
-    // Declined falls through deliberately. It is neither a serve record nor a
-    // question — they told us, so there is nothing to ask and nothing to count.
-  });
-
-  return {serves, questions};
-}
+// The Involvement id, the serve record, and the split into serves and open
+// questions — one definition, shared with the browser.
+const {involvementIdFor, serveRecordFor, conversion} = Occ;
 
 module.exports = {
   CHURCH_TIMEZONE,

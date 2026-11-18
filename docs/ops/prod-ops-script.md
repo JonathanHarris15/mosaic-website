@@ -62,6 +62,7 @@ gh workflow run "Prod ops script" --ref main \
 | `prayer-request-send-preview.js` | Dry-run pastoral-prayer SMS recipients and bodies (optional `--service-date`) |
 | `prayer-text-notifications-audit.js` | Read-only prayer text failures in `notifications` since `--since` (default `2026-10-13`) |
 | `reset-prayer-send-attempt.js` | [P0 prayer SMS — clear send attempt](./ms-prayer-sms-textbelt-reply-webhook.md) (`--service-date`, `--ids`) |
+| `reconcile-cover.js` | Roles audit — bring the cover list into line with every occurrence it names and every one from today on: stale entries off, moved dates' places back on, re-stamped rungs, one entry per one-off (empty `args`; dry-run, then `commit=true`). The triggers keep it right from then on. |
 | `backfill-occurrence-visibility.js` | [MS-783 — stamp occurrence visibility](./ms-783-occurrence-visibility-backfill.md) (empty `args`; `commit=true` to apply) |
 | `merge-duplicate-person.js` | [MS-771 — merge duplicate person](./ms-771-legacy-oos-audit.md) (`--from` / `--to`; `commit=true` to apply) |
 | `sync-pastoral-prayer-dates.js` | [MS-790 — rebuild `lastPastoralPrayerDate` from history](./ms-790-pastoral-prayer-dates-sync.md) (empty `args`; `commit=true` to apply) |

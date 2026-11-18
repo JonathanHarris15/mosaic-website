@@ -315,6 +315,7 @@
     <script src="events-core.js"></script>
     <script src="live-read.js"></script>
     <script src="live-fields-core.js"></script>
+    <script src="role-editor-core.js"></script>
     <script src="roles-manager.js"></script>
     <script defer src="vendor/alpine-3.15.12.min.js"></script>
 </head>
@@ -356,6 +357,21 @@
                         <span x-text="`A saved Role called “${def.name}” clashes with the built-in Role “${def.clashesWith}” and is not shown. `"></span>
                     </template>
                     Ask an admin to remove it.
+                </p>
+            </div>
+        </div>
+
+        <!-- Two stored Roles filed under one short name. Both stay listed so one
+             can be deleted; until then neither can be taken, traded or
+             checked, because nothing will guess which of the two a place means. -->
+        <div x-show="sharedSlugs.length" class="m-notice m-notice--error" data-shared-slugs>
+            <span class="material-symbols-outlined m-notice__icon">warning</span>
+            <div class="m-notice__body">
+                <p class="m-notice__text">
+                    <template x-for="shared in sharedSlugs" :key="shared.slug">
+                        <span x-text="sharedSlugSentence(shared)"></span>
+                    </template>
+                    Delete the one that should not be there.
                 </p>
             </div>
         </div>
@@ -406,7 +422,7 @@
                          inside the WebView a tap on the row still arrived as a
                          synthesized click on the hidden button. -->
                     <ul x-show="hasServantRoles" class="m-picklist rm-role-list">
-                        <template x-for="role in servantRoles" :key="role.slug">
+                        <template x-for="role in servantRoles" :key="role.id">
                             <li>
                                 <button type="button"
                                         class="m-picklist__item rm-role-row"

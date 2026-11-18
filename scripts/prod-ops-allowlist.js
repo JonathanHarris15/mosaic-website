@@ -34,6 +34,7 @@ const ALLOWLIST_SORTED = [
     'normalize-hymn-page-shapes.js',
     'prayer-request-send-preview.js',
     'prayer-text-notifications-audit.js',
+    'reconcile-cover.js',
     'reset-prayer-send-attempt.js',
     'roles-merge-impact.js',
     'set-liturgy-order-flags.js',

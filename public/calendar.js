@@ -638,7 +638,8 @@
 
             async answerCommitment(commitment, state) {
                 if (this.answering) return;
-                const id = commitment.occurrenceId + '__' + commitment.roleSlug;
+                const id = [commitment.occurrenceId, commitment.roleSlug,
+                    commitment.oneOffId || commitment.slotId || 'x'].join('__');
                 const before = commitment.state;
                 this.answering = id;
                 this.applyAnswer(commitment, state);
@@ -671,7 +672,9 @@
                         assignments: (o.assignments || []).map(a => (
                             a.personId === this.personId &&
                             a.roleSlug === commitment.roleSlug &&
-                            (a.slotId || null) === (commitment.slotId || null)
+                            (a.slotId || null) === (commitment.slotId || null) &&
+                            // Each one-off job is its own place (MS-818).
+                            (a.oneOffId || null) === (commitment.oneOffId || null)
                                 ? Object.assign({}, a, { state: state })
                                 : a
                         )),

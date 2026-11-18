@@ -512,12 +512,21 @@ service cloud.firestore {
 
     match /roles/{roleId} {
       allow read: if true;
+      // A new Role is created WITH its slug. Every place, cover entry, Trade
+      // and serve record names a Role by it, and one stored without took the
+      // slug of whatever its name was when somebody first saved it.
       allow create: if editsWith('roles.manager.edit')
         && request.resource.data.keys().hasOnly(roleFields())
-        && roleShapeOk(request.resource.data);
+        && roleShapeOk(request.resource.data)
+        && request.resource.data.get('slug', '') is string
+        && request.resource.data.get('slug', '').size() > 0;
+      // The slot counter only goes up (MS-823): a lower one re-issues the id
+      // of a removed slot, and every Assignment still pointing at it attaches
+      // to the new slot.
       allow update: if editsWith('roles.manager.edit')
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(roleFields())
         && roleShapeOk(request.resource.data)
+        && request.resource.data.get('nextSlotSeq', 0) >= resource.data.get('nextSlotSeq', 0)
         && (!('slug' in resource.data) || resource.data.slug == null
               || request.resource.data.get('slug', null) == resource.data.slug);
       allow delete: if editsWith('roles.manager.edit');

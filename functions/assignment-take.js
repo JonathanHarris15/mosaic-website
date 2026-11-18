@@ -11,7 +11,8 @@
  * never there, because it looks like it worked.
  *
  * ⚠ A ROSTER ROW'S ID CONTAINS THE personId. It is built as
- * `{roleSlug}__{slotId}__{personId}` in events-store.js, so a place changing
+ * `{roleSlug}__{oneOffId || slotId}__{personId}` (PlaceCore.rosterIdFor), so a
+ * place changing
  * hands is a DELETE plus a CREATE,
  * never an update. Treating it as an update leaves two people standing in one
  * slot, and the derived fields would agree with both of them.
@@ -27,67 +28,12 @@
  */
 
 const occurrences = require("./shared/events-occurrence-core.js");
+const place = require("./shared/place-core.js");
 
-const STATES = {
-  PENDING: "pending",
-  CONFIRMED: "confirmed",
-  DECLINED: "declined",
-};
+const STATES = place.STATES;
 
 const refuse = (code, message, extra) =>
   Object.assign({ok: false, code, message}, extra || {});
-
-/**
- * The roster document id for one Assignment. Restated from events-store.js,
- * which owns it; `test/assignment-take.test.js` pins the shape.
- * @param {object} assignment the Assignment
- * @return {string} its roster document id
- */
-function rosterIdFor(assignment) {
-  const a = assignment || {};
-  return [
-    a.roleSlug,
-    a.oneOffId || a.slotId || "x",
-    a.personId,
-  ].join("__");
-}
-
-/**
- * Deterministic cover document id — must match `coverId` in
- * assignment-answer.js and cover-store.js.
- * @param {string} occurrenceId the occurrence
- * @param {string} roleSlug the Role
- * @param {?string} slotId the slot, or null for a one-off
- * @return {string} the cover document id
- */
-function coverId(occurrenceId, roleSlug, slotId) {
-  return [occurrenceId, roleSlug, slotId || "one_off"].join("__");
-}
-
-/**
- * Everyone holding a place on this Event, which is what the `participant`
- * visibility rule reads.
- * @param {Array<object>} roster every Assignment on the occurrence
- * @return {Array<string>} the Person ids
- */
-function participantIdsOf(roster) {
-  const seen = [];
-  (roster || []).forEach((a) => {
-    if (a && a.personId && seen.indexOf(a.personId) === -1) {
-      seen.push(a.personId);
-    }
-  });
-  return seen;
-}
-
-/**
- * Does anything on this Event still need an editor's eye?
- * @param {Array<object>} roster every Assignment on the occurrence
- * @return {boolean} whether one of them is declined
- */
-function needsAttentionFor(roster) {
-  return (roster || []).some((a) => a && a.state === STATES.DECLINED);
-}
 
 /**
  * Decide what taking one open place changes.
@@ -99,6 +45,7 @@ function needsAttentionFor(roster) {
  * @param {?string} spec.personId the taker's own Person id
  * @param {string} spec.roleSlug the Role of the place being taken
  * @param {?string} spec.slotId its slot
+ * @param {?string} [spec.oneOffId] which one-off job, when it is one
  * @param {?object} spec.verdict cover-core's answer for this Person
  * @param {string} spec.today YYYY-MM-DD in the church's timezone
  * @param {*} spec.now a timestamp to stamp the new Assignment with
@@ -126,10 +73,20 @@ function planTake(spec) {
   if (!date || !s.today || date < s.today) {
     return refuse("failed-precondition", "That date has already passed.");
   }
+  // A cancelled or moved date is not happening on this day. Its roster is
+  // kept (so un-cancelling restores it), but a place on it cannot be
+  // answered or taken — the same gate the nudge job reads.
+  if (occurrences.notHappening(s.occurrence)) {
+    return refuse("failed-precondition", "That date is not happening.");
+  }
 
-  const held = roster.find((a) =>
-    a && a.roleSlug === s.roleSlug &&
-    (a.slotId || null) === (s.slotId || null));
+  // ⚠ EVERY ONE-OFF SHARES A SLUG AND HAS NO SLOT. Its own id says which
+  // job is meant; a caller that sends none (an older page) is matched to the
+  // one that is actually going spare, never to whichever came first — which
+  // used to be somebody's confirmed place, refused as "already sorted".
+  const candidates = roster.filter((a) => place.samePlace(a, s));
+  const held = candidates.find((a) => a.state === STATES.DECLINED) ||
+    candidates[0];
 
   if (!held) {
     return refuse("not-found", "That place is no longer on the Event.");
@@ -171,18 +128,13 @@ function planTake(spec) {
     ok: true,
     // Delete first, then create. The id carries the person, so these are two
     // different documents and the old one would otherwise simply remain.
-    removeRosterId: rosterIdFor(held),
-    rosterId: rosterIdFor(assignment),
+    removeRosterId: place.rosterIdFor(held),
+    rosterId: place.rosterIdFor(assignment),
     assignment: assignment,
-    derived: {
-      participantIds: participantIdsOf(after),
-      needsAttention: needsAttentionFor(after),
-      outForCover: occurrences.outForCover(
-          Object.assign({}, s.occurrence, {assignments: after})),
-    },
+    derived: place.derivedFields(s.occurrence, after),
     cover: {
       action: "delete",
-      id: coverId(s.occurrence.id, s.roleSlug, s.slotId),
+      id: place.coverIdFor(s.occurrence.id, held),
     },
     // They marked themselves Away on this date and took it anyway. Permitted —
     // overruling your own stated plans is changing your mind (ADR-0030 §3) —
@@ -193,7 +145,5 @@ function planTake(spec) {
 
 module.exports = {
   STATES,
-  rosterIdFor,
-  coverId,
   planTake,
 };

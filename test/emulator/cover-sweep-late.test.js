@@ -12,7 +12,9 @@ const writes = require('../../functions/assignment-writes.js');
 
 // MS-819. The cover sweep decided from the trigger's copy of the row, so a
 // confirm's trigger delivered after the decline that followed it deleted the
-// advertisement that decline had just put up.
+// advertisement that decline had just put up. reconcileCover, which replaced
+// the sweep, takes no copy at all: it reads the occurrence and its roster
+// again in a transaction, so a late trigger can only ever make the list true.
 
 const suite = H.skipReason ? /** @type {(name: string, body: () => void) => void} */ ((n) => test(n, { skip: H.skipReason }, () => {})) : describe;
 const OCC = 'occ-sweep';
@@ -24,7 +26,6 @@ const ANN = 'person-ann';
  *     stateSetBy: null, stateSetAt: null}} the row
  */
 const row = (state) => ({ roleSlug: 'ushers', slotId: 's1', personId: ANN, state, stateSetBy: null, stateSetAt: null });
-const place = { occurrenceId: OCC, roleSlug: 'ushers', slotId: 's1' };
 
 suite('the cover sweep, when its trigger is late', () => {
     /** @type {Firestore} */
@@ -50,8 +51,8 @@ suite('the cover sweep, when its trigger is late', () => {
         assert.equal((await say('declined')).ok, true);
         assert.equal(await coverCount(), 1);
         // The confirm's trigger, arriving now, still carrying the confirmed row.
-        const cleared = await writes.sweepCover(db, Object.assign({ row: row('confirmed') }, place));
-        assert.equal(cleared, false);
+        const changes = await writes.reconcileCover(db, OCC);
+        assert.deepStrictEqual(changes.remove, []);
         assert.equal(await coverCount(), 1, 'the decline is no longer advertised');
     });
 
@@ -59,8 +60,20 @@ suite('the cover sweep, when its trigger is late', () => {
         assert.equal((await say('declined')).ok, true);
         assert.equal(await coverCount(), 1);
         await db.collection('event_occurrences').doc(OCC).collection('roster').doc(H.rosterIdFor(row('declined'))).delete();
-        const cleared = await writes.sweepCover(db, Object.assign({ row: null }, place));
-        assert.equal(cleared, true);
+        const changes = await writes.reconcileCover(db, OCC);
+        assert.equal(changes.remove.length, 1);
+        assert.equal(await coverCount(), 0);
+    });
+
+    test('cancelling the date takes the advertisement down; making it elder-only re-stamps it', async () => {
+        assert.equal((await say('declined')).ok, true);
+        const occ = db.collection('event_occurrences').doc(OCC);
+        await occ.update({ visibility: 'elder' });
+        await writes.reconcileCover(db, OCC);
+        const [entry] = (await db.collection('cover').get()).docs;
+        assert.equal(entry.data().visibility, 'elder');
+        await occ.update({ cancelled: true });
+        await writes.reconcileCover(db, OCC);
         assert.equal(await coverCount(), 0);
     });
 });

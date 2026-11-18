@@ -101,6 +101,7 @@ global.AccessCore = require('../public/access-core.js');
 const Roles = require('../public/roles-core.js');
 require('../public/events-core.js');
 require('../public/relationship-core.js');
+require('../public/role-editor-core.js');
 require('../public/roles-manager.js');
 
 // ── Fixtures ─────────────────────────────────────────────────────────────────
@@ -350,15 +351,14 @@ test('removing the last slot is refused — a Role with no slots is invalid', as
     assert.match(page.toast.message, /slot/i);
 });
 
-test('cancelling an edit restores the definition as stored, with nothing partial written', async () => {
+// There is no Cancel (MS-721): a Role saves itself, and leaving it sends what
+// was waiting. What leaving must never do is write a Role nobody changed.
+test('leaving a Role nobody changed writes nothing', async () => {
     const page = await mountPage({ roles: { r1: kidsDefinition() } });
     page.startEdit(page.roleDefinitions.find(d => d.id === 'r1'));
-    page.draft.name = 'Renamed';
-    page.addSlot();
-    page.cancelEdit();
+    await page.closeRole();
     assert.equal(page.draft, null);
     assert.deepStrictEqual(stored('roles').r1, kidsDefinition());
-    assert.deepStrictEqual(page.roleDefinitions.find(d => d.id === 'r1').slots, kidsDefinition().slots);
 });
 
 test('editing a draft never mutates the stored definition until it is saved', async () => {
@@ -496,42 +496,24 @@ test('saving a Role does not drop the rest of it either', async () => {
 });
 
 
-test('a description survives a save and comes back when the Role is reopened', () => {
+test('EVERY field a new Role has is in the document a Role is stored as', () => {
     // ⚠ THE BUG THIS EXISTS FOR. `description` was added to the model, to the
-    // form, and to five screens — and not to the object saveDraft writes. So it
-    // was typed, validated, and dropped: the Role reopened blank every time and
-    // nothing anywhere reported a problem.
-    //
-    // A synchronous check of the write list itself, because the failure was not
-    // in any behaviour a mounted page performs — it was a missing line.
-    const source = require('node:fs').readFileSync(
-        require('node:path').join(__dirname, '..', 'public', 'roles-manager.js'), 'utf8');
-    const written = source.match(/definitionFromDraft\(\) \{[\s\S]*?return \{([\s\S]*?)\n {8}\};/);
-    assert.ok(written, 'saveDraft no longer builds the document it writes');
-    assert.match(written[1], /description:/, 'a saved Role would lose its description');
-});
-
-test('EVERY field a new Role has is written when one is saved', () => {
-    // The general form of the same mistake. The document is written WHOLE, so a
-    // field missing from that object is not merely unsaved — it is deleted from
-    // the stored Role on the next save. `newDefinition` is the list of what a
-    // Role has; this walks it so the next field added cannot go missing quietly.
-    const source = require('node:fs').readFileSync(
-        require('node:path').join(__dirname, '..', 'public', 'roles-manager.js'), 'utf8');
-    const written = source.match(/definitionFromDraft\(\) \{[\s\S]*?return \{([\s\S]*?)\n {8}\};/)[1];
-
+    // form, and to five screens — and not to the object that was written. So
+    // it was typed, validated, and dropped. `newDefinition` is the list of
+    // what a Role has; this walks it so the next field added cannot go
+    // missing quietly.
+    const RoleEditor = require('../public/role-editor-core.js');
+    const written = RoleEditor.definitionFrom(RoleEditor.draftFrom(Roles.newDefinition('Anything')));
     Object.keys(Roles.newDefinition('Anything')).forEach(field => {
-        assert.match(written, new RegExp('\\b' + field + ':'),
-            '`' + field + '` is part of a Role but saveDraft does not write it — ' +
-            'saving would silently drop it');
+        assert.ok(field in written, '`' + field + '` is part of a Role but is never written');
     });
 });
 
 test('a description is stored trimmed, so what is read back is what is shown', () => {
-    const source = require('node:fs').readFileSync(
-        require('node:path').join(__dirname, '..', 'public', 'roles-manager.js'), 'utf8');
-    assert.match(source, /description: String\(this\.draft\.description \|\| ''\)\.trim\(\)/,
-        'the stored value is not normalised, so a whitespace-only one reads as present');
+    const RoleEditor = require('../public/role-editor-core.js');
+    const draft = Object.assign(RoleEditor.draftFrom(kidsDefinition()), { description: '  Arrive by nine.  ' });
+    assert.equal(RoleEditor.definitionFrom(draft).description, 'Arrive by nine.');
+    assert.equal(RoleEditor.definitionFrom(Object.assign(draft, { description: '   ' })).description, '');
 });
 
 test('a rule can be removed', async () => {
@@ -722,7 +704,7 @@ test('the open Role is the selected row, so the list shows where you are', async
     page.startEdit(kids);
     assert.equal(page.isSelected(kids), true);
     assert.equal(page.isSelected(page.roleDefinitions.find(d => d.id === 'r2')), false);
-    page.cancelEdit();
+    page.closeRole();
     assert.equal(page.isSelected(kids), false);
 });
 
@@ -1817,8 +1799,7 @@ test('MS-721: leaving a Role sends what was waiting', async () => {
     const { page } = await mountLive({ roles: { r1: kidsDefinition(), r2: coffeeDefinition() } });
     page.draft.description = 'Arrive by nine.';
     page.syncLiveRole();
-    page.cancelEdit();
-    await new Promise(r => setImmediate(r));
+    await page.closeRole();
     assert.equal(stored('roles').r1.description, 'Arrive by nine.');
 });
 
@@ -1893,4 +1874,129 @@ test('MS-721: liturgical rest and "Doesn\'t serve" follow their own rules, not r
     assert.equal(AccessCore.canEditEvents(custom('calendar.events.edit')), true);
     assert.equal(AccessCore.canEditEvents(custom('roles.manager.edit')), false);
     assert.equal(AccessCore.canEditEvents('editor'), true);
+});
+
+// ── One Role open at a time, and it writes only itself ──────────────────────
+//
+// ⚠ The bug report: "creating or renaming a Role renames or overwrites the
+// Roles around it". Opening Role B used to swap the page's draft to B and
+// THEN stop Role A's session — which flushed A's session with B's values and
+// wrote B's name, slots and rules over A. Creating a Role opened it the same
+// way, over whichever Role was open.
+
+const pause = () => new Promise(r => setImmediate(r));
+
+test('opening another Role leaves the first one exactly as stored', async () => {
+    const page = await mountPage({ roles: { r1: kidsDefinition(), r2: coffeeDefinition() } });
+    page.startEdit(page.roleDefinitions.find(d => d.id === 'r1'));
+    page.startEdit(page.roleDefinitions.find(d => d.id === 'r2'));
+    await pause();
+    assert.deepStrictEqual(stored('roles').r1, kidsDefinition());
+    assert.deepStrictEqual(stored('roles').r2, coffeeDefinition());
+    assert.deepStrictEqual(page.roleDefinitions.map(d => d.name).sort(), ['Coffee', 'Kids Ministry']);
+});
+
+test('creating a Role leaves the open one exactly as stored', async () => {
+    const page = await mountPage({ roles: { r1: kidsDefinition() } });
+    page.startEdit(page.roleDefinitions.find(d => d.id === 'r1'));
+    await page.createRole('Greeters');
+    await pause();
+    assert.deepStrictEqual(stored('roles').r1, kidsDefinition());
+    assert.equal(page.draft.name, 'Greeters', 'and the new Role is the one open');
+    assert.deepStrictEqual(page.roleDefinitions.map(d => d.name), ['Greeters', 'Kids Ministry']);
+});
+
+test('a rename still waiting when another Role opens goes to the renamed Role, and only there', async () => {
+    const page = await mountPage({ roles: { r1: kidsDefinition(), r2: coffeeDefinition() } });
+    page.startEdit(page.roleDefinitions.find(d => d.id === 'r1'));
+    page.draft.name = 'Kids Team';
+    page.startEdit(page.roleDefinitions.find(d => d.id === 'r2'));
+    await pause();
+    assert.equal(stored('roles').r1.name, 'Kids Team');
+    assert.deepStrictEqual(stored('roles').r1.slots, kidsDefinition().slots);
+    assert.deepStrictEqual(stored('roles').r2, coffeeDefinition());
+    assert.equal(page.draft.name, 'Coffee');
+    assert.equal(page.roleDefinitions.find(d => d.id === 'r1').name, 'Kids Team');
+});
+
+test('a save that lands after its Role was left puts that row right and leaves the open Role alone', async () => {
+    const page = await mountPage({ roles: { r1: kidsDefinition(), r2: coffeeDefinition() } });
+    page.startEdit(page.roleDefinitions.find(d => d.id === 'r1'));
+    page.draft.name = 'Kids Team';
+    page.syncLiveRole();
+    const sending = page.saveDraft();
+    page.startEdit(page.roleDefinitions.find(d => d.id === 'r2'));
+    await sending;
+    await pause();
+    assert.equal(page.draft.name, 'Coffee');
+    assert.equal(page.draftId, 'r2');
+    assert.equal(page.roleChip, 'saved');
+    assert.equal(page.roleDefinitions.find(d => d.id === 'r1').name, 'Kids Team');
+});
+
+test('deleting the open Role drops what it was waiting to save, rather than failing after the delete', async () => {
+    const page = await mountPage({ roles: { r1: kidsDefinition() } });
+    page.startEdit(page.roleDefinitions.find(d => d.id === 'r1'));
+    page.draft.name = 'Half typed';
+    page.syncLiveRole();
+    await page.deleteRole(page.draftRole);
+    await pause();
+    assert.equal(stored('roles').r1, undefined);
+    assert.equal(page.draft, null);
+    assert.equal(page.toast.type, 'success', page.toast.message);
+});
+
+test('renaming a Role stored without a slug keeps the slug its history is under', async () => {
+    const legacy = kidsDefinition();
+    delete legacy.slug;
+    const page = await mountPage({ roles: { r1: legacy } });
+    page.startEdit(page.roleDefinitions.find(d => d.id === 'r1'));
+    page.draft.name = 'Children';
+    await page.saveDraft();
+    assert.equal(stored('roles').r1.slug, 'kids_ministry');
+    assert.equal(stored('roles').r1.name, 'Children');
+});
+
+test('a slugless Role opened from its row in the list still keeps its slug on rename', async () => {
+    // The template opens `role in servantRoles`, and those rows have been
+    // through allRoles — which fills in the slug the stored document lacks.
+    // Stored as JSON, so an undefined slug is a document without one.
+    const legacy = Object.assign(kidsDefinition(), { slug: undefined });
+    const page = await mountPage({ roles: { r1: legacy } });
+    page.startEdit(page.servantRoles.find((/** @type {*} */ r) => r.id === 'r1'));
+    page.draft.name = 'Prayer';
+    await page.saveDraft();
+    assert.equal(stored('roles').r1.slug, 'kids_ministry',
+        'unpinned, it would read as "prayer" — a liturgical slug — on the next load');
+});
+
+test('a new name that slugs onto a Role stored without a slug is refused', async () => {
+    const legacy = coffeeDefinition();
+    delete legacy.slug;
+    const page = await mountPage({ roles: { r1: legacy } });
+    await page.createRole('coffee!');
+    assert.equal(Object.keys(stored('roles')).length, 1);
+    assert.equal(page.toast.type, 'error');
+});
+
+test('the Roles list is keyed by document, so two Roles can never share one row', () => {
+    assert.match(rolesManagerHtml(), /x-for="role in servantRoles" :key="role\.id"/);
+});
+
+test('creating asks the store again, so a Role another editor just made is not duplicated', async () => {
+    const page = await mountPage({ roles: { r1: kidsDefinition() } });
+    // Another tab creates "Greeters" after this page loaded its list.
+    global.db._data.roles.other = Object.assign(coffeeDefinition(), { name: 'Greeters', slug: 'greeters' });
+    await page.createRole('Greeters');
+    assert.equal(Object.keys(stored('roles')).length, 2, 'no second Greeters');
+    assert.equal(page.toast.type, 'error');
+    assert.ok(page.roleDefinitions.some(d => d.id === 'other'), 'and the list now shows it');
+});
+
+test('Roles that share a slug are said out loud on the page', async () => {
+    const legacy = Object.assign(coffeeDefinition(), { name: 'coffee!', slug: undefined });
+    const page = await mountPage({ roles: { r1: coffeeDefinition(), r2: legacy } });
+    assert.equal(page.sharedSlugs.length, 1);
+    assert.match(page.sharedSlugSentence(page.sharedSlugs[0]), /“Coffee” and “coffee!”/);
+    assert.match(rolesManagerHtml(), /x-show="sharedSlugs\.length"/);
 });

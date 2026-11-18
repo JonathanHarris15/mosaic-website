@@ -55,6 +55,7 @@ const SECOND = "second";
  *   cancelled?: boolean,
  *   movedTo?: string,
  *   movedFrom?: string,
+ *   originalDate?: string,
  *   assignments?: Array<Assignment>,
  * }} Occurrence
  */
@@ -181,15 +182,17 @@ function shortDate(dateStr) {
  * somebody taking over an Assignment their own clock.
  *
  * A moved date is the same instance on another day (ADR-0018), so it keeps
- * the key of the date it moved from, and with it the count of nudges it has
- * already had.
+ * the key of the date the pattern first put it on, and with it the count of
+ * nudges it has already had. ⚠ `originalDate`, not `movedFrom`: that is only
+ * the last hop, so a date moved twice used to start its count again.
  * @param {Occurrence} occurrence
  * @param {Assignment} assignment
  * @return {string}
  */
 function nudgeRecordId(occurrence, assignment) {
-  const keyedOn = occurrence.movedFrom && occurrence.seriesId ?
-    {id: Occ.occurrenceId(occurrence.seriesId, occurrence.movedFrom)} :
+  const first = occurrence.originalDate || occurrence.movedFrom;
+  const keyedOn = first && occurrence.seriesId ?
+    {id: Occ.occurrenceId(occurrence.seriesId, first)} :
     occurrence;
   return Occ.involvementIdFor(keyedOn, assignment);
 }

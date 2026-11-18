@@ -51,6 +51,7 @@ const {
   sweepHeldInvitations,
 } = require("./trade-invitation-send");
 const ac = require("./assignment-conversion");
+const placeCore = require("./shared/place-core.js");
 const si = require("./service-involvement");
 const siRun = require("./service-involvement-run");
 const dr = require("./directory-request");
@@ -981,7 +982,7 @@ exports.takeAssignment = onCall(
       const {user, personId} =
         await linkedPerson.callerOf(db, request.auth.uid);
 
-      const {occurrenceId, roleSlug, slotId} = request.data || {};
+      const {occurrenceId, roleSlug, slotId, oneOffId} = request.data || {};
       if (!occurrenceId || !roleSlug) {
         throw new HttpsError(
             "invalid-argument", "Missing the place being taken.");
@@ -993,6 +994,9 @@ exports.takeAssignment = onCall(
         occurrenceId: occurrenceId,
         roleSlug: roleSlug,
         slotId: slotId || null,
+        // Which one-off job (MS-818): every one-off shares a slug and has
+        // no slot, so without it a take could land on the wrong one.
+        oneOffId: typeof oneOffId === "string" ? oneOffId : null,
         today: ac.churchToday(new Date()),
         now: admin.firestore.Timestamp.now(),
       });
@@ -1075,6 +1079,22 @@ exports.answerAssignment = onCall(
 );
 
 /**
+ * A place named by a caller, in PlaceCore's one shape: a one-off job keeps its
+ * own id (every one-off shares a slug and has no slot), anything else drops
+ * one it should not have sent.
+ * @param {*} occurrenceId the occurrence
+ * @param {*} roleSlug the Role
+ * @param {*} slotId the slot
+ * @param {*} oneOffId the one-off job
+ * @return {Object} the reference
+ */
+function placeRef(occurrenceId, roleSlug, slotId, oneOffId) {
+  return Object.assign(
+      placeCore.placeOf({occurrenceId, roleSlug, slotId, oneOffId}),
+      {occurrenceId});
+}
+
+/**
  * Trades (MS-190). Five moves, one record.
  *
  * ⚠ EVERY TRANSITION COMES THROUGH HERE. `firestore.rules` refuses a client
@@ -1116,7 +1136,7 @@ async function tradeMove(request, run) {
 exports.inviteToTrade = onCall(
     {cors: true, region: "us-central1", secrets: [TEXTBELT_KEY]},
     async (request) => {
-      const {occurrenceId, roleSlug, slotId, counterpartyId} =
+      const {occurrenceId, roleSlug, slotId, oneOffId, counterpartyId} =
         request.data || {};
       if (!occurrenceId || !roleSlug || !counterpartyId) {
         throw new HttpsError("invalid-argument", "Missing who, or what.");
@@ -1124,7 +1144,7 @@ exports.inviteToTrade = onCall(
 
       const result = await tradeMove(request, (db, base) => tw.invite(
           db, Object.assign({
-            assignment: {occurrenceId, roleSlug, slotId: slotId || null},
+            assignment: placeRef(occurrenceId, roleSlug, slotId, oneOffId),
             counterpartyId: counterpartyId,
           }, base)));
 
@@ -1177,7 +1197,7 @@ exports.refuseTrade = onCall(
 exports.offerTrade = onCall(
     {cors: true, region: "us-central1"},
     async (request) => {
-      const {tradeId, occurrenceId, roleSlug, slotId, offered} =
+      const {tradeId, occurrenceId, roleSlug, slotId, oneOffId, offered} =
         request.data || {};
       // ⚠ NO `holderId`. Who holds the place is read off the roster inside
       // `tw.offer` — the caller may not name them, and the cover list an
@@ -1190,7 +1210,7 @@ exports.offerTrade = onCall(
           db, Object.assign({
             tradeId: tradeId || null,
             assignment: tradeId ?
-              null : {occurrenceId, roleSlug, slotId: slotId || null},
+              null : placeRef(occurrenceId, roleSlug, slotId, oneOffId),
             offered: Array.isArray(offered) ? offered : [],
           }, base)));
 
@@ -1231,14 +1251,15 @@ exports.acceptTrade = onCall(
 exports.setCoverReach = onCall(
     {cors: true, region: "us-central1"},
     async (request) => {
-      const {occurrenceId, roleSlug, slotId, quiet} = request.data || {};
+      const {occurrenceId, roleSlug, slotId, oneOffId, quiet} =
+        request.data || {};
       if (!occurrenceId || !roleSlug) {
         throw new HttpsError("invalid-argument", "Missing which place.");
       }
 
       const result = await tradeMove(request, (db, base) => tw.setReach(
           db, Object.assign({
-            assignment: {occurrenceId, roleSlug, slotId: slotId || null},
+            assignment: placeRef(occurrenceId, roleSlug, slotId, oneOffId),
             quiet: quiet === true,
           }, base)));
 
@@ -1298,6 +1319,16 @@ exports.endTradesOnFilledPlace = onDocumentWritten(
       const row = after || before;
       if (!row || !row.roleSlug) return;
 
+      const db = admin.firestore();
+
+      // ⚠ THE COVER LIST IS RECONCILED ON EVERY ROSTER WRITE — a `quiet`
+      // toggle included, since that moves a place on or off the list. It is
+      // a derived view of the occurrence and its roster (PlaceCore), and the
+      // roster can change through doors that know nothing about it: an
+      // editor emptying a run of dates, a date moved with its roster, a
+      // schedule shifted. It writes only what differs.
+      await aw.reconcileCover(db, event.params.occurrenceId);
+
       // Nothing about WHO holds the place, or WHETHER it is still looking for
       // cover, has changed — a `quiet` toggle, say, which fires on every
       // reach change and must not end anybody's conversation.
@@ -1305,28 +1336,11 @@ exports.endTradesOnFilledPlace = onDocumentWritten(
           before.personId === after.personId &&
           (before.state || null) === (after.state || null)) return;
 
-      const db = admin.firestore();
-
-      // ⚠ TWO SWEEPS, AND THE SECOND IS NEW. A Trade is a conversation about
-      // the place and ends when the place does; the COVER ENTRY is the
-      // advertisement for it, and nothing was taking that down when an editor
-      // simply removed the roster row. Emptying a run of dates left the list
-      // asking for cover on Sundays that no longer had a rota.
-      //
-      // Both hang off the roster write for the same reason: the editor does
-      // nothing special, so the cleanup has to run whichever door they changed
-      // the roster through.
-      await aw.sweepCover(db, {
-        occurrenceId: event.params.occurrenceId,
-        roleSlug: row.roleSlug,
-        slotId: row.slotId || null,
-        row: after,
-      });
-
       const result = await tw.sweepAssignment(db, {
         occurrenceId: event.params.occurrenceId,
         roleSlug: row.roleSlug,
         slotId: row.slotId || null,
+        oneOffId: row.oneOffId || null,
         today: ac.churchToday(new Date()),
         now: admin.firestore.Timestamp.now(),
       });
@@ -1337,6 +1351,32 @@ exports.endTradesOnFilledPlace = onDocumentWritten(
             `${row.roleSlug} ended ${closed.length} — ` +
             closed.map((c) => c.because).join(", "));
       }
+    },
+);
+
+/**
+ * Keep the cover list true when the OCCURRENCE changes (PlaceCore).
+ *
+ * The roster trigger above reconciles when a place changes. This one does it
+ * when the Event does, which nothing used to:
+ *
+ *   - cancelled or moved: its places are not happening, so they come off;
+ *   - made more private: every entry is re-stamped with the new rung, which
+ *     is the only thing the cover rule reads — a stale stamp kept a
+ *     tightened Event's name and date readable by everyone at the old one;
+ *   - renamed or re-dated: the entries say what the Event now says.
+ *
+ * It writes only /cover, never the occurrence, so it cannot wake itself.
+ * Fields this function does not read changing (the derived fields an answer
+ * writes, say) cost one read and write nothing.
+ */
+exports.reconcileCoverOnOccurrence = onDocumentWritten(
+    {
+      document: "event_occurrences/{occurrenceId}",
+      region: "us-central1",
+    },
+    async (event) => {
+      await aw.reconcileCover(admin.firestore(), event.params.occurrenceId);
     },
 );
 

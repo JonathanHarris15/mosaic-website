@@ -31,7 +31,7 @@ const NOT_SHIPPED_BY_THE_JOB = [
     'onGuidanceWritten', 'mcpCapabilities', 'restoreGuidanceVersion',
     'onServiceThemeWritten', 'syncPermissionLevelToMembershipStage',
     'syncMemberTagToRole', 'syncElderRoleToTag', 'smsCheckQuota', 'smsSendTest',
-    'convertConfirmedAssignments', 'notificationReachability', 'deleteFormTemplate',
+    'notificationReachability', 'deleteFormTemplate',
     'shepherdingTask',
 ];
 

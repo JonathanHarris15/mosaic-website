@@ -32,12 +32,17 @@ window.RolesManager = () => ({
     currentPermissionLevel: null,
 
     // The stored Servant Role Definitions, as `{ id, ...definition }`.
+    /** @type {Array<Record<string, *>>} */
     roleDefinitions: [],
     // Stored definitions that would take a liturgical slug. They cannot be shown
     // in the list — allRoles rightly refuses to mix two Roles' serve history —
     // but /roles is editor-writable, so one can arrive by hand. Held aside and
     // reported rather than left to throw on every render.
     conflictingDefinitions: [],
+    // Stored Roles that read as one slug: shown, but not takeable anywhere
+    // until one is deleted (RolesCore.registry refuses to guess between them).
+    /** @type {Array<{ slug: string, names: string[] }>} */
+    sharedSlugs: [],
 
     // Only the tags this account may see. The ids of the rest are held apart in
     // hiddenTagIds — an existing rule can say it is unavailable without the name
@@ -47,8 +52,9 @@ window.RolesManager = () => ({
     sharedRelationshipTypes: [],
     relationshipTypesDenied: false,
 
-    // The Role Definition being edited: a working copy, so cancel is free and
-    // nothing partial is ever written. `draftId` is the document it came from.
+    // The Role Definition being edited: the working copy the form binds to.
+    // `draftId` is the document it came from. Only the open Role's session
+    // (RoleEditorCore) writes it, and only the fields that changed.
     draft: null,
     draftId: null,
     saveAttempted: false,
@@ -238,27 +244,17 @@ window.RolesManager = () => ({
 
     // ── Loading ──────────────────────────────────────────────────────────────
 
+    async readStoredDefinitions() {
+        const snap = await db.collection('roles').orderBy('name', 'asc').get();
+        return snap.docs.map(doc => Object.assign({ id: doc.id }, doc.data()));
+    },
+
     async loadRoleDefinitions() {
         try {
-            const snap = await db.collection('roles').orderBy('name', 'asc').get();
-            const all = snap.docs.map(doc => Object.assign({ id: doc.id }, doc.data()));
-            const takesLiturgicalSlug = def =>
-                RolesCore.LITURGICAL_SLUGS.indexOf(def.slug || RolesCore.slugify(def.name)) !== -1;
-            // ⚠ `clashesWith` is the NAME of the built-in Role, not its slug.
-            // This message used to print the stored id — "clashes with the
-            // built-in Role “prayer”" — on the one screen that must never show
-            // one, and it is the editor's only hint about which Role is meant.
-            this.conflictingDefinitions = all.filter(takesLiturgicalSlug)
-                .map(def => {
-                    const slug = def.slug || RolesCore.slugify(def.name);
-                    const builtIn = RolesCore.LITURGICAL_ROLES.find(role => role.slug === slug);
-                    return Object.assign({}, def, {
-                        slug: slug,
-                        clashesWith: (builtIn && builtIn.name) || slug,
-                    });
-                });
-            this.roleDefinitions = all.filter(def => !takesLiturgicalSlug(def))
-                .sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+            const split = RoleEditorCore.partition(await this.readStoredDefinitions());
+            this.conflictingDefinitions = split.conflicting;
+            this.sharedSlugs = split.sharedSlugs;
+            this.roleDefinitions = split.definitions;
         } catch (e) {
             console.error('Error loading Role Definitions:', e);
             this.showToast('Could not load Roles', 'error');
@@ -313,6 +309,12 @@ window.RolesManager = () => ({
             this.sharedRelationshipTypes = [];
             this.relationshipTypesDenied = true;
         }
+    },
+
+    /** @param {{ names: string[] }} shared */
+    sharedSlugSentence(shared) {
+        const names = ((shared && shared.names) || []).map(n => `“${n}”`).join(' and ');
+        return `${names} are saved under the same short name, so places in them cannot be taken or swapped. `;
     },
 
     // ── The one roles list ───────────────────────────────────────────────────
@@ -401,7 +403,7 @@ window.RolesManager = () => ({
     // there is one pane. Leaving a Role open behind it would put an unsaved
     // draft somewhere the editor cannot see it.
     openPane(name) {
-        if (this.draft) this.cancelEdit();
+        if (this.draft) this.closeRole();
         this.pane = name;
     },
 
@@ -414,7 +416,7 @@ window.RolesManager = () => ({
     // The only way back on a narrow screen — out of whatever is open, to the
     // list. A Role is re-opened on a desktop by the seed, never here.
     backToList() {
-        if (this.draft) this.cancelEdit();
+        if (this.draft) this.closeRole();
         this.pane = 'role';
     },
 
@@ -433,42 +435,29 @@ window.RolesManager = () => ({
 
     async createRole(name) {
         if (!this.canManageRoles) return;
-        const trimmed = String(name || '').trim();
-        if (!trimmed) {
-            this.showToast('A Role needs a name', 'error');
+        const proposal = RoleEditorCore.proposeNew(name, this.roleDefinitions);
+        if (!proposal.ok) {
+            this.showToast(proposal.error, 'error');
             return;
         }
-        const definition = RolesCore.newDefinition(trimmed);
-
-        // The slug is fixed at creation and Involvement is written under it, so a
-        // collision is refused before the write rather than discovered later as
-        // two Roles sharing one serve history.
-        if (RolesCore.LITURGICAL_SLUGS.indexOf(definition.slug) !== -1) {
-            this.showToast(
-                `"${trimmed}" is a liturgical Role. Those are built in and cannot be recreated here — pick another name.`,
-                'error'
-            );
-            return;
-        }
-        if (this.roleDefinitions.some(def => def.slug === definition.slug)) {
-            this.showToast(`A Role called "${trimmed}" already exists`, 'error');
-            return;
-        }
-
-        const check = RolesCore.validateDefinition(definition);
-        if (!check.valid) {
-            this.showToast(check.errors.join(' '), 'error');
-            return;
-        }
-
+        const definition = proposal.definition;
         try {
+            // ⚠ The list on screen is the one loaded when the page opened. A
+            // Role another editor (or another tab) has created since is not
+            // in it, so the slug is asked about again, now, before the write.
+            const fresh = await this.readStoredDefinitions();
+            const recheck = RoleEditorCore.proposeNew(name, fresh);
+            if (!recheck.ok) {
+                this.showToast(recheck.error, 'error');
+                await this.loadRoleDefinitions();
+                return;
+            }
             const ref = await db.collection('roles').add(definition);
-            this.roleDefinitions = this.roleDefinitions
-                .concat([Object.assign({ id: ref.id }, definition)])
-                .sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+            this.roleDefinitions = RoleEditorCore.withStored(
+                this.roleDefinitions.concat([Object.assign({ id: ref.id }, definition)]), ref.id, {});
             this.newRoleName = '';
             this.startEdit(this.roleDefinitions.find(def => def.id === ref.id));
-            this.showToast(`Role "${trimmed}" created`);
+            this.showToast(`Role "${definition.name}" created`);
         } catch (e) {
             console.error('Error creating Role:', e);
             this.showToast('Error creating Role', 'error');
@@ -476,23 +465,29 @@ window.RolesManager = () => ({
         }
     },
 
-    // The draft is a deep copy: every RolesCore helper returns a new definition,
-    // so nothing the editor does touches the stored one until they save.
+    // Opening a Role. The draft is the working copy the form binds to; every
+    // slot and rule helper replaces it with a new object, so nothing touches
+    // the stored Role except the session that is opened with it.
     startEdit(role) {
+        if (!role) return;
         if (RolesCore.isLocked(role)) {
             this.showToast('Liturgical Roles are built in and cannot be edited', 'error');
             return;
         }
-        // Defaults are filled in on open rather than left absent, so the form
-        // shows the editor what a Role they have never configured actually does
-        // — exclusive, one week's rest — instead of two empty controls.
-        this.draft = Object.assign(JSON.parse(JSON.stringify(role)), {
-            intensity: RolesCore.intensityOf(role),
-            allowsAnotherRole: RolesCore.allowsAnotherRole(role),
-        });
-        this.draftId = role.id;
-        this.saveAttempted = false;
-        this.startLiveRole();
+        // ⚠ The Role being left is closed FIRST — while the draft is still
+        // its own — so its last keystrokes are handed to its own session and
+        // sent. Swapping the draft first is what used to write the next
+        // Role's name, slots and rules over the one being left.
+        this.endSession();
+        // ⚠ The STORED document, not the row it was clicked from. A row in
+        // `servantRoles` has been through allRoles, which fills in a slug for
+        // a Role stored without one — so the session would believe the slug
+        // was stored and never write it, and the Role's slug would go on
+        // following its name.
+        const stored = this.roleDefinitions.find(def => def.id === role.id) || role;
+        this.draft = RoleEditorCore.draftFrom(stored);
+        this.draftId = stored.id;
+        this.openSession(stored);
         // One pane: opening a Role takes it back off whichever church-wide
         // destination was showing.
         this.pane = 'role';
@@ -512,12 +507,13 @@ window.RolesManager = () => ({
         return this.roleDefinitions.find(def => def.id === this.draftId) || null;
     },
 
-    cancelEdit() {
-        this.stopLiveRole();
+    // Leaving the open Role: what was waiting is sent, then the pane is empty.
+    closeRole() {
+        const sent = this.endSession();
         this.draft = null;
         this.draftId = null;
-        this.saveAttempted = false;
         this.resetRuleForm();
+        return sent;
     },
 
     // ── A Role saves itself (MS-721, ADR 0081) ──────────────────────────────
@@ -528,8 +524,18 @@ window.RolesManager = () => ({
     // it is; an invalid Role does not save and lists its problems; a refused
     // save says Not saved with a Retry, and the next change retries. Another
     // editor's change lands in any field this editor is not changing.
+    //
+    // What is saved, when, and from which values is RoleEditorCore's session.
+    // This page only opens one per Role, hands it the draft, and draws what it
+    // says. `liveSerial` names the session that is current: a callback from
+    // one that has been left (a save landing late, a snapshot in flight)
+    // checks it and does nothing to the Role on screen.
 
     liveRole: null,
+    liveSerial: 0,
+    // The values last handed to the session, so a field the form has changed
+    // since is never overwritten by what the session hands back.
+    liveHanded: null,
     stopRoleWatch: null,
     roleChip: 'saved',
     roleError: '',
@@ -538,68 +544,37 @@ window.RolesManager = () => ({
         return window.LiveFields ? window.LiveFields.chipText(status) : '';
     },
 
-    startLiveRole() {
-        this.stopLiveRole();
-        const LF = window.LiveFields;
-        if (!LF || !this.draft || !this.draftId || !this.canManageRoles) return;
-        const id = this.draftId;
-        const FIELDS = ['name', 'description', 'intensity', 'allowsAnotherRole', 'slots', 'restrictions'];
-        const norm = v => (typeof v === 'string' ? v.trim() : JSON.stringify(v == null ? null : v));
-        const clone = v => (v == null || typeof v !== 'object' ? v : JSON.parse(JSON.stringify(v)));
-        const initial = {};
-        FIELDS.forEach(f => { initial[f] = clone(this.draft[f]); });
-        this.liveRole = LF.create({
-            fields: FIELDS,
-            initial,
-            same: (a, b) => norm(a) === norm(b),
-            validate: () => (this.draft && this.draftErrors.length ? { role: this.draftErrors.join(' ') } : null),
-            save: async (/** @type {Record<string, *>} */ patch) => {
-                const definition = this.definitionFromDraft();
-                /** @type {Record<string, *>} */
-                const out = {};
-                Object.keys(patch).forEach(f => { out[f] = definition[f]; });
-                // The slot counter goes with the slots, so a removed slot's id
-                // is never handed out again (MS-823).
-                if ('slots' in out) out.nextSlotSeq = definition.nextSlotSeq;
-                const stored = this.roleDefinitions.find(d => d.id === id) || {};
-                if (!stored.slug) out.slug = definition.slug;
-                try {
-                    await db.collection('roles').doc(id).update(out);
-                } catch (e) {
-                    this.showToast('Not saved — ' + ((e && e.message) || 'that change could not be saved'), 'error');
-                    throw e;
-                }
-                this.roleDefinitions = this.roleDefinitions
-                    .map(def => (def.id === id ? Object.assign({}, def, out) : def))
-                    .sort((a, b) => (a.name || '').localeCompare(b.name || ''));
-                return out;
+    openSession(role) {
+        if (!this.canManageRoles || !role || !role.id) return;
+        const serial = ++this.liveSerial;
+        const id = role.id;
+        const current = () => this.liveSerial === serial;
+        this.liveHanded = JSON.parse(JSON.stringify(this.draft));
+        this.liveRole = RoleEditorCore.openSession({
+            role,
+            store: { update: (docId, patch) => db.collection('roles').doc(docId).update(patch) },
+            knownTypes: () => this.knownRelationshipTypes,
+            onState: (st) => { if (current()) this.showSessionState(st); },
+            // Keyed by id, so a save that lands after its Role was left still
+            // puts the list right — and only that Role's row.
+            onSaved: (docId, write) => {
+                this.roleDefinitions = RoleEditorCore.withStored(this.roleDefinitions, docId, write);
             },
-            onChange: (st) => {
-                // Not while the page is handing its own fields over: a field
-                // not yet handed over would read as "different" and be put
-                // back. Adoption is for saves and other editors.
-                if (this.draft && this.draftId === id && !this.syncingRole) {
-                    Object.keys(st.draft).forEach(f => {
-                        if (JSON.stringify(this.draft[f]) !== JSON.stringify(st.draft[f])) this.draft[f] = clone(st.draft[f]);
-                    });
-                }
-                this.roleChip = st.status;
-                this.roleError = st.error;
-                this.saveAttempted = Object.keys(st.invalid).length > 0 && st.dirty.length > 0;
+            onFailed: (docId, e) => {
+                const why = (e && e.message) || 'that change could not be saved';
+                const left = (this.roleDefinitions.find(d => d.id === docId) || {}).name;
+                this.showToast(current() || !left ? 'Not saved — ' + why : `"${left}" was not saved — ${why}`, 'error');
             },
         });
         const Live = window.MosaicLiveRead;
         if (Live && typeof db !== 'undefined' && db && typeof db.collection === 'function') {
             try {
                 this.stopRoleWatch = Live.watch(db.collection('roles').doc(id), (snap) => {
-                    if (!snap || !snap.exists || !this.liveRole || this.draftId !== id) return;
+                    if (!current() || !this.liveRole || !snap || !snap.exists) return;
                     const data = snap.data() || {};
                     const pending = !!(snap.metadata && snap.metadata.hasPendingWrites);
+                    if (!pending) this.roleDefinitions = RoleEditorCore.withStored(this.roleDefinitions, id, data);
                     this.liveRole.remote(data, { pendingWrites: pending });
-                    if (!pending) {
-                        this.roleDefinitions = this.roleDefinitions
-                            .map(def => (def.id === id ? Object.assign({ id }, def, data) : def));
-                    }
                 }, { onError: (e) => console.warn('This Role is not live:', e) });
             } catch (e) {
                 console.warn('This Role is not live:', e);
@@ -607,39 +582,61 @@ window.RolesManager = () => ({
         }
     },
 
+    // The session's word on the open Role. A field the session settled
+    // differently (a save trimmed it, another editor changed it) is taken
+    // into the form — unless the form has changed that field since it last
+    // handed it over, in which case the form is newer and wins.
+    showSessionState(st) {
+        if (this.draft && this.draftId === st.id) {
+            const handed = this.liveHanded || {};
+            const text = v => JSON.stringify(v === undefined ? null : v);
+            Object.keys(st.values).forEach(f => {
+                if (text(this.draft[f]) !== text(handed[f])) return;
+                if (text(this.draft[f]) === text(st.values[f])) return;
+                const v = st.values[f];
+                this.draft[f] = v == null || typeof v !== 'object' ? v : JSON.parse(JSON.stringify(v));
+                handed[f] = this.draft[f];
+            });
+        }
+        this.roleChip = st.status;
+        this.roleError = st.error;
+        this.saveAttempted = st.showProblems;
+    },
+
     // Called by the Alpine $watch on `draft` and before any flush, so a change
     // made by a slot or rule helper (which replace `draft`) is seen too.
-    syncingRole: false,
-
     syncLiveRole() {
         if (!this.liveRole || !this.draft) return;
-        this.syncingRole = true;
-        try {
-            ['name', 'description', 'intensity', 'allowsAnotherRole', 'slots', 'nextSlotSeq', 'restrictions'].forEach(f => {
-                const v = this.draft[f];
-                this.liveRole.edit(f, v == null || typeof v !== 'object' ? v : JSON.parse(JSON.stringify(v)));
-            });
-        } finally {
-            this.syncingRole = false;
-        }
+        const values = JSON.parse(JSON.stringify(this.draft));
+        this.liveHanded = values;
+        this.liveRole.edit(this.draftId, JSON.parse(JSON.stringify(values)));
     },
 
     revertRole(field) {
         if (this.liveRole) this.liveRole.revert(field);
     },
 
-    // Leaving a Role (another one opened, or the pane closed) sends what is
-    // waiting first; a change is never dropped by moving on.
-    stopLiveRole() {
+    // Ends the open Role's session: sends what is waiting (or, with
+    // `discard`, drops it), stops the listener, and resets the chip. Returns
+    // the send, so a caller that needs it landed can wait for it.
+    endSession({ discard = false } = {}) {
+        this.liveSerial++;
+        if (this.stopRoleWatch) { this.stopRoleWatch(); this.stopRoleWatch = null; }
+        let sent = Promise.resolve(true);
         if (this.liveRole) {
-            this.syncLiveRole();
-            if (this.liveRole.dirtyFields().length) this.liveRole.flush();
-            this.liveRole.dispose();
+            if (discard) {
+                this.liveRole.discard();
+            } else {
+                this.syncLiveRole();
+                sent = this.liveRole.close();
+            }
             this.liveRole = null;
         }
-        if (this.stopRoleWatch) { this.stopRoleWatch(); this.stopRoleWatch = null; }
+        this.liveHanded = null;
         this.roleChip = 'saved';
         this.roleError = '';
+        this.saveAttempted = false;
+        return sent;
     },
 
     resetRuleForm() {
@@ -661,23 +658,31 @@ window.RolesManager = () => ({
             'Only the Role and its rules are removed, so it can no longer be assigned.'
         );
         if (!confirmed) return;
+        // A Role being deleted drops what it was waiting to save: sent after
+        // the delete, it would fail on a document that is gone and say so.
+        const wasOpen = this.draftId === role.id;
+        if (wasOpen) this.endSession({ discard: true });
         try {
             await db.collection('roles').doc(role.id).delete();
             this.roleDefinitions = this.roleDefinitions.filter(def => def.id !== role.id);
-            if (this.draftId === role.id) this.cancelEdit();
+            if (wasOpen) this.closeRole();
             this.showToast(`Role "${role.name}" deleted`);
         } catch (e) {
             console.error('Error deleting Role:', e);
             this.showToast('Error deleting Role', 'error');
             await this.loadRoleDefinitions();
+            // Still there, so open it again as it is stored.
+            const still = wasOpen && this.roleDefinitions.find(def => def.id === role.id);
+            if (still) this.startEdit(still);
         }
     },
 
     // ── Slots ────────────────────────────────────────────────────────────────
     //
     // Every slot operation goes through RolesCore, which returns a new
-    // definition rather than mutating — that is what makes cancel clean and slot
-    // ids stable. Three people needed means three slots.
+    // definition rather than mutating — that is what keeps slot ids stable and
+    // lets the session see exactly what changed. Three people needed means
+    // three slots.
 
     addSlot(requirement) {
         if (!this.draft) return;
@@ -949,7 +954,7 @@ window.RolesManager = () => ({
     },
 
     // Replace the rule at `index` with one holding `personIds`. Immutable, like
-    // every other edit here, so cancel stays free.
+    // every other edit here, so the session sees a changed field.
     replaceAllowlistAt(index, personIds) {
         this.draft = Object.assign({}, this.draft, {
             restrictions: this.draftRestrictions.map((rule, i) => (
@@ -1230,99 +1235,19 @@ window.RolesManager = () => ({
         return 'This rule is unavailable — remove it.';
     },
 
-    // ── Saving ───────────────────────────────────────────────────────────────
+    // ── What is wrong with the draft ─────────────────────────────────────────
 
     // Every problem at once, so the editor fixes them together rather than one
-    // save at a time.
-    // What the editor typed, in the shape the model reads. A number input hands
-    // back a string, and `intensity` is read strictly on purpose — a STORED
-    // string is genuinely bad data. Coercing at the boundary keeps both true:
-    // the box can never lock the Role, and the strict read stays strict.
-    get normalisedDraft() {
-        if (!this.draft) return null;
-        const raw = this.draft.intensity;
-
-        // ⚠ ONLY a value that really is a number is coerced. An EMPTY box must
-        // stay rejected: Number('') is 0, a real intensity meaning the job costs
-        // nothing, and saving that silently would empty the rest budget of
-        // whoever does it. Absent is fine — it reads as one week — but blank is
-        // a question the editor has not answered.
-        if (typeof raw !== 'string' || raw.trim() === '') return this.draft;
-        const parsed = Number(raw);
-        if (!Number.isFinite(parsed)) return this.draft;
-
-        return Object.assign({}, this.draft, { intensity: parsed });
-    },
-
+    // save at a time. The same check the session refuses a save by.
     get draftErrors() {
-        if (!this.draft) return [];
-        const errors = RolesCore.validateDefinition(this.normalisedDraft).errors.slice();
-        this.draftRestrictions.forEach((rule, i) => {
-            RolesCore.validateRestriction(rule, this.knownRelationshipTypes).errors
-                .forEach(message => errors.push(`Rule ${i + 1}: ${message}`));
-        });
-        return errors;
+        return RoleEditorCore.errorsFor(this.draft, this.knownRelationshipTypes);
     },
 
-    // The document a Role is: what saveDraft writes whole, and what the live
-    // editor picks the changed fields from (MS-721).
-    definitionFromDraft() {
-        // Written whole, not merged: a rule the editor removed has to disappear
-        // from the stored document too. The slug is carried across untouched —
-        // renaming must never move a Role's serve history.
-        return {
-            name: this.draft.name.trim(),
-            // Carried across, never recomputed. Only a definition that somehow
-            // stored none falls back to deriving one — which is what every read
-            // path already does for it, so nothing moves.
-            slug: this.draft.slug || RolesCore.slugify(this.draft.name),
-            family: RolesCore.FAMILIES.SERVANT,
-            slots: this.draft.slots,
-            // Never below what this Role has already issued (MS-823).
-            nextSlotSeq: RolesCore.slotSeqOf(this.draft),
-            restrictions: this.draftRestrictions,
-            // Typed into a number input, which hands back a string when the box
-            // is cleared. Normalised once here so what is stored is always the
-            // number every read path expects.
-            intensity: RolesCore.intensityOf({ intensity: Number(this.draft.intensity) }),
-            allowsAnotherRole: this.draft.allowsAnotherRole === true,
-            // ⚠ EVERY FIELD A ROLE HAS MUST BE LISTED HERE. This object is
-            // written WHOLE, so a field left out of it is not merely unsaved —
-            // it is deleted from the stored Role on the next save. A new field
-            // that is added to the form and the model but not to this list
-            // reads back blank for ever, with nothing anywhere reporting a
-            // problem. `newDefinition` is the list; the paired test walks it.
-            description: String(this.draft.description || '').trim(),
-        };
-    },
-
-    async saveDraft() {
-        if (!this.draft || !this.draftId) return;
-        // Only roles.manager.edit writes a Role (the rule refuses anyone else).
-        if (!this.canManageRoles) return;
-        // Live (MS-721): this is Retry, or a flush — save what changed now.
-        if (this.liveRole) { this.syncLiveRole(); return this.liveRole.flush(); }
-        this.saveAttempted = true;
-        if (this.draftErrors.length) {
-            this.showToast('This Role can\'t be saved yet — see the problems listed', 'error');
-            return;
-        }
-
-        const definition = this.definitionFromDraft();
-
-        try {
-            await db.collection('roles').doc(this.draftId).set(definition);
-            this.roleDefinitions = this.roleDefinitions
-                .map(def => (def.id === this.draftId ? Object.assign({ id: def.id }, definition) : def))
-                .sort((a, b) => (a.name || '').localeCompare(b.name || ''));
-            this.cancelEdit();
-            this.showToast(`Role "${definition.name}" saved`);
-        } catch (e) {
-            console.error('Error saving Role:', e);
-            this.showToast('Error saving Role — nothing was changed', 'error');
-            // The screen must match what is actually stored, not what was typed.
-            await this.loadRoleDefinitions();
-        }
+    // Retry, and blur/Enter: send what is waiting now.
+    saveDraft() {
+        if (!this.liveRole || !this.canManageRoles) return Promise.resolve(false);
+        this.syncLiveRole();
+        return this.liveRole.flush();
     },
 
     showToast(message, type = 'success') {

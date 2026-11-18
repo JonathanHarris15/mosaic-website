@@ -185,33 +185,31 @@ test('an occurrence with no visibility puts nothing on the list — fails closed
     assert.equal(result.cover.entry, undefined);
 });
 
-// ── The two sides must not drift ─────────────────────────────────────────────
+// ── One statement of a place ─────────────────────────────────────────────────
 //
-// `functions/` deploys as its own bundle and cannot require from `public/`, so
-// the cover entry's id scheme and shape are RESTATED there. That is the same
-// trade assignment-conversion.js already makes with the assignment states, and
-// this is the test that holds the two together.
+// The cover id and the entry's shape used to be restated here, in
+// assignment-take.js, in trade-writes.js and in the browser, held together by
+// tests like these. They are PlaceCore's now, synced into functions/shared.
 
-test('the server builds the same cover id the client reads', () => {
-    assert.equal(
-        aa.coverId('midweek_2026-08-14', 'kids', 's1'),
-        CoverStore.coverId('midweek_2026-08-14', 'kids', 's1')
-    );
-    assert.equal(
-        aa.coverId('o1', 'kids', null),
-        CoverStore.coverId('o1', 'kids', null)
-    );
+const Place = require('../functions/shared/place-core.js');
+
+test('the server builds its cover id and entry from PlaceCore', () => {
+    const result = plan({ state: 'declined' });
+    assert.equal(result.cover.id, Place.coverIdFor(OCCURRENCE.id, { roleSlug: 'kids', slotId: 's1' }));
+    assert.deepEqual(result.cover.entry,
+        Place.coverEntryFor(OCCURRENCE, result.assignment, result.cover.entry.roleName));
 });
 
-test('the server writes the same cover entry shape the client reads', () => {
-    const server = plan({ state: 'declined' }).cover.entry;
-    const client = CoverStore.entryFor(
-        OCCURRENCE,
-        { roleSlug: 'kids', slotId: 's1', personId: 'carl' },
-        server.roleName
-    );
-    assert.deepEqual(Object.keys(server).sort(), Object.keys(client).sort());
-    assert.deepEqual(server, client);
+test('two declined one-offs on one Event get two cover entries, not one', () => {
+    const roster = [
+        { roleSlug: 'one_off', slotId: null, oneOffId: 'setup', label: 'Setup', personId: 'carl', state: 'pending' },
+        { roleSlug: 'one_off', slotId: null, oneOffId: 'teardown', label: 'Teardown', personId: 'carl', state: 'pending' },
+    ];
+    const a = plan({ roster, roleSlug: 'one_off', slotId: null, oneOffId: 'setup', state: 'declined' });
+    const b = plan({ roster, roleSlug: 'one_off', slotId: null, oneOffId: 'teardown', state: 'declined' });
+    assert.ok(a.ok && b.ok);
+    assert.notEqual(a.cover.id, b.cover.id);
+    assert.equal(a.cover.entry.oneOffId, 'setup');
 });
 
 test('the server agrees with the client about which places belong on the list', () => {
@@ -288,4 +286,12 @@ test('the rung still wins over the person’s choice', () => {
 
     assert.equal(result.cover.action, 'delete');
     assert.equal(result.cover.entry, undefined);
+});
+
+test('a place on a cancelled or moved date cannot be answered', () => {
+    for (const marker of [{ cancelled: true }, { movedTo: '2099-01-01' }]) {
+        const result = plan({ occurrence: Object.assign({}, OCCURRENCE, marker) });
+        assert.equal(result.ok, false, JSON.stringify(marker));
+        assert.equal(result.code, 'failed-precondition');
+    }
 });

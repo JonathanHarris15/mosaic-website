@@ -366,6 +366,22 @@ test('a date moved after its nudges keeps its count, so it never gets a third', 
     assert.deepEqual(plan([moved], [r]), []);
 });
 
+test('a date moved TWICE still keeps its count — the key is where it started, not the last hop', () => {
+    const a = pending();
+    const first = occ({id: 'sunday_service_2026-09-13', date: '2026-09-13'});
+    const r = record(first, a, {
+        firstDate: '2026-09-08', firstChannel: 'push',
+        secondDate: '2026-09-10', secondChannel: 'text',
+    });
+    // 13th → 18th → 20th. movedFrom now says the 18th; originalDate the 13th.
+    const twice = occ({
+        id: 'sunday_service_2026-09-20', date: '2026-09-20',
+        movedFrom: '2026-09-18', originalDate: '2026-09-13', assignments: [a],
+    });
+    assert.equal(nudge.nudgeRecordId(twice, a), nudge.nudgeRecordId(first, a));
+    assert.deepEqual(plan([twice], [r]), []);
+});
+
 test('a moved date not yet nudged is nudged by its new date', () => {
     const moved = occ({
         id: 'sunday_service_2026-09-18', date: '2026-09-18',
