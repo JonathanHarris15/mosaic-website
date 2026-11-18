@@ -165,7 +165,7 @@ test('cross-Role rules naming a retired Role go with it', () => {
     });
     const { series } = Events.reconcileSundayService(stored, LITURGICAL);
 
-    assert.deepEqual(series.crossRoleRules.map(r => r.roleSlugs), [['preacher', 'coffee']]);
+    assert.deepEqual(series.crossRoleRules.map((/** @type {*} */ r) => r.roleSlugs), [['preacher', 'coffee']]);
 });
 
 test('once retired, a Servant Role of that slug can be put back on the Sunday', () => {

@@ -194,7 +194,7 @@
         // One-time by construction: once unlocked it is never retired again,
         // so a Servant Role of the same name can be put back on by hand.
         const lockedNow = lockedRolesOf(stored);
-        const retired = lockedNow.filter(slug => slugs.indexOf(slug) === -1);
+        const retired = lockedNow.filter((/** @type {string} */ slug) => slugs.indexOf(slug) === -1);
         if (retired.length) {
             reasons.push('took retired liturgical Roles off the Sunday: ' + retired.join(', '));
         }
@@ -207,7 +207,7 @@
         if (missing.length) {
             reasons.push('restored liturgical Roles: ' + missing.join(', '));
         }
-        const servant = existing.filter(slug => (
+        const servant = existing.filter((/** @type {string} */ slug) => (
             slugs.indexOf(slug) === -1 && retired.indexOf(slug) === -1
         ));
         const roleSlugs = slugs.concat(servant);
@@ -221,8 +221,8 @@
         // fire — dropped with it, as setSeriesRoles does.
         const extra = {};
         if (retired.length && Array.isArray(stored.crossRoleRules)) {
-            extra.crossRoleRules = crossRoleRulesOf(stored).filter(rule => (
-                ((rule && rule.roleSlugs) || []).every(slug => retired.indexOf(slug) === -1)
+            extra.crossRoleRules = crossRoleRulesOf(stored).filter((/** @type {*} */ rule) => (
+                ((rule && rule.roleSlugs) || []).every((/** @type {string} */ slug) => retired.indexOf(slug) === -1)
             ));
         }
 
