@@ -75,8 +75,9 @@
         return {
             loading: true,
             error: '',
-            busy: null,          // the key currently being written, so one row
-                                 // can show it is working without freezing all
+            // The key currently being written, so one control can show it is
+            // working without freezing all.
+            busy: /** @type {string|null} */ (null),
             toast: '',
 
             rank: null,
@@ -114,8 +115,56 @@
             // ── Boot ─────────────────────────────────────────────────────────
 
             async init() {
+                this.pinSheetsToViewport();
                 this.rank = await this.resolveRank();
                 await this.load();
+            },
+
+            // ── Sheets on a phone ────────────────────────────────────────────
+            //
+            // ⚠ A SHEET IS PINNED TO WHAT IS ON SCREEN, NOT TO THE PAGE. A
+            // fixed `inset: 0` layer sits on the LAYOUT viewport. With the
+            // keyboard up (typing a name into "Who could take it?") the part
+            // you can see is smaller than that, and a drag pans it — so the
+            // sheet came loose from the bottom of the screen and slid about
+            // with the page showing beneath it. The visual viewport is the
+            // part actually on screen; the sheets read their top and height
+            // from it (see `.trade-sheet` in the page's style block).
+            pinSheetsToViewport() {
+                const vv = window.visualViewport;
+                if (!vv) return;
+                const root = document.documentElement;
+                const sync = () => {
+                    root.style.setProperty('--sheet-top', vv.offsetTop + 'px');
+                    root.style.setProperty('--sheet-height', vv.height + 'px');
+                };
+                vv.addEventListener('resize', sync);
+                vv.addEventListener('scroll', sync);
+                sync();
+            },
+
+            // While any sheet is up the page behind it must not scroll: a drag
+            // that runs off the end of the sheet's list was carrying on into
+            // the page underneath.
+            get sheetOpen() {
+                return !!(this.asking || this.replying || this.choosing || this.declining);
+            },
+
+            // ── Working ──────────────────────────────────────────────────────
+            //
+            // Every act here is a round trip to a callable, and some of them a
+            // reload as well — seconds on a phone connection. The control that
+            // was tapped shows a spinner (`busy` names it), and this drives a
+            // small "Working…" pill for the reloads, which redraw the whole
+            // page and have no one control to sit on.
+            get working() {
+                return !!this.busy || (this.loading && this.rows.length > 0);
+            },
+
+            /** @param {{occurrenceId: string, roleSlug: string, slotId?: string|null}} put */
+            acceptKey(put) {
+                return 'accept:' + put.occurrenceId + '|' + put.roleSlug + '|' +
+                    (put.slotId || '');
             },
 
             async resolveRank() {
@@ -454,8 +503,16 @@
 
             // ── Asking somebody ──────────────────────────────────────────────
 
+            // The directory is read on first open, which can take a moment —
+            // so the button says it is working rather than looking dead.
             async openAsk(row) {
-                await this.loadPeople();
+                if (this.busy) return;
+                this.busy = 'open:' + row.key;
+                try {
+                    await this.loadPeople();
+                } finally {
+                    this.busy = null;
+                }
                 this.asking = row;
                 this.search = '';
             },
@@ -498,7 +555,7 @@
             async ask(person) {
                 if (this.busy) return;
                 if (!person || person.selectable === false) return;
-                this.busy = 'ask';
+                this.busy = 'ask:' + person.id;
                 try {
                     const call = firebase.functions().httpsCallable('inviteToTrade');
                     await call({
@@ -565,7 +622,7 @@
             // trap. It reads as what it is.
             async sendOffer(swap, take) {
                 if (this.busy) return;
-                this.busy = 'offer';
+                this.busy = take ? 'take' : 'offer';
                 try {
                     const offered = take ? [] : this.offerable
                         .filter(r => this.picked.includes(r.key))
@@ -596,7 +653,7 @@
 
             async take(swap, ref) {
                 if (this.busy) return;
-                this.busy = 'accept';
+                this.busy = this.acceptKey(ref);
                 try {
                     const call = firebase.functions().httpsCallable('acceptTrade');
                     await call({ tradeId: swap.id, chosen: ref });
@@ -644,7 +701,7 @@
 
             async setReach(row, quiet) {
                 if (this.busy) return;
-                this.busy = row.key;
+                this.busy = 'reach:' + row.key;
                 try {
                     const call = firebase.functions().httpsCallable('setCoverReach');
                     await call(Object.assign(this.refFor(row), { quiet: quiet }));
