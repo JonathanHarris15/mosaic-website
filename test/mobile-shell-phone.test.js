@@ -14,22 +14,28 @@ const vm = require('node:vm');
 const SRC = fs.readFileSync(path.join(__dirname, '..', 'public', 'mobile-shell.js'), 'utf8');
 const PREF = 'mosaicPrefersDesktop';
 
+/** @param {Record<string, string>} [init] */
 function storage(init) {
+    /** @type {Record<string, string>} */
     const s = Object.assign({}, init);
     return {
         data: s,
         api: {
-            getItem: (k) => (k in s ? s[k] : null),
-            setItem: (k, v) => { s[k] = String(v); },
-            removeItem: (k) => { delete s[k]; },
+            getItem: (/** @type {string} */ k) => (k in s ? s[k] : null),
+            setItem: (/** @type {string} */ k, /** @type {unknown} */ v) => { s[k] = String(v); },
+            removeItem: (/** @type {string} */ k) => { delete s[k]; },
         },
     };
 }
 
+/**
+ * @param {{ phone?: boolean, pointer?: string, width?: number, native?: boolean,
+ *           search?: string, stored?: Record<string, string>, session?: Record<string, string> }} opts
+ */
 function load(opts) {
     const pointer = opts.pointer || (opts.phone ? 'coarse' : 'fine');
     const width = opts.width || (opts.phone ? 390 : 1440);
-    const matchMedia = (q) => {
+    const matchMedia = (/** @type {string} */ q) => {
         let matches = true;
         const p = q.match(/\(pointer:\s*(\w+)\)/);
         if (p) matches = matches && p[1] === pointer;
@@ -42,13 +48,14 @@ function load(opts) {
     const classes = new Set();
     const document = {
         readyState: 'complete',
-        documentElement: { classList: { add: (c) => classes.add(c) } },
+        documentElement: { classList: { add: (/** @type {string} */ c) => classes.add(c) } },
         body: { classList: { add() {} } },
         head: { appendChild() {} },
         querySelector: () => ({ getAttribute: () => 'width=device-width', setAttribute() {} }),
         createElement: () => ({ setAttribute() {} }),
         addEventListener() {},
     };
+    /** @type {Record<string, any>} */
     const window = {
         location: { search: opts.search || '' },
         matchMedia, URLSearchParams, document,
