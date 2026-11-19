@@ -266,6 +266,7 @@ async function verdictFor(db, personId, ref, roster) {
     slot: slot,
     context: {
       people: context.person ? [context.person] : [],
+      knownPeople: await aw.rosterPeople(db, roster, context),
       relationships: context.relationships,
       groups: context.groups,
       awayPersonIds: context.awayPersonIds,

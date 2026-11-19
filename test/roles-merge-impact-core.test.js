@@ -88,7 +88,8 @@ test('a Role from the Roles page passes the shape check; a broken one names why'
         slots: [{ id: 's1', requirement: 'either' }] }), []);
     const bad = Core.roleShapeProblems({ name: '', family: 'liturgical', slots: [],
         slug: 'Bad Slug', description: 'x'.repeat(601), intensity: -1 });
-    assert.equal(bad.length, 6);
+    // Slots are each Event's now (ADR 0085): an empty list is not a problem.
+    assert.equal(bad.length, 5);
     assert.deepEqual(Core.extraRoleFields({ name: 'x', createdAt: 1, notes: 'y' }), ['createdAt', 'notes']);
 });
 
@@ -97,7 +98,7 @@ test('the report prints uid prefixes only', () => {
         [{ id: 'abcdefghijklmnop', data: custom({ 'hymns.edit': true }) },
             { id: 'qrstuvwxyz123456', data: { personId: 'p-x' } }],
         [],
-        [{ id: 'r1', data: { name: 'Ushers', family: 'servant', slots: [] } }],
+        [{ id: 'r1', data: { name: '', family: 'servant', slots: [] } }],
     );
     const text = Core.formatText(r);
     assert.match(text, /uid:abcdefgh /);

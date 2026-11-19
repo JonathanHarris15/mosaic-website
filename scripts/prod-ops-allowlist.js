@@ -28,6 +28,7 @@ const ALLOWLIST_SORTED = [
     'migrate-printable-page-numbers.js',
     'migrate-meeting-mentions.js',
     'migrate-reminders-to-tasks.js',
+    'migrate-role-settings-to-events.js',
     'migrate-service-dotted-keys.js',
     'ms-776-backfill-account-levels.js',
     'normalise-care-list-documents.js',

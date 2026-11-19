@@ -61,6 +61,7 @@
     const View = window.CalendarView;
     const Roles = window.RolesCore;
     const Grid = window.RecurringRosterCore;
+    const RoleRules = window.RoleRulesCore;
     const Dates = window.DateUtils;
 
 
@@ -86,7 +87,9 @@
             seriesId: '',
 
             people: [],
-            roleDefinitions: [],
+            // The Roles as stored; read them through `roleDefinitions`, which is
+            // the open Event's version of each (EventsCore.effectiveRole).
+            storedRoleDefinitions: [],
 
             // date → the occurrence document, with its roster attached. Sparse:
             // a date nobody has touched is simply absent, which is the answer
@@ -160,12 +163,26 @@
             // must not be married to each other". They belong to neither Role,
             // so they belong to the Event that runs both, which is this page.
             sharedGroupTypes: [],
+            // Person-to-person types an elder has shared ("cannot serve
+            // together if..."), for the team rules.
+            sharedPairwiseTypes: [],
             groupTypesDenied: false,
-            newPairKind: 'notSameGroup',
-            newPairTypeId: '',
-            newPairRoleA: '',
-            newPairRoleB: '',
-            savingPairRule: false,
+            // The tags a rule can name, as this viewer may see them.
+            ruleTags: [],
+
+            // ── The Roles & rules table ──────────────────────────────────────
+            // Which Role row is open, and the form behind each row
+            // (RoleRulesCore). Keyed by series and Role, so switching events
+            // never shows one Event's rules under another's name.
+            openRole: null,
+            roleForms: {},
+            crossForms: [],
+            crossFormsFor: null,
+            savingRole: '',
+            nonServingOpts: null,
+            saveAgain: {},
+            savingCross: false,
+            crossAgain: false,
 
             // ── Loading ──────────────────────────────────────────────────────
 
@@ -214,6 +231,16 @@
 
                 this.loading = false;
                 if (opening) await this.choose(opening);
+
+                // The Roles page sends you here to change who a Role needs, its
+                // rules or its rest — so arrive on that tab with its row open.
+                const params = new URLSearchParams(window.location.search);
+                const role = params.get('role');
+                if (this.editorLanes && (role || params.get('tab') === 'roles')) {
+                    this.tab = 'roles';
+                    this.buildRoleForms();
+                    if (role && this.tableRoles.indexOf(role) !== -1) this.openRole = role;
+                }
 
                 // The shell's arrow has to mean "out of this event" before it
                 // means "out of this page" — only the page knows which of the
@@ -269,8 +296,28 @@
                     db.collection('roles').get(),
                 ]);
                 this.people = people.docs.map(d => Object.assign({ id: d.id }, d.data()));
-                this.roleDefinitions = roles.docs.map(d => Object.assign({ id: d.id }, d.data()));
-                await this.loadGroupTypes();
+                this.storedRoleDefinitions = roles.docs.map(d => Object.assign({ id: d.id }, d.data()));
+                await Promise.all([this.loadGroupTypes(), this.loadRuleTags()]);
+                if (window.NonServing) this.nonServingOpts = await window.NonServing.load(db);
+            },
+
+            // The tags a rule can name. /people_tags is readable by everyone;
+            // hiding some from this viewer is the app's job (RolesCore.visibleTags),
+            // the same as on the Roles Manager.
+            async loadRuleTags() {
+                try {
+                    const snap = await db.collection('people_tags').orderBy('name', 'asc').get();
+                    const all = snap.docs.map(d => ({
+                        id: d.id,
+                        name: d.data().name || d.id,
+                        hiddenFromOthers: d.data().hiddenFromOthers === true,
+                    }));
+                    this.ruleTags = Roles.visibleTags(all, this.account || this.rank)
+                        .map(t => ({ id: t.id, name: t.name }));
+                } catch (e) {
+                    console.error('Could not read the tags:', e);
+                    this.ruleTags = [];
+                }
             },
 
             // The Group Types a Cross-Role Rule can be written against (MS-221).
@@ -286,12 +333,15 @@
                     const snap = await db.collection('relationship_types')
                         .where('sharedWithEditors', '==', true)
                         .get();
-                    this.sharedGroupTypes = snap.docs
+                    const shared = snap.docs
                         .map(d => Object.assign({ id: d.id }, d.data()))
-                        .filter(t => t.kind === 'group' && t.sharedWithEditors === true);
+                        .filter(t => t.sharedWithEditors === true);
+                    this.sharedGroupTypes = shared.filter(t => t.kind === 'group');
+                    this.sharedPairwiseTypes = shared.filter(t => t.kind === 'pairwise');
                 } catch (e) {
                     console.error('Could not read the relationship types:', e);
                     this.sharedGroupTypes = [];
+                    this.sharedPairwiseTypes = [];
                     this.groupTypesDenied = true;
                 }
             },
@@ -356,6 +406,8 @@
                 // name over another event's record and offer to save it there.
                 this.startSeriesDraft();
                 this.recomputeDates();
+                this.openRole = null;
+                this.buildRoleForms();
                 // The Rota's own grid is an editor-only read (MS-287) — a
                 // member never opens that tab, so there is nothing there for
                 // them to wait on. The Dates tab is everyone's, and reads its
@@ -654,6 +706,16 @@
             // are not in the roster at all — they are fields on the Service
             // document, filled in the order of service — so a row for them here
             // would sit empty and read as "nobody is preaching".
+            // Who a Role needs, its rules and its rest belong to the Event that
+            // runs it, so this page reads the open Event's version of each.
+            get roleDefinitions() {
+                return Series.rolesFor(this.chosen, this.storedRoleDefinitions);
+            },
+            // Setting the list sets the Roles as stored.
+            set roleDefinitions(defs) {
+                this.storedRoleDefinitions = defs || [];
+            },
+
             get gridRoles() {
                 const slugs = ((this.chosen && this.chosen.roleSlugs) || [])
                     .filter(slug => Roles.LITURGICAL_SLUGS.indexOf(slug) === -1);
@@ -689,31 +751,22 @@
             // thing nobody has set up yet.
             get hasRoles() { return this.gridRoles.length > 0; },
 
-            // ── Cross-Role Rules (MS-221) ────────────────────────────────────
+            // ── Roles & rules (the table) ────────────────────────────────────
             //
-            // A Role's own rules are written in the Roles Manager, because they
-            // are facts about that Role wherever it runs. A rule about a PAIR of
-            // Roles is not — it is a fact about this Event, the only thing that
-            // knows the two run together — so it is written here.
+            // Who a Role needs, who may fill it, its rest and whether it uses up
+            // the morning are this Event's to say (EventsCore.effectiveRole):
+            // Setup needs two men on a Sunday and one of anybody on a Wednesday.
+            // Every Role on the Event is one row; opening it shows who can do
+            // it, the team's rules, and what those rules allow. Rules across
+            // Roles sit under the table. RoleRulesCore is the model; this is the
+            // wiring. Every change saves itself (ADR 0032), once it is whole.
 
-            get pairRules() {
-                return Series.crossRoleRulesOf(this.chosen);
-            },
-
-            // Family and Marriage come from the Membership Directory and need no
-            // elder to share them; anything else an elder has shared joins them.
             get pairTypeOptions() {
                 return Roles.DIRECTORY_GROUP_TYPES.concat(this.sharedGroupTypes);
             },
 
-            // Both pickers offer every Role on this Event. Liturgical ones are
-            // included on purpose: "the preacher and the service leader must not
-            // be married" is the same rule, and the roster judge sees liturgy.
-            get pairRoleOptions() {
-                return ((this.chosen && this.chosen.roleSlugs) || []).map(slug => ({
-                    slug: slug,
-                    name: this.roleName(slug),
-                }));
+            get allRuleTypes() {
+                return this.pairTypeOptions.concat(this.sharedPairwiseTypes);
             },
 
             roleName(slug) {
@@ -724,91 +777,413 @@
             },
 
             typeName(typeId) {
-                const type = this.pairTypeOptions.find(t => t.id === typeId);
+                const type = this.allRuleTypes.find(t => t.id === typeId);
                 return (type && type.name) || null;
             },
 
-            // A rule the editor can check by reading it, in the same words the
-            // Roles Manager uses for the one-Role version.
-            pairRuleSentence(rule) {
-                const type = this.typeName(rule && rule.typeId);
-                const pair = ((rule && rule.roleSlugs) || []).map(slug => this.roleName(slug));
-                if (!type) {
-                    return 'This rule is unavailable — an elder is no longer sharing the relationship '
-                        + 'type it uses with editors. Remove it, or ask an elder to share that type again.';
-                }
-                return rule.kind === Roles.RESTRICTIONS.SAME_GROUP
-                    ? `${pair[0]} and ${pair[1]} must be from the same "${type}"`
-                    : `${pair[0]} and ${pair[1]} cannot be from the same "${type}"`;
+            tagName(tagId) {
+                const tag = this.ruleTags.find(t => t.id === tagId);
+                return (tag && tag.name) || null;
             },
 
-            pairRuleAvailable(rule) {
-                return Roles.validateCrossRoleRule(
-                    rule, this.sharedGroupTypes, null
-                ).valid;
-            },
-
-            get pairRuleErrors() {
-                if (!this.newPairTypeId || !this.newPairRoleA || !this.newPairRoleB) return [];
-                return Roles.validateCrossRoleRule({
-                    kind: this.newPairKind,
-                    typeId: this.newPairTypeId,
-                    roleSlugs: [this.newPairRoleA, this.newPairRoleB],
-                }, this.sharedGroupTypes, (this.chosen && this.chosen.roleSlugs) || []).errors;
-            },
-
-            async addPairRule() {
-                if (!this.chosen || this.savingPairRule) return;
-                const rule = {
-                    kind: this.newPairKind,
-                    typeId: this.newPairTypeId,
-                    roleSlugs: [this.newPairRoleA, this.newPairRoleB],
+            get ruleNames() {
+                return {
+                    tag: id => this.tagName(id),
+                    type: id => this.typeName(id),
+                    role: slug => this.roleName(slug),
+                    person: id => this.personName(id),
                 };
-                const check = Roles.validateCrossRoleRule(
-                    rule, this.sharedGroupTypes, (this.chosen && this.chosen.roleSlugs) || []
-                );
-                if (!check.valid) {
-                    this.error = check.errors[0];
-                    return;
-                }
-                // The same pair, the same type, the same polarity, twice, is one
-                // rule written twice — it would refuse the same person twice.
-                const already = this.pairRules.some(r => (
-                    r.kind === rule.kind && r.typeId === rule.typeId &&
-                    r.roleSlugs.slice().sort().join() === rule.roleSlugs.slice().sort().join()
-                ));
-                if (already) {
-                    this.error = 'That rule is already on this event.';
-                    return;
-                }
-                await this.savePairRules(Series.addCrossRoleRule(this.chosen, rule));
-                this.newPairTypeId = '';
-                this.newPairRoleA = '';
-                this.newPairRoleB = '';
             },
 
-            async removePairRule(index) {
-                if (!this.chosen || this.savingPairRule) return;
-                await this.savePairRules(Series.removeCrossRoleRule(this.chosen, index));
+            // The Servant Roles on this Event, in its own order. Liturgical ones
+            // are rows of their own below: they are filled in the order of
+            // service, and the only thing an Event says about them is rest.
+            get tableRoles() {
+                return ((this.chosen && this.chosen.roleSlugs) || [])
+                    .filter(slug => Roles.LITURGICAL_SLUGS.indexOf(slug) === -1)
+                    .filter(slug => this.roleDefinitions.some(d => d.slug === slug));
             },
 
-            // One writer for both, so the list on screen and the list in
-            // Firestore can never be two different lists.
-            async savePairRules(nextSeries) {
-                this.savingPairRule = true;
+            get liturgicalRows() {
+                return ((this.chosen && this.chosen.roleSlugs) || [])
+                    .filter(slug => Roles.LITURGICAL_SLUGS.indexOf(slug) !== -1)
+                    .map(slug => ({
+                        slug: slug,
+                        name: this.roleName(slug),
+                        rest: Series.roleIntensity(this.chosen, slug),
+                    }));
+            },
+
+            get rolesAvailable() {
+                const on = (this.chosen && this.chosen.roleSlugs) || [];
+                return this.roleDefinitions
+                    .filter(d => Roles.LITURGICAL_SLUGS.indexOf(d.slug) === -1)
+                    .filter(d => on.indexOf(d.slug) === -1);
+            },
+
+            // Built when the tab opens and whenever the Event changes, never
+            // inside a getter: a form made while drawing would be thrown away
+            // on the next draw, and with it whatever was being typed.
+            buildRoleForms() {
+                if (!this.chosen) return;
+                const forms = Object.assign({}, this.roleForms);
+                this.tableRoles.forEach(slug => {
+                    const key = this.seriesId + ':' + slug;
+                    if (!forms[key]) {
+                        forms[key] = RoleRules.formFrom(this.roleDefinitions.find(d => d.slug === slug) || {});
+                    }
+                });
+                this.roleForms = forms;
+                if (this.crossFormsFor !== this.seriesId) {
+                    this.crossForms = RoleRules.crossFormsFrom(Series.crossRoleRulesOf(this.chosen));
+                    this.crossFormsFor = this.seriesId;
+                }
+            },
+
+            formFor(slug) {
+                return this.roleForms[this.seriesId + ':' + slug] || null;
+            },
+
+            toggleRole(slug) {
+                this.openRole = this.openRole === slug ? null : slug;
+            },
+
+            // How many people a Role needs here, one more or one fewer.
+            stepCount(slug, delta) {
+                const form = this.formFor(slug);
+                if (!form) return;
+                const next = Math.max(1, (Number(form.count) || 1) + delta);
+                if (next === form.count) return;
+                form.count = next;
+                this.saveRole(slug);
+            },
+
+            // The three rule lists drawn by the one shared template: what it
+            // lists, what kind of rules they are, and where they save.
+            whoBlock(slug) {
+                const form = this.formFor(slug);
+                return { scope: 'who', slug: slug, rules: form ? [form.who] : [] };
+            },
+            teamBlock(slug) {
+                const form = this.formFor(slug);
+                return { scope: 'team', slug: slug, rules: form ? form.team : [] };
+            },
+            get acrossBlock() {
+                return { scope: 'across', slug: null, rules: this.crossForms };
+            },
+            saveBlock(block) {
+                return block.scope === 'across' ? this.saveCross() : this.saveRole(block.slug);
+            },
+
+            // ── Building rules ───────────────────────────────────────────────
+
+            conditionKinds(scope) {
+                if (scope === 'who') {
+                    return [
+                        { value: 'requireTag', label: 'Tagged' },
+                        { value: 'excludeTag', label: 'Not tagged' },
+                        { value: 'sex', label: 'A man / a woman' },
+                        { value: 'allowlist', label: 'One of these people' },
+                    ];
+                }
+                const kinds = [
+                    { value: 'lineup', label: 'Line-up' },
+                    { value: 'atLeastTagged', label: 'At least … tagged' },
+                    { value: 'notSameGroup', label: scope === 'across' ? 'Not from the same' : 'No two from the same' },
+                    { value: 'sameGroup', label: scope === 'across' ? 'From the same' : 'All from the same' },
+                ];
+                if (scope === 'team' && this.sharedPairwiseTypes.length) {
+                    kinds.push({ value: 'notTogether', label: 'Cannot serve together if' });
+                }
+                return kinds;
+            },
+
+            countOf(slug) {
+                const form = this.formFor(slug);
+                return form ? Math.max(1, Number(form.count) || 1) : 1;
+            },
+
+            // A new condition, filled in enough to be whole: a rule that names
+            // no Tag would refuse everybody, so it starts on the first one.
+            freshCondition(scope, slug) {
+                const roleSlug = scope === 'across' ? (this.tableRoles[0] || '') : null;
+                const c = RoleRules.newCondition(scope, this.countOf(scope === 'across' ? roleSlug : slug), roleSlug);
+                if (scope === 'who') c.tagId = (this.ruleTags[0] && this.ruleTags[0].id) || '';
+                return c;
+            },
+
+            // The kind changed: give the condition what that kind needs.
+            reshapeCondition(c, scope, slug) {
+                const keep = { id: c.id, kind: c.kind };
+                if (scope === 'across' && c.roleSlug) keep.roleSlug = c.roleSlug;
+                Object.keys(c).forEach(k => { delete c[k]; });
+                Object.assign(c, keep);
+                const firstTag = (this.ruleTags[0] && this.ruleTags[0].id) || '';
+                const firstGroup = (this.pairTypeOptions[0] && this.pairTypeOptions[0].id) || 'family';
+                if (c.kind === 'requireTag' || c.kind === 'excludeTag') c.tagId = firstTag;
+                if (c.kind === 'sex') c.sex = 'male';
+                if (c.kind === 'allowlist') c.personIds = [];
+                if (c.kind === 'lineup') {
+                    if (scope === 'across' && !c.roleSlug) c.roleSlug = this.tableRoles[0] || '';
+                    c.sexes = Array(this.countOf(scope === 'across' ? c.roleSlug : slug)).fill('either');
+                }
+                if (c.kind === 'atLeastTagged') {
+                    c.tagId = firstTag;
+                    c.atLeast = 1;
+                    if (scope === 'across') delete c.roleSlug;
+                }
+                if (c.kind === 'notSameGroup' || c.kind === 'sameGroup') {
+                    c.typeId = firstGroup;
+                    if (scope === 'across') {
+                        delete c.roleSlug;
+                        c.roleSlugs = [this.tableRoles[0] || '', this.tableRoles[1] || ''];
+                    }
+                }
+                if (c.kind === 'notTogether') {
+                    c.typeId = (this.sharedPairwiseTypes[0] && this.sharedPairwiseTypes[0].id) || '';
+                }
+            },
+
+            // A line-up across Roles now about a different Role: as many marks
+            // as that Role needs, all "either" until somebody says otherwise.
+            fitLineup(c) {
+                if (c.kind === 'lineup') c.sexes = Array(this.countOf(c.roleSlug)).fill('either');
+            },
+
+            lineupFewer(c, block) {
+                if (c.sexes.length <= 1) return;
+                c.sexes.pop();
+                this.saveBlock(block);
+            },
+
+            addPerson(c, personId, block) {
+                if (!personId || c.personIds.indexOf(personId) !== -1) return;
+                c.personIds.push(personId);
+                this.saveBlock(block);
+            },
+
+            nextMark(mark) {
+                return mark === 'male' ? 'female' : mark === 'female' ? 'either' : 'male';
+            },
+
+            markLabel(mark) {
+                return mark === 'male' ? 'M' : mark === 'female' ? 'W' : 'Any';
+            },
+
+            makeupMarks(makeup) {
+                return Array(makeup.men).fill('male').concat(Array(makeup.women).fill('female'));
+            },
+
+            makeupWords(makeup) {
+                return RoleRules.makeupWords(makeup);
+            },
+
+            addOption(rule, scope, slug) {
+                rule.options.push({ id: RoleRules.newOption(scope).id, conditions: [this.freshCondition(scope, slug)] });
+            },
+
+            addRule(rules, scope, slug) {
+                const rule = RoleRules.newRule(scope);
+                rule.options[0].conditions = [this.freshCondition(scope, slug)];
+                rules.push(rule);
+            },
+
+            // Removing the last condition of an option removes the option; the
+            // last option of a team or cross rule removes the rule.
+            removeCondition(rules, ruleIndex, optionIndex, condIndex, scope) {
+                const rule = rules[ruleIndex];
+                const option = rule.options[optionIndex];
+                option.conditions.splice(condIndex, 1);
+                if (!option.conditions.length) rule.options.splice(optionIndex, 1);
+                if (!rule.options.length && scope !== 'who') rules.splice(ruleIndex, 1);
+            },
+
+            sentence(rule, scope) {
+                return RoleRules.sentence(rule, scope, this.ruleNames);
+            },
+
+            // ── What a Role's rules allow ────────────────────────────────────
+
+            settingsFor(slug) {
+                const def = this.roleDefinitions.find(d => d.slug === slug) || {};
+                return RoleRules.settingsFrom(this.formFor(slug), def);
+            },
+
+            // Everything wrong with a Role's form, in words. A form with any of
+            // these is not saved: half a rule is worse than none, because a rule
+            // that names no Tag refuses everybody.
+            roleProblems(slug) {
+                const form = this.formFor(slug);
+                if (!form) return [];
+                const settings = this.settingsFor(slug);
+                const out = [];
+                settings.restrictions.forEach(rule => {
+                    Roles.validateRestriction(rule, this.allRuleTypes, { count: settings.slots.length }).errors
+                        .forEach(e => { if (out.indexOf(e) === -1) out.push(e); });
+                });
+                return out;
+            },
+
+            get assignable() {
+                return Roles.assignablePeople(this.people, Object.assign(
+                    { rank: this.rank, account: this.account }, this.nonServingOpts || {}));
+            },
+
+            // Who can do it, judged on "who can do it" alone — the team's rules
+            // depend on who else is on it, which no date has decided yet.
+            eligibleFor(slug) {
+                const settings = this.settingsFor(slug);
+                const def = Object.assign({}, this.roleDefinitions.find(d => d.slug === slug) || {}, settings, {
+                    restrictions: settings.restrictions.filter(r => r.scope === 'person'),
+                });
+                const people = this.assignable;
+                const ok = {};
+                Roles.candidatesFor(def, settings.slots[0], { people: people })
+                    .forEach(r => { if (r.eligible) ok[r.personId] = true; });
+                return people.filter(p => ok[p.id]);
+            },
+
+            eligibleSentence(slug) {
+                const e = this.eligibleFor(slug);
+                const men = e.filter(p => p.sex === 'male').length;
+                const women = e.filter(p => p.sex === 'female').length;
+                return e.length + ' of ' + this.assignable.length + ' people can do it — '
+                    + (men === 1 ? '1 man' : men + ' men') + ', ' + (women === 1 ? '1 woman' : women + ' women') + '.';
+            },
+
+            baseMakeups(slug) {
+                const form = this.formFor(slug);
+                if (!form) return [];
+                return RoleRules.makeups(this.countOf(slug), this.eligibleFor(slug), form.team);
+            },
+
+            get combos() {
+                const roles = this.tableRoles.map(slug => ({ slug: slug, makeups: this.baseMakeups(slug) }));
+                return RoleRules.combos(roles, this.crossForms);
+            },
+
+            get linkedRoles() {
+                return RoleRules.linkedSlugs(this.crossForms, this.tableRoles);
+            },
+
+            allowedMakeups(slug) {
+                const base = this.baseMakeups(slug);
+                if (this.linkedRoles.indexOf(slug) === -1) return base;
+                const combos = this.combos;
+                return base.filter(m => combos.some(c => c[slug] && c[slug].men === m.men));
+            },
+
+            narrowedAcross(slug) {
+                return this.allowedMakeups(slug).length < this.baseMakeups(slug).length;
+            },
+
+            anyMix(slug) {
+                const count = this.countOf(slug);
+                return count > 1 && this.allowedMakeups(slug).length === count + 1;
+            },
+
+            ruleCount(slug) {
+                const form = this.formFor(slug);
+                if (!form) return 0;
+                const across = this.crossForms.filter(rule => (rule.options || []).some(o => (o.conditions || []).some(
+                    c => c.roleSlug === slug || ((c.roleSlugs || []).indexOf(slug) !== -1)
+                ))).length;
+                return (form.who.options.length ? 1 : 0) + form.team.length + across;
+            },
+
+            tryRules(slug) {
+                const form = this.formFor(slug);
+                return form ? form.team.filter(r => r.strength === 'try') : [];
+            },
+
+            // ── Saving ───────────────────────────────────────────────────────
+
+            // ⚠ ONE SAVE AT A TIME. Clicking through a line-up is several
+            // changes a second, and two writes in flight can land in either
+            // order — the older one last would undo the newer. So a change made
+            // while a save is out waits, and the form as it stands then is what
+            // goes next.
+            async saveRole(slug) {
+                if (!this.chosen || !this.formFor(slug)) return;
+                if (this.roleProblems(slug).length) return;
+                if (this.savingRole) {
+                    this.saveAgain = Object.assign({}, this.saveAgain, { [slug]: true });
+                    return;
+                }
+                this.savingRole = slug;
                 this.error = '';
                 try {
-                    const saved = await Store.setSeriesCrossRoleRules(
-                        db, this.seriesId, Series.crossRoleRulesOf(nextSeries)
-                    );
-                    this.series = this.series.map(s => (
-                        s.id === this.seriesId ? Object.assign({}, s, { crossRoleRules: saved }) : s
-                    ));
+                    const map = await Store.setSeriesRoleSettings(db, this.seriesId, slug, this.settingsFor(slug));
+                    this.patchSeries({ roleSettings: map });
                 } catch (e) {
-                    console.error('Could not save the cross-Role rule:', e);
-                    this.error = 'That rule could not be saved — nothing was changed.';
+                    console.error('Could not save the role on this event:', e);
+                    this.error = (e && e.message) || 'That change could not be saved — nothing was changed.';
                 } finally {
-                    this.savingPairRule = false;
+                    this.savingRole = '';
+                }
+                const waiting = Object.keys(this.saveAgain || {});
+                this.saveAgain = {};
+                for (const next of waiting) await this.saveRole(next);
+            },
+
+            crossProblems() {
+                const out = [];
+                const slugs = (this.chosen && this.chosen.roleSlugs) || [];
+                this.crossForms.forEach(rule => (rule.options || []).forEach(o => (o.conditions || []).forEach(c => {
+                    if (c.kind === 'lineup') {
+                        Roles.validateRestriction({ kind: 'lineup', sexes: c.sexes }, [], { count: this.countOf(c.roleSlug) }).errors
+                            .forEach(e => out.push(e));
+                        if (slugs.indexOf(c.roleSlug) === -1) out.push('Choose a Role for each line-up.');
+                    }
+                    if (c.kind === 'notSameGroup' || c.kind === 'sameGroup') {
+                        const pair = c.roleSlugs || [];
+                        if (pair.length !== 2 || !pair[0] || !pair[1] || pair[0] === pair[1]) {
+                            out.push('A rule between Roles names two different Roles.');
+                        }
+                        if (!this.typeName(c.typeId)) out.push('Choose a relationship for each rule between Roles.');
+                    }
+                })));
+                return out.filter((e, i) => out.indexOf(e) === i);
+            },
+
+            async saveCross() {
+                if (!this.chosen || this.crossProblems().length) return;
+                // The same one-at-a-time rule as saveRole.
+                if (this.savingCross) { this.crossAgain = true; return; }
+                this.savingCross = true;
+                this.error = '';
+                try {
+                    const saved = await Store.setSeriesCrossRoleRules(db, this.seriesId, RoleRules.crossRulesFrom(this.crossForms));
+                    this.patchSeries({ crossRoleRules: saved });
+                } catch (e) {
+                    console.error('Could not save the rule across roles:', e);
+                    this.error = (e && e.message) || 'That rule could not be saved — nothing was changed.';
+                } finally {
+                    this.savingCross = false;
+                }
+                if (this.crossAgain) {
+                    this.crossAgain = false;
+                    await this.saveCross();
+                }
+            },
+
+            // The order of service Roles have no definition, so their rest is
+            // the one thing this Event says about them (EventsCore.roleIntensity).
+            async setLiturgicalRest(slug, raw) {
+                const value = Number(raw);
+                if (!this.chosen || !Number.isFinite(value) || value < 0) {
+                    this.error = 'Rest between turns has to be zero or more weeks.';
+                    return;
+                }
+                const map = Object.assign({}, this.chosen.liturgicalIntensity || {});
+                map[slug] = value;
+                this.error = '';
+                try {
+                    await db.collection('events').doc(this.seriesId).set({ liturgicalIntensity: map }, { merge: true });
+                    this.patchSeries({ liturgicalIntensity: map });
+                } catch (e) {
+                    console.error('Could not save the rest:', e);
+                    this.error = 'That rest could not be saved — nothing was changed.';
                 }
             },
 
@@ -1321,38 +1696,6 @@
             // nobody assigns here would sit empty and read as "nobody is
             // preaching".
 
-            get seriesRoles() {
-                const slugs = (this.chosen && this.chosen.roleSlugs) || [];
-                const locked = (this.chosen && this.chosen.lockedRoleSlugs) || [];
-                return slugs.map(slug => {
-                    const def = this.roleDefinitions.find(d => d.slug === slug);
-                    const slots = (def && def.slots) || [];
-                    return {
-                        slug: slug,
-                        name: this.roleName(slug),
-                        slots: slots,
-                        // What an editor is deciding is how many people have to
-                        // be there on the day. "Places" is the model's word for
-                        // it, and the model is not who is reading this.
-                        needed: slots.length
-                            ? 'Needs ' + slots.length + (slots.length === 1 ? ' person' : ' people')
-                            : 'Nobody needed yet',
-                        locked: locked.indexOf(slug) !== -1
-                            || Roles.LITURGICAL_SLUGS.indexOf(slug) !== -1,
-                    };
-                });
-            },
-
-            get liturgicalRoles() { return this.seriesRoles.filter(r => r.locked); },
-            get servantRoles() { return this.seriesRoles.filter(r => !r.locked); },
-
-            get seriesRolesAvailable() {
-                const on = (this.chosen && this.chosen.roleSlugs) || [];
-                return this.roleDefinitions
-                    .filter(d => Roles.LITURGICAL_SLUGS.indexOf(d.slug) === -1)
-                    .filter(d => on.indexOf(d.slug) === -1);
-            },
-
             // Which dates of this Event have people in a Role, and who.
             //
             // ⚠ Constrained to the viewer's OWN rungs. Asking for a rung they
@@ -1444,20 +1787,32 @@
                 }
             },
 
-            addSeriesRole(slug) {
+            // A Role added here gets this Event's own settings at once — one
+            // person, anyone, a week's rest unless the Role still carries older
+            // values — because a Role is only its name and what it involves
+            // (ADR 0085), and an Event reading it with no settings would have
+            // no places to fill.
+            async addSeriesRole(slug) {
                 if (!slug || !this.chosen) return;
-                return this.setSeriesRoles(((this.chosen.roleSlugs) || []).concat([slug]));
+                await this.setSeriesRoles(((this.chosen.roleSlugs) || []).concat([slug]));
+                this.buildRoleForms();
+                this.openRole = slug;
+                await this.saveRole(slug);
             },
 
-            // Dropping a Role from an Event drops the Cross-Role Rules naming
-            // it — `withoutRulesNaming` is the model's own words for why.
+            // Dropping a Role from an Event drops the rules naming it and its
+            // own settings here — the store writes both, and the page's copy
+            // follows (EventsCore.withoutRulesNaming says why).
             async removeSeriesRole(slug) {
                 if (!this.chosen) return;
-                const before = this.pairRules.length;
                 await this.setSeriesRoles(((this.chosen.roleSlugs) || []).filter(s => s !== slug));
-
-                const next = Series.withoutRulesNaming(this.chosen, slug);
-                if (Series.crossRoleRulesOf(next).length !== before) await this.savePairRules(next);
+                const next = Series.withoutRoleSettings(Series.withoutRulesNaming(this.chosen, slug), slug);
+                this.patchSeries({
+                    crossRoleRules: Series.crossRoleRulesOf(next),
+                    roleSettings: next.roleSettings || {},
+                });
+                this.crossForms = RoleRules.crossFormsFrom(Series.crossRoleRulesOf(next));
+                if (this.openRole === slug) this.openRole = null;
             },
 
             // ── Colour ───────────────────────────────────────────────────────

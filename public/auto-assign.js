@@ -92,7 +92,10 @@
 
             // ── Everything the solve needs ───────────────────────────────────
             people: [],
-            roleDefinitions: [],
+            // The Roles as stored; read them through `roleDefinitions`, which is
+            // the chosen Event's version of each (EventsCore.effectiveRole).
+            storedRoleDefinitions: [],
+            nonServingOpts: window.NonServing ? window.NonServing.EMPTY : { nonServing: null, groups: [] },
             relationships: [],
             groups: [],
             hidingTags: [],
@@ -598,7 +601,7 @@
                 ]);
 
                 this.people = people.docs.map(d => Object.assign({ id: d.id }, d.data()));
-                this.roleDefinitions = roles.docs.map(d => Object.assign({ id: d.id }, d.data()));
+                this.storedRoleDefinitions = roles.docs.map(d => Object.assign({ id: d.id }, d.data()));
                 this.relationships = rels.docs.map(d => d.data());
                 this.groups = groups.docs
                     .map(d => Object.assign({ id: d.id }, d.data()))
@@ -608,6 +611,7 @@
                     ));
 
                 await this.loadHidingTags();
+                if (window.NonServing) this.nonServingOpts = await window.NonServing.load(db);
                 await Promise.all([this.loadHistory(dates), this.loadLiturgy(dates)]);
             },
 
@@ -714,6 +718,16 @@
             // The MANAGED Roles this series carries, minus the liturgical ones —
             // those are never drawn as fillable places (ADR-0018 §2), and a
             // one-off Role has no definition for a solve to reason about.
+            // Who a Role needs, its rules and its rest belong to the Event that
+            // runs it, so the draft reasons about the chosen Event's version.
+            get roleDefinitions() {
+                return Events.rolesFor(this.chosen, this.storedRoleDefinitions);
+            },
+            // Setting the list sets the Roles as stored.
+            set roleDefinitions(defs) {
+                this.storedRoleDefinitions = defs || [];
+            },
+
             get draftableRoles() {
                 const carried = (this.chosen && this.chosen.roleSlugs) || [];
                 return carried
@@ -726,6 +740,9 @@
                 return Roles.assignablePeople(this.people, {
                     rank: this.rank,
                     hidingTags: this.hidingTags,
+                    // Whole tags and groups that do not serve (ADR 0086).
+                    nonServing: this.nonServingOpts.nonServing,
+                    groups: this.nonServingOpts.groups,
                 });
             },
 

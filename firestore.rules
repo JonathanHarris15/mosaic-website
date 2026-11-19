@@ -490,15 +490,18 @@ service cloud.firestore {
     // cap. Rules cannot loop, so each slot and restriction is left to
     // validateDefinition; the lists are only bounded. Fields this list does not
     // name may stay on an older Role, but no write may add or change one.
+    // A Role is its name and what it involves (ADR 0085). Who it needs, its
+    // rules and its rest are each Event's (events/{id}.roleSettings), so no
+    // write may add or change them here. A Role stored before still carries
+    // them until the migration strips them; they are bounded below meanwhile.
     function roleFields() {
-      return ['name', 'slug', 'family', 'slots', 'nextSlotSeq', 'restrictions',
-              'intensity', 'allowsAnotherRole', 'description'];
+      return ['name', 'slug', 'family', 'description'];
     }
 
     function roleShapeOk(d) {
       return d.name is string && d.name.size() > 0 && d.name.size() <= 200
         && d.get('family', '') == 'servant'
-        && d.slots is list && d.slots.size() > 0 && d.slots.size() <= 100
+        && (!('slots' in d) || (d.slots is list && d.slots.size() <= 100))
         && (!('slug' in d) || (d.slug is string && d.slug.size() <= 120
               && d.slug.matches('^[a-z0-9_]+$')))
         && (!('nextSlotSeq' in d) || (d.nextSlotSeq is int && d.nextSlotSeq >= 1))
@@ -1036,6 +1039,23 @@ service cloud.firestore {
 
     // The directory's tag vocabulary, including which tags hide people. Read
     // by the directory, so it is closed with it (MS-197, ADR-0031).
+    // Doesn't serve, for a whole tag or group (ADR 0086). One document for the
+    // church: the tag ids and Relationship Group ids whose people no rota ever
+    // offers. Here rather than on the tag or group because a group is an
+    // elder's record, and this is an editor's call — the same editors who may
+    // mark one Person (people/{id}.doesNotServe). Ids only, so reading it says
+    // nothing a signed-in account could not already see.
+    match /serving_settings/{docId} {
+      allow read: if isSignedIn();
+      allow create, update: if isEditor() && docId == 'church'
+        && request.resource.data.keys().hasOnly(['doesNotServeTagIds', 'doesNotServeGroupIds', 'updatedAt'])
+        && request.resource.data.get('doesNotServeTagIds', []) is list
+        && request.resource.data.get('doesNotServeTagIds', []).size() <= 200
+        && request.resource.data.get('doesNotServeGroupIds', []) is list
+        && request.resource.data.get('doesNotServeGroupIds', []).size() <= 200;
+      allow delete: if false;
+    }
+
     match /people_tags/{tagId} {
       allow read: if isSignedIn();
       allow create, update, delete: if isEditor() || canDecide();

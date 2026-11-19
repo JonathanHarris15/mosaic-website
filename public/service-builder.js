@@ -2886,6 +2886,9 @@ function personPicker(personRef, parent = null, suggestionsKey = null, field = n
             if (typeof PeoplePickerCore === 'undefined') return found;
             let list = PeoplePickerCore.finalizePickerList(found, registry, {
                 keepIds: [this.personRef && this.personRef.id],
+                // Whole tags and groups that do not serve (ADR 0086), read
+                // once per page; until it has loaded nobody extra is left out.
+                assignableOpts: window.NonServing ? window.NonServing.current : {},
             });
             const suggestions = this.suggestions;
             if (suggestions && suggestions.length) {
@@ -2907,6 +2910,8 @@ function personPicker(personRef, parent = null, suggestionsKey = null, field = n
         hadFuse: false,
         
         init() {
+            // Who does not serve, read once for the whole page (ADR 0086).
+            if (window.NonServing && typeof db !== 'undefined' && db) window.NonServing.load(db);
             // Keep local query in sync with incoming name
             this.$watch('personRef.name', (val) => {
                 this.query = val || '';

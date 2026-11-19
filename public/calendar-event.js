@@ -188,7 +188,10 @@
             // who was actually here — so it starts on the Event either way.
             tab: cfg.filesOnly ? 'files' : 'event',
             people: [],
-            roleDefinitions: [],
+            // The Roles as stored. Read them through `roleDefinitions`, which is
+            // this Event's version of each (EventsCore.effectiveRole).
+            storedRoleDefinitions: [],
+            nonServingOpts: window.NonServing ? window.NonServing.EMPTY : { nonServing: null, groups: [] },
             relationships: [],
             groups: [],
 
@@ -639,7 +642,18 @@
                     this.loadPeople(),
                     db.collection('roles').get(),
                 ]);
-                this.roleDefinitions = roles.docs.map(d => Object.assign({ id: d.id }, d.data()));
+                this.storedRoleDefinitions = roles.docs.map(d => Object.assign({ id: d.id }, d.data()));
+            },
+
+            // Who a Role needs, its rules and its rest belong to the Event that
+            // runs it, so everything on this page reads the Event's version.
+            // A one-off Event has no series and reads the Role as stored.
+            get roleDefinitions() {
+                return Events.rolesFor(this.series, this.storedRoleDefinitions);
+            },
+            // Setting the list sets the Roles as stored.
+            set roleDefinitions(defs) {
+                this.storedRoleDefinitions = defs || [];
             },
 
             // Loaded once, the first time somebody opens the picker, and kept.
@@ -667,6 +681,7 @@
                         this.people
                     ));
                 await this.loadHidingTags();
+                if (window.NonServing) this.nonServingOpts = await window.NonServing.load(db);
 
                 this.pickerDataLoaded = true;
             },
@@ -1373,6 +1388,9 @@
                 return Roles.assignablePeople(this.people, {
                     rank: this.rank,
                     hidingTags: this.hidingTags,
+                    // Whole tags and groups that do not serve (ADR 0086).
+                    nonServing: this.nonServingOpts.nonServing,
+                    groups: this.nonServingOpts.groups,
                 });
             },
 

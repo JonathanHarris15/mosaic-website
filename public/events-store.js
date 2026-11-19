@@ -518,6 +518,10 @@
                             // would freeze this one date at the roster the
                             // series had the last time anybody touched it.
                             seriesRoleSlugs: s.roleSlugs || [],
+                            // And what this series says each of those Roles
+                            // needs (EventsCore.effectiveRole) — the same
+                            // display-only stamp, stripped the same way.
+                            seriesRoleSettings: s.roleSettings || {},
                         },
                         o,
                         { time: rule.time || null }
@@ -592,6 +596,7 @@
         // dates somebody had already put people on.
         delete payload.seriesColour;
         delete payload.seriesRoleSlugs;
+        delete payload.seriesRoleSettings;
         // And `time`, for exactly the same reason — which this missed, so it
         // froze. `rebuildOccurrence` stamps the rule's time on for display, and
         // the first save of the date (a role, a visibility change) wrote it back
@@ -1518,12 +1523,22 @@
         // people. So the two are written together rather than leaving the
         // second to a later save that might not come.
         const kept = Events.crossRoleRulesOf(stored).filter(rule => (
-            ((rule && rule.roleSlugs) || []).every(slug => (roleSlugs || []).indexOf(slug) !== -1)
+            Events.rolesNamedBy(rule).every(slug => (roleSlugs || []).indexOf(slug) !== -1)
         ));
+
+        // A Role's settings on this Event go with it, for the same reason.
+        // Written whole: a merge would leave the dropped Role's key behind.
+        const settings = Object.assign({}, stored.roleSettings || {});
+        Object.keys(settings).forEach(slug => {
+            if ((roleSlugs || []).indexOf(slug) === -1) delete settings[slug];
+        });
 
         await db.collection(SERIES).doc(seriesId).set(
             { roleSlugs: roleSlugs, crossRoleRules: kept }, { merge: true }
         );
+        if (Object.keys(settings).length !== Object.keys(stored.roleSettings || {}).length) {
+            await db.collection(SERIES).doc(seriesId).update({ roleSettings: settings });
+        }
         return roleSlugs;
     }
 
@@ -1540,18 +1555,30 @@
         if (!stored) throw new Error('No such event series: ' + seriesId);
 
         const slugs = stored.roleSlugs || [];
-        const list = (rules || []).map(rule => ({
-            kind: rule.kind,
-            typeId: rule.typeId,
-            roleSlugs: ((rule && rule.roleSlugs) || []).slice(),
-        }));
+        // Two shapes: a plain pair rule, or an OR rule whose conditions each
+        // name the Role they are about (RolesCore — rules that can say OR).
+        const list = (rules || []).map(rule => (rule && rule.kind === 'anyOf'
+            ? JSON.parse(JSON.stringify({
+                kind: 'anyOf',
+                strength: rule.strength === 'try' ? 'try' : 'must',
+                options: rule.options || [],
+            }))
+            : {
+                kind: rule.kind,
+                typeId: rule.typeId,
+                roleSlugs: ((rule && rule.roleSlugs) || []).slice(),
+            }));
 
         list.forEach(rule => {
-            const pair = rule.roleSlugs;
-            if (pair.length !== 2 || pair[0] === pair[1]) {
-                throw new Error('A cross-Role rule names two different Roles.');
-            }
-            const missing = pair.filter(slug => slugs.indexOf(slug) === -1);
+            const pairs = rule.kind === 'anyOf'
+                ? [].concat(...rule.options.map(o => (o.conditions || []).filter(c => c && c.roleSlugs).map(c => c.roleSlugs)))
+                : [rule.roleSlugs];
+            pairs.forEach(pair => {
+                if (pair.length !== 2 || pair[0] === pair[1]) {
+                    throw new Error('A cross-Role rule names two different Roles.');
+                }
+            });
+            const missing = Events.rolesNamedBy(rule).filter(slug => slugs.indexOf(slug) === -1);
             if (missing.length) {
                 throw new Error(
                     'These Roles are not on "' + (stored.name || seriesId) + '", so a rule ' +
@@ -1562,6 +1589,29 @@
 
         await db.collection(SERIES).doc(seriesId).set({ crossRoleRules: list }, { merge: true });
         return list;
+    }
+
+    // One Role's settings on this Event — who it needs, its rules, its rest
+    // (EventsCore.effectiveRole). Checked against the series as it would stand,
+    // and refused for a Role the Event does not run. The map is written whole,
+    // because a Role slug is not safe to splice into a field path.
+    async function setSeriesRoleSettings(db, seriesId, roleSlug, settings) {
+        const stored = await loadSeries(db, seriesId);
+        if (!stored) throw new Error('No such event series: ' + seriesId);
+        const next = Events.withRoleSettings(
+            Object.assign({ id: seriesId }, stored), roleSlug, JSON.parse(JSON.stringify(settings || {}))
+        );
+        // Only this Role's settings are checked: an unrelated old problem on
+        // the series must not stop an editor fixing this one.
+        const check = Events.validateSeries({
+            id: seriesId,
+            name: stored.name || seriesId,
+            roleSlugs: stored.roleSlugs || [],
+            roleSettings: { [roleSlug]: next.roleSettings[roleSlug] },
+        });
+        if (!check.valid) throw new Error(check.errors[0]);
+        await db.collection(SERIES).doc(seriesId).update({ roleSettings: next.roleSettings });
+        return next.roleSettings;
     }
 
     // The time it starts. Written onto the RECURRENCE RULE rather than beside it,
@@ -2048,6 +2098,7 @@
         ensureSundayService,
         setSeriesRoles,
         setSeriesCrossRoleRules,
+        setSeriesRoleSettings,
         setSeriesTime,
         saveSeriesDetails,
         saveOccurrenceDetails,

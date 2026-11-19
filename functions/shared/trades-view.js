@@ -335,6 +335,8 @@
 
         return Roles.assignablePeople(people, {
             rank: opts.rank, hidingTags: opts.hidingTags,
+            // Whole tags and groups that do not serve (ADR 0086).
+            nonServing: opts.nonServing, groups: opts.groups,
         }).filter(p =>
             p.id !== opts.personId && already.indexOf(p.id) === -1)
             .map(p => inviteeRow(p, {

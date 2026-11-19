@@ -193,12 +193,6 @@ test('every liturgical Role reads as locked and every Servant Role as editable',
     }
 });
 
-test('a Servant Role reports how many people it needs', async () => {
-    const page = await mountPage({ roles: { r1: kidsDefinition() } });
-    const kids = page.roles.find(r => r.slug === 'kids_ministry');
-    assert.equal(page.peopleNeeded(kids), 3);
-});
-
 test('with no Servant Roles defined the page invites the user to create one', async () => {
     const page = await mountPage({ roles: {} });
     assert.equal(page.hasServantRoles, false);
@@ -222,14 +216,14 @@ test('a stored definition that would take a liturgical slug is quarantined, not 
 
 // ── Create, rename, delete (MS-137) ──────────────────────────────────────────
 
-test('a new Role starts from RolesCore.newDefinition — one either-slot, valid at once', async () => {
-    const page = await mountPage({ roles: {} });
-    await page.createRole('Setup Team');
-    const written = Object.values(stored('roles'));
-    assert.equal(written.length, 1);
-    assert.deepStrictEqual(written[0].slots, [{ id: 's1', requirement: Roles.REQUIREMENTS.EITHER }]);
-    assert.equal(written[0].slug, 'setup_team');
-    assert.equal(Roles.validateDefinition(written[0]).valid, true);
+test('a new Role is only its name and what it involves', async () => {
+    // Who it needs, its rules and its rest are each Event's (ADR 0085): an
+    // Event that adds the Role gives it its own settings then.
+    const page = await mountPage({ roles: {} }, { rank: 'super_admin' });
+    await page.createRole('Greeters');
+    const made = Object.values(stored('roles'))[0];
+    assert.deepStrictEqual(Object.keys(made).sort(), ['description', 'family', 'name', 'slug']);
+    assert.deepStrictEqual(Roles.validateDefinition(made).errors, []);
 });
 
 test('naming a Role after a liturgical Role is refused before anything is written', async () => {
@@ -294,12 +288,11 @@ test('an invalid definition never reaches Firestore, and every problem is report
     const page = await mountPage({ roles: { r1: kidsDefinition() } });
     page.startEdit(page.roleDefinitions.find(d => d.id === 'r1'));
     page.draft.name = '';
-    page.draft.slots = [];
+    page.draft.description = 'x'.repeat(Roles.MAX_DESCRIPTION + 1);
     await page.saveDraft();
     assert.equal(stored('roles').r1.name, 'Kids Ministry', 'the stored Role is untouched');
-    assert.ok(page.draftErrors.length >= 2, 'the name AND the missing slot are both reported');
+    assert.ok(page.draftErrors.length >= 2, 'the name AND the description are both reported');
     assert.ok(page.draftErrors.some(e => /name/i.test(e)));
-    assert.ok(page.draftErrors.some(e => /slot/i.test(e)));
 });
 
 test('a failed write leaves the on-screen list matching what is actually stored', async () => {
@@ -317,40 +310,6 @@ test('a failed write leaves the on-screen list matching what is actually stored'
 
 // ── The slot editor (MS-138) ─────────────────────────────────────────────────
 
-test('slots can be added, removed, and given a requirement', async () => {
-    const page = await mountPage({ roles: { r1: coffeeDefinition() } });
-    page.startEdit(page.roleDefinitions.find(d => d.id === 'r1'));
-    page.addSlot();
-    page.addSlot();
-    assert.equal(page.draftPeopleNeeded, 3);
-    page.setSlotRequirement('s2', Roles.REQUIREMENTS.MALE);
-    assert.equal(page.draft.slots[1].requirement, 'male');
-    page.removeSlot('s2');
-    assert.deepStrictEqual(page.draft.slots.map(s => s.id), ['s1', 's3'],
-        'ids are never re-issued — an assignment points at a specific slot');
-    assert.equal(page.draftPeopleNeeded, 2);
-});
-
-test('reordering changes only the order — identity and requirement travel with the slot', async () => {
-    const page = await mountPage({ roles: { r1: kidsDefinition() } });
-    page.startEdit(page.roleDefinitions.find(d => d.id === 'r1'));
-    page.moveSlot(0, 2);
-    assert.deepStrictEqual(page.draft.slots, [
-        { id: 's2', requirement: 'either' },
-        { id: 's3', requirement: 'either' },
-        { id: 's1', requirement: 'female' },
-    ]);
-});
-
-test('removing the last slot is refused — a Role with no slots is invalid', async () => {
-    const page = await mountPage({ roles: { r1: coffeeDefinition() } });
-    page.startEdit(page.roleDefinitions.find(d => d.id === 'r1'));
-    page.removeSlot('s1');
-    assert.equal(page.draft.slots.length, 1, 'the only slot survives');
-    assert.equal(page.toast.type, 'error');
-    assert.match(page.toast.message, /slot/i);
-});
-
 // There is no Cancel (MS-721): a Role saves itself, and leaving it sends what
 // was waiting. What leaving must never do is write a Role nobody changed.
 test('leaving a Role nobody changed writes nothing', async () => {
@@ -361,89 +320,12 @@ test('leaving a Role nobody changed writes nothing', async () => {
     assert.deepStrictEqual(stored('roles').r1, kidsDefinition());
 });
 
-test('editing a draft never mutates the stored definition until it is saved', async () => {
-    const page = await mountPage({ roles: { r1: kidsDefinition() } });
-    page.startEdit(page.roleDefinitions.find(d => d.id === 'r1'));
-    page.setSlotRequirement('s2', Roles.REQUIREMENTS.MALE);
-    assert.equal(page.roleDefinitions.find(d => d.id === 'r1').slots[1].requirement, 'either');
-    assert.equal(stored('roles').r1.slots[1].requirement, 'either');
-});
-
 // ── Tag restriction rules (MS-139) ───────────────────────────────────────────
-
-test('a Role can require a Tag and exclude a Tag, and both survive a save', async () => {
-    const page = await mountPage({ roles: { r1: kidsDefinition() } });
-    page.startEdit(page.roleDefinitions.find(d => d.id === 'r1'));
-    page.addTagRule(Roles.RESTRICTIONS.REQUIRE_TAG, KIDS_CLEARED);
-    page.addTagRule(Roles.RESTRICTIONS.EXCLUDE_TAG, SABBATICAL);
-    await page.saveDraft();
-    assert.deepStrictEqual(stored('roles').r1.restrictions, [
-        { kind: 'requireTag', tagId: KIDS_CLEARED },
-        { kind: 'excludeTag', tagId: SABBATICAL },
-    ]);
-});
-
-test('Tags are offered from the church\'s own Tags, not typed free-hand', async () => {
-    const page = await mountPage({ roles: {} });
-    assert.deepStrictEqual(
-        page.shepherdingTags.map(t => t.id).sort(),
-        [KIDS_CLEARED, SABBATICAL].sort()
-    );
-    const page2 = await mountPage({ roles: { r1: kidsDefinition() } });
-    page2.startEdit(page2.roleDefinitions.find(d => d.id === 'r1'));
-    page2.addTagRule(Roles.RESTRICTIONS.REQUIRE_TAG, 'a_tag_that_does_not_exist');
-    assert.equal(page2.draft.restrictions.length, 0, 'an unknown tag id is not accepted');
-});
 
 // ── Tags an elder keeps private ──────────────────────────────────────────────
 //
 // `hiddenFromOthers` is an elder saying the TAG is theirs. The name is the
 // private thing, so offering it in a rule picker has already leaked it.
-
-test('a tag an elder has hidden is never offered to an editor building a rule', async () => {
-    const page = await mountPage({
-        roles: { r1: kidsDefinition() },
-        people_tags: { ...TAGS, [DISCIPLINE]: { name: 'Under Discipline', hiddenFromOthers: true } },
-    }, { rank: 'editor' });
-
-    assert.deepStrictEqual(page.shepherdingTags.map(t => t.id).sort(), [KIDS_CLEARED, SABBATICAL].sort());
-    assert.deepStrictEqual(page.ruleValueOptions.map(o => o.id).sort(), [KIDS_CLEARED, SABBATICAL].sort());
-    assert.ok(
-        !JSON.stringify(page.ruleValueOptions).includes('Under Discipline'),
-        'the hidden tag\'s name must not reach the picker'
-    );
-
-    // And not by hand either: the id can be typed, the rule cannot be built.
-    page.startEdit(page.roleDefinitions.find(d => d.id === 'r1'));
-    page.addTagRule(Roles.RESTRICTIONS.REQUIRE_TAG, DISCIPLINE);
-    assert.equal(page.draft.restrictions.length, 0);
-});
-
-test('an elder still sees their own hidden tags — they are hidden from everyone else FOR elders', async () => {
-    for (const rank of ['elder', 'super_admin']) {
-        const page = await mountPage({
-            people_tags: { ...TAGS, [DISCIPLINE]: { name: 'Under Discipline', hiddenFromOthers: true } },
-        }, { rank });
-        assert.ok(page.shepherdingTags.some(t => t.id === DISCIPLINE), rank + ' should see the hidden tag');
-        assert.deepStrictEqual(page.hiddenTagIds, [], 'nothing is held back from ' + rank);
-    }
-});
-
-test('a rule already built on a hidden tag says it is private, not that it is broken', async () => {
-    const withRule = kidsDefinition();
-    withRule.restrictions = [{ kind: 'requireTag', tagId: DISCIPLINE }];
-    const page = await mountPage({
-        roles: { r1: withRule },
-        people_tags: { ...TAGS, [DISCIPLINE]: { name: 'Under Discipline', hiddenFromOthers: true } },
-    }, { rank: 'editor' });
-
-    const sentence = page.ruleSentence({ kind: 'requireTag', tagId: DISCIPLINE });
-    assert.doesNotMatch(sentence, /Under Discipline/, 'the name is the thing being hidden');
-    assert.doesNotMatch(sentence, /no longer exists/, 'a hidden tag is not a deleted one');
-    assert.match(sentence, /private/i);
-    // A tag that really is gone still reads as gone.
-    assert.match(page.ruleSentence({ kind: 'requireTag', tagId: 'tag_deleted' }), /no longer exists/);
-});
 
 // ── The write list, and the field that fell off it ───────────────────────────
 
@@ -480,22 +362,6 @@ test('clearing a description clears it, rather than leaving the old words', asyn
     assert.equal(Roles.descriptionOf(stored('roles').r1), null);
 });
 
-test('saving a Role does not drop the rest of it either', async () => {
-    // The write is WHOLE, so this is the shape of every version of this bug.
-    const page = await mountPage({ roles: { r1: kidsDefinition() }, people: PEOPLE });
-    page.startEdit(page.roleDefinitions.find(d => d.id === 'r1'));
-    page.draft.description = 'Two adults in the room at all times.';
-    page.addTagRule(Roles.RESTRICTIONS.REQUIRE_TAG, KIDS_CLEARED);
-    await page.saveDraft();
-
-    const saved = stored('roles').r1;
-    assert.equal(saved.description, 'Two adults in the room at all times.');
-    assert.equal(saved.slots.length, 3, 'the slots went');
-    assert.deepStrictEqual(saved.restrictions, [{ kind: 'requireTag', tagId: KIDS_CLEARED }]);
-    assert.equal(saved.slug, 'kids_ministry', 'the slug moved, orphaning its serve history');
-});
-
-
 test('EVERY field a new Role has is in the document a Role is stored as', () => {
     // ⚠ THE BUG THIS EXISTS FOR. `description` was added to the model, to the
     // form, and to five screens — and not to the object that was written. So
@@ -516,178 +382,13 @@ test('a description is stored trimmed, so what is read back is what is shown', (
     assert.equal(RoleEditor.definitionFrom(Object.assign(draft, { description: '   ' })).description, '');
 });
 
-test('a rule can be removed', async () => {
-    const page = await mountPage({ roles: { r1: kidsDefinition() } });
-    page.startEdit(page.roleDefinitions.find(d => d.id === 'r1'));
-    page.addTagRule(Roles.RESTRICTIONS.REQUIRE_TAG, KIDS_CLEARED);
-    page.addTagRule(Roles.RESTRICTIONS.EXCLUDE_TAG, SABBATICAL);
-    page.removeRule(0);
-    await page.saveDraft();
-    assert.deepStrictEqual(stored('roles').r1.restrictions, [{ kind: 'excludeTag', tagId: SABBATICAL }]);
-});
-
-test('the same Tag rule cannot be added twice', async () => {
-    const page = await mountPage({ roles: { r1: kidsDefinition() } });
-    page.startEdit(page.roleDefinitions.find(d => d.id === 'r1'));
-    page.addTagRule(Roles.RESTRICTIONS.REQUIRE_TAG, KIDS_CLEARED);
-    page.addTagRule(Roles.RESTRICTIONS.REQUIRE_TAG, KIDS_CLEARED);
-    assert.equal(page.draft.restrictions.length, 1);
-});
-
-test('each rule reads as a sentence a non-technical user can check', async () => {
-    const page = await mountPage({ roles: {}, relationship_types: { t1: MARRIAGE } });
-    assert.match(page.ruleSentence({ kind: 'requireTag', tagId: KIDS_CLEARED }), /Kids Cleared/);
-    assert.match(page.ruleSentence({ kind: 'requireTag', tagId: KIDS_CLEARED }), /must/i);
-    assert.match(page.ruleSentence({ kind: 'excludeTag', tagId: SABBATICAL }), /On Sabbatical/);
-    assert.match(page.ruleSentence({ kind: 'notTogether', typeId: 't1' }), /Marriage/);
-    // No raw field names leak into the sentence.
-    assert.doesNotMatch(page.ruleSentence({ kind: 'requireTag', tagId: KIDS_CLEARED }), /tagId|requireTag/);
-});
-
-test('saved Tag rules round-trip and the eligibility engine reads them untranslated', async () => {
-    const page = await mountPage({ roles: { r1: kidsDefinition() } });
-    page.startEdit(page.roleDefinitions.find(d => d.id === 'r1'));
-    page.addTagRule(Roles.RESTRICTIONS.REQUIRE_TAG, KIDS_CLEARED);
-    await page.saveDraft();
-
-    const reopened = await mountPage({ roles: stored('roles') });
-    const def = reopened.roleDefinitions.find(d => d.id === 'r1');
-    assert.deepStrictEqual(def.restrictions, [{ kind: 'requireTag', tagId: KIDS_CLEARED }]);
-
-    const verdicts = Roles.candidatesFor(def, def.slots[1], {
-        people: [
-            { id: 'ann', sex: 'female', tags: [KIDS_CLEARED] },
-            { id: 'ben', sex: 'male', tags: [] },
-        ],
-        assigned: [],
-    });
-    assert.equal(verdicts.find(v => v.personId === 'ann').eligible, true);
-    assert.equal(verdicts.find(v => v.personId === 'ben').eligible, false);
-    assert.equal(verdicts.find(v => v.personId === 'ben').reason, Roles.REASONS.MISSING_REQUIRED_TAG);
-});
-
 // ── Relationship restriction rules (MS-140) ──────────────────────────────────
-
-test('the Relationship Type query is constrained to shared Types', async () => {
-    await mountPage({ relationship_types: { t1: MARRIAGE, t2: DISCIPLESHIP } });
-    const q = queriesFor('relationship_types');
-    assert.equal(q.length, 1);
-    assert.ok(
-        q[0].filters.some(f => f.field === 'sharedWithEditors' && f.op === '==' && f.value === true),
-        'an unconstrained query errors outright — it does not return fewer rows'
-    );
-});
-
-test('only Shared Relationship Types are offered, and an unshared one is nowhere on the page', async () => {
-    const page = await mountPage({ relationship_types: { t1: MARRIAGE, t2: DISCIPLESHIP } });
-    assert.deepStrictEqual(page.sharedRelationshipTypes.map(t => t.id), ['t1']);
-    assert.deepStrictEqual(page.relationshipRuleOptions.map(t => t.id), ['t1']);
-    const page_json = JSON.stringify({
-        types: page.sharedRelationshipTypes,
-        options: page.relationshipRuleOptions,
-        notice: page.relationshipTypesNotice,
-    });
-    assert.doesNotMatch(page_json, /Discipleship/, 'an unshared Type is not named, listed, or hinted at');
-});
-
-test('the page behaves identically for an elder — it is not a second route into shepherding data', async () => {
-    const asEditor = await mountPage({ relationship_types: { t1: MARRIAGE, t2: DISCIPLESHIP } });
-    asEditor.currentPermissionLevel = 'editor';
-    const asElder = await mountPage({ relationship_types: { t1: MARRIAGE, t2: DISCIPLESHIP } });
-    asElder.currentPermissionLevel = 'elder';
-    assert.deepStrictEqual(
-        asElder.relationshipRuleOptions.map(t => t.id),
-        asEditor.relationshipRuleOptions.map(t => t.id)
-    );
-});
-
-test('a group-kind shared Type is not offered as a pair rule', async () => {
-    const page = await mountPage({ relationship_types: { t1: MARRIAGE, t3: HOUSE_GROUP } });
-    assert.deepStrictEqual(page.relationshipRuleOptions.map(t => t.id), ['t1'],
-        'a "may not serve together" rule connects two people');
-});
-
-test('a permission failure says so rather than looking like an empty church', async () => {
-    const page = await mountPage({ relationship_types: { t1: MARRIAGE } }, { deny: ['relationship_types'] });
-    assert.equal(page.relationshipTypesDenied, true);
-    assert.match(page.relationshipTypesNotice, /permission|couldn't|could not/i);
-    assert.doesNotMatch(page.relationshipTypesNotice, /^No relationship types$/i);
-});
-
-test('when nothing is shared yet the page says so and points at an elder', async () => {
-    const page = await mountPage({ relationship_types: { t2: DISCIPLESHIP } });
-    assert.deepStrictEqual(page.relationshipRuleOptions, []);
-    assert.match(page.relationshipTypesNotice, /elder/i);
-});
-
-test('a "may not serve together" rule can be added and saved', async () => {
-    const page = await mountPage({ roles: { r1: kidsDefinition() }, relationship_types: { t1: MARRIAGE } });
-    page.startEdit(page.roleDefinitions.find(d => d.id === 'r1'));
-    page.addRelationshipRule('t1');
-    await page.saveDraft();
-    assert.deepStrictEqual(stored('roles').r1.restrictions, [{ kind: 'notTogether', typeId: 't1' }]);
-});
-
-test('a rule naming an unshared Type is refused rather than saved to match nobody', async () => {
-    const page = await mountPage({ roles: { r1: kidsDefinition() }, relationship_types: { t1: MARRIAGE } });
-    page.startEdit(page.roleDefinitions.find(d => d.id === 'r1'));
-    page.addRelationshipRule('t2'); // Discipleship — never offered here
-    assert.equal(page.draft.restrictions.length, 0);
-});
-
-test('a rule whose Type is later unshared degrades safely — the Role still loads, the rule reads unavailable', async () => {
-    const withRule = kidsDefinition();
-    withRule.restrictions = [{ kind: 'notTogether', typeId: 't1' }];
-    // The elder has since made Marriage private again.
-    const page = await mountPage({
-        roles: { r1: withRule },
-        relationship_types: { t1: { ...MARRIAGE, sharedWithEditors: false } },
-    });
-    const def = page.roleDefinitions.find(d => d.id === 'r1');
-    assert.equal(def.restrictions.length, 1, 'the rule is not silently dropped');
-    assert.equal(page.isRuleAvailable(def.restrictions[0]), false);
-    assert.match(page.ruleSentence(def.restrictions[0]), /unavailable|no longer|elder/i);
-    page.startEdit(def);
-    assert.ok(page.draft, 'the Role still opens for editing');
-});
-
-test('saved relationship rules round-trip through the eligibility engine', async () => {
-    const page = await mountPage({ roles: { r1: kidsDefinition() }, relationship_types: { t1: MARRIAGE } });
-    page.startEdit(page.roleDefinitions.find(d => d.id === 'r1'));
-    page.addRelationshipRule('t1');
-    await page.saveDraft();
-
-    const reopened = await mountPage({ roles: stored('roles'), relationship_types: { t1: MARRIAGE } });
-    const def = reopened.roleDefinitions.find(d => d.id === 'r1');
-    const verdicts = Roles.candidatesFor(def, def.slots[1], {
-        people: [{ id: 'ann', sex: 'female' }, { id: 'ben', sex: 'male' }],
-        relationships: [{ typeId: 't1', fromId: 'ann', toId: 'ben' }],
-        assigned: [{ slotId: 's1', personId: 'ann' }],
-    });
-    assert.equal(verdicts.find(v => v.personId === 'ben').eligible, false);
-    assert.equal(verdicts.find(v => v.personId === 'ben').reason, Roles.REASONS.RELATIONSHIP_CONFLICT);
-});
 
 // ── How the list and the editor read (the two-pane redesign) ─────────────────
 //
 // The list is the navigation now: a row IS the edit control, and it has to say
 // enough at a glance that you know which Role to open. These are the sentences
 // it says.
-
-test('a Role row says how many people it needs and how many rules it carries', async () => {
-    const withRule = kidsDefinition();
-    withRule.restrictions = [{ kind: 'requireTag', tagId: KIDS_CLEARED }];
-    const page = await mountPage({ roles: { r1: withRule, r2: coffeeDefinition() } });
-    const kids = page.roles.find(r => r.slug === 'kids_ministry');
-    const coffee = page.roles.find(r => r.slug === 'coffee');
-
-    assert.equal(page.peopleNeededLabel(kids), 'Needs 3 people');
-    assert.equal(page.peopleNeededLabel(coffee), 'Needs 1 person', 'one person, not "1 people"');
-    assert.equal(page.ruleCountLabel(kids), '1 rule');
-    assert.equal(page.ruleCountLabel(coffee), '0 rules');
-    assert.equal(page.restrictionCount(coffee), 0);
-    assert.equal(page.roleCountLabel, '2 roles');
-});
 
 test('the roles count covers the Servant Roles the list actually shows', async () => {
     // The liturgical Roles live in their own locked card and are not counted here.
@@ -729,260 +430,13 @@ test('deleting nothing does nothing', async () => {
     assert.equal(Object.keys(stored('roles')).length, 1);
 });
 
-test('each kind of rule gets its own glyph, so a list of rules is scannable', async () => {
-    const page = await mountPage({ roles: {} });
-    const icons = [
-        page.ruleIcon({ kind: 'requireTag', tagId: KIDS_CLEARED }),
-        page.ruleIcon({ kind: 'excludeTag', tagId: SABBATICAL }),
-        page.ruleIcon({ kind: 'notTogether', typeId: 't1' }),
-    ];
-    assert.equal(new Set(icons).size, 3, 'a required tag must not look like an excluded one');
-    icons.forEach(icon => assert.ok(icon && typeof icon === 'string'));
-});
-
 // ── Composing a rule from one pair of pickers ────────────────────────────────
-
-test('the rule kinds on offer include a relationship rule only when a Type is shared', async () => {
-    // The allowlist is always on offer and always last: it needs nothing shared
-    // to build, and it is the blunt one — right for the four who serve
-    // communion, wrong for anything a tag could say.
-    // The GROUP rules are always on offer too, because Family and Marriage come
-    // from the Membership Directory and need nobody to share them.
-    const withShared = await mountPage({ relationship_types: { t1: MARRIAGE } });
-    assert.deepStrictEqual(
-        withShared.ruleKindOptions.map(o => o.value),
-        ['requireTag', 'excludeTag', 'notTogether', 'notSameGroup', 'sameGroup', 'allowlist']
-    );
-
-    const withNone = await mountPage({ relationship_types: { t2: DISCIPLESHIP } });
-    assert.deepStrictEqual(withNone.ruleKindOptions.map(o => o.value),
-        ['requireTag', 'excludeTag', 'notSameGroup', 'sameGroup', 'allowlist'],
-        'the PAIRWISE rule is the dead end without a shared Type; the group ones never are');
-    // And every label is a sentence opener, not a field name.
-    withShared.ruleKindOptions.forEach(o => assert.doesNotMatch(o.label, /Tag[A-Z]|kind|typeId/));
-});
-
-test('the second picker follows the first — tags for a tag rule, shared Types for a pair rule', async () => {
-    const page = await mountPage({ relationship_types: { t1: MARRIAGE, t2: DISCIPLESHIP } });
-
-    page.newRuleKind = Roles.RESTRICTIONS.REQUIRE_TAG;
-    assert.deepStrictEqual(page.ruleValueOptions.map(o => o.id).sort(), [KIDS_CLEARED, SABBATICAL].sort());
-    assert.match(page.ruleValuePlaceholder, /tag/i);
-
-    page.newRuleKind = Roles.RESTRICTIONS.NOT_TOGETHER;
-    assert.deepStrictEqual(page.ruleValueOptions.map(o => o.id), ['t1'],
-        'an unshared Type is never offered, whichever picker is asking');
-    assert.match(page.ruleValuePlaceholder, /relationship/i);
-});
-
-test('adding a composed rule routes to the right kind and clears the picker', async () => {
-    const page = await mountPage({ roles: { r1: kidsDefinition() }, relationship_types: { t1: MARRIAGE } });
-    page.startEdit(page.roleDefinitions.find(d => d.id === 'r1'));
-
-    page.newRuleKind = Roles.RESTRICTIONS.EXCLUDE_TAG;
-    page.newRuleValue = SABBATICAL;
-    page.addComposedRule();
-
-    page.newRuleKind = Roles.RESTRICTIONS.NOT_TOGETHER;
-    page.newRuleValue = 't1';
-    page.addComposedRule();
-
-    assert.deepStrictEqual(page.draft.restrictions, [
-        { kind: 'excludeTag', tagId: SABBATICAL },
-        { kind: 'notTogether', typeId: 't1' },
-    ]);
-    assert.equal(page.newRuleValue, '', 'the picker resets, ready for the next rule');
-});
-
-test('adding a rule with nothing chosen says so rather than adding a rule about nothing', async () => {
-    const page = await mountPage({ roles: { r1: kidsDefinition() } });
-    page.startEdit(page.roleDefinitions.find(d => d.id === 'r1'));
-    page.newRuleValue = '';
-    page.addComposedRule();
-    assert.equal(page.draft.restrictions.length, 0);
-    assert.equal(page.toast.type, 'error');
-});
 
 // ── Group restriction rules (MS-141 reaching the rule builder) ───────────────
 //
 // The engine has understood same-group / not-same-group since MS-141; this page
 // is what lets anyone author one. A church whose only Shared Type is a Group
 // must not be told "nothing has been shared with editors yet".
-
-test('shared Group-kind Types are offered for group rules, and pairwise ones are not', async () => {
-    const page = await mountPage({ relationship_types: { t1: MARRIAGE, t3: HOUSE_GROUP } });
-    // Family and Marriage lead, always: they are the commonest rule in a church
-    // and the Membership Directory already knows them.
-    assert.deepStrictEqual(page.groupRuleOptions.map(t => t.id), ['family', 'marriage', 't3']);
-    assert.deepStrictEqual(page.relationshipRuleOptions.map(t => t.id), ['t1'],
-        'the two lists stay separate — a Type is one kind or the other');
-});
-
-test('an unshared Group Type is offered nowhere', async () => {
-    const page = await mountPage({
-        relationship_types: { t3: { ...HOUSE_GROUP, sharedWithEditors: false } },
-    });
-    assert.deepStrictEqual(page.customGroupTypes, [],
-        'the directory pair are always there; a CUSTOM Type still has to be shared');
-    assert.doesNotMatch(JSON.stringify(page.groupRuleOptions), /House Group/);
-    assert.doesNotMatch(JSON.stringify(page.ruleKindOptions) + page.relationshipTypesNotice, /House Group/);
-});
-
-test('the rule kinds follow what is actually shared, pairwise and group independently', async () => {
-    const groupOnly = await mountPage({ relationship_types: { t3: HOUSE_GROUP } });
-    assert.deepStrictEqual(groupOnly.ruleKindOptions.map(o => o.value),
-        ['requireTag', 'excludeTag', 'notSameGroup', 'sameGroup', 'allowlist'],
-        'a shared Group Type must open the group rules even with no pairwise Type');
-
-    const pairOnly = await mountPage({ relationship_types: { t1: MARRIAGE } });
-    assert.deepStrictEqual(pairOnly.ruleKindOptions.map(o => o.value),
-        ['requireTag', 'excludeTag', 'notTogether', 'notSameGroup', 'sameGroup', 'allowlist'],
-        'the group rules do not wait on a shared Type any more');
-
-    const both = await mountPage({ relationship_types: { t1: MARRIAGE, t3: HOUSE_GROUP } });
-    assert.deepStrictEqual(both.ruleKindOptions.map(o => o.value),
-        ['requireTag', 'excludeTag', 'notTogether', 'notSameGroup', 'sameGroup', 'allowlist']);
-});
-
-test('a shared Group Type is not reported as nothing being shared', async () => {
-    // The bug this replaces: the page said "no relationship types have been
-    // shared with editors yet" to a church that had shared exactly one.
-    const page = await mountPage({ relationship_types: { t3: HOUSE_GROUP } });
-    assert.equal(page.relationshipTypesNotice, '', 'there is something to build a rule from');
-
-    const nothing = await mountPage({ relationship_types: { t2: DISCIPLESHIP } });
-    assert.match(nothing.relationshipTypesNotice, /elder/i);
-});
-
-test('the group pickers offer groups, and composing a group rule saves one', async () => {
-    const page = await mountPage({
-        roles: { r1: kidsDefinition() },
-        relationship_types: { t1: MARRIAGE, t3: HOUSE_GROUP },
-    });
-    page.startEdit(page.roleDefinitions.find(d => d.id === 'r1'));
-
-    page.newRuleKind = Roles.RESTRICTIONS.SAME_GROUP;
-    assert.deepStrictEqual(page.ruleValueOptions.map(o => o.id), ['family', 'marriage', 't3']);
-    assert.match(page.ruleValuePlaceholder, /group/i);
-    page.newRuleValue = 't3';
-    page.addComposedRule();
-
-    page.newRuleKind = Roles.RESTRICTIONS.NOT_SAME_GROUP;
-    page.newRuleValue = 't3';
-    page.addComposedRule();
-
-    await page.saveDraft();
-    assert.deepStrictEqual(stored('roles').r1.restrictions, [
-        { kind: 'sameGroup', typeId: 't3' },
-        { kind: 'notSameGroup', typeId: 't3' },
-    ]);
-});
-
-test('a group rule against a pairwise Type is refused before it is written', async () => {
-    // RolesCore calls this a mistake rather than a no-op; the page must not
-    // build one in the first place.
-    const page = await mountPage({
-        roles: { r1: kidsDefinition() },
-        relationship_types: { t1: MARRIAGE, t3: HOUSE_GROUP },
-    });
-    page.startEdit(page.roleDefinitions.find(d => d.id === 'r1'));
-    page.addGroupRule(Roles.RESTRICTIONS.SAME_GROUP, 't1');
-    assert.equal(page.draft.restrictions.length, 0);
-    assert.equal(page.toast.type, 'error');
-});
-
-test('group rules read as sentences and carry their own glyphs', async () => {
-    const page = await mountPage({ relationship_types: { t1: MARRIAGE, t3: HOUSE_GROUP } });
-    const same = { kind: 'sameGroup', typeId: 't3' };
-    const notSame = { kind: 'notSameGroup', typeId: 't3' };
-
-    assert.match(page.ruleSentence(same), /House Group/);
-    assert.match(page.ruleSentence(notSame), /House Group/);
-    assert.notEqual(page.ruleSentence(same), page.ruleSentence(notSame),
-        'the two rules are opposites and must not read alike');
-
-    const icons = [page.ruleIcon(same), page.ruleIcon(notSame), page.ruleIcon({ kind: 'notTogether', typeId: 't1' })];
-    assert.equal(new Set(icons).size, 3);
-});
-
-// ⚠ THE BUG THIS REPLACES. A rule naming Marriage rendered as "unavailable —
-// an elder is no longer sharing the relationship type it uses", because the
-// label looked the type up in `sharedRelationshipTypes` alone. Wrong, and
-// unfixable by the person reading it: no elder can share a type that is not a
-// document.
-test('a rule naming Family or Marriage reads as a sentence, not as unavailable', async () => {
-    // Deliberately a church with NOTHING shared.
-    const page = await mountPage({ relationship_types: {} });
-
-    const marriage = { kind: 'notSameGroup', typeId: 'marriage' };
-    const family = { kind: 'notSameGroup', typeId: 'family' };
-
-    assert.equal(page.isRuleAvailable(marriage), true);
-    assert.equal(page.isRuleAvailable(family), true);
-    assert.match(page.ruleSentence(marriage), /Marriage/);
-    assert.match(page.ruleSentence(family), /Family/);
-    assert.doesNotMatch(page.ruleSentence(marriage), /unavailable/);
-});
-
-// Still true of a CUSTOM type, and still worth saying: an elder really can
-// unshare one after a rule was written against it.
-test('a rule naming a type nobody shares any more still says so', async () => {
-    const page = await mountPage({ relationship_types: {} });
-    const orphan = { kind: 'notSameGroup', typeId: 't3' };
-
-    assert.equal(page.isRuleAvailable(orphan), false);
-    assert.match(page.ruleSentence(orphan), /unavailable/);
-});
-
-test('saved group rules round-trip through the eligibility engine', async () => {
-    const page = await mountPage({ roles: { r1: coffeeDefinition() }, relationship_types: { t3: HOUSE_GROUP } });
-    page.startEdit(page.roleDefinitions.find(d => d.id === 'r1'));
-    page.addSlot();
-    page.addGroupRule(Roles.RESTRICTIONS.NOT_SAME_GROUP, 't3');
-    await page.saveDraft();
-
-    const reopened = await mountPage({ roles: stored('roles'), relationship_types: { t3: HOUSE_GROUP } });
-    const def = reopened.roleDefinitions.find(d => d.id === 'r1');
-    assert.equal(Roles.validateDefinition(def).valid, true);
-    assert.equal(reopened.isRuleAvailable(def.restrictions[0]), true);
-
-    // Ann is already seated; Ben shares her group, so he is out.
-    const verdicts = Roles.candidatesFor(def, def.slots[1], {
-        people: [{ id: 'ann', sex: 'female' }, { id: 'ben', sex: 'male' }, { id: 'cal', sex: 'male' }],
-        groups: [{ id: 'g1', typeId: 't3', leaderId: 'ann', memberIds: ['ben'] }],
-        assigned: [{ slotId: 's1', personId: 'ann' }],
-    });
-    assert.equal(verdicts.find(v => v.personId === 'ben').eligible, false,
-        'the leader counts as being in her own group');
-    assert.equal(verdicts.find(v => v.personId === 'cal').eligible, true);
-});
-
-test('the demo: Kids Ministry with three slots, a Tag rule and a couple rule, reopened unchanged', async () => {
-    const page = await mountPage({ roles: {}, relationship_types: { t1: MARRIAGE } });
-    await page.createRole('Kids Ministry');
-    const id = Object.keys(stored('roles'))[0];
-    page.startEdit(page.roleDefinitions.find(d => d.id === id));
-    page.setSlotRequirement('s1', Roles.REQUIREMENTS.FEMALE);
-    page.addSlot();
-    page.addSlot();
-    page.addTagRule(Roles.RESTRICTIONS.REQUIRE_TAG, KIDS_CLEARED);
-    page.addRelationshipRule('t1');
-    await page.saveDraft();
-
-    const reopened = await mountPage({ roles: stored('roles'), relationship_types: { t1: MARRIAGE } });
-    const def = reopened.roleDefinitions.find(d => d.id === id);
-    assert.equal(def.name, 'Kids Ministry');
-    assert.deepStrictEqual(def.slots, [
-        { id: 's1', requirement: 'female' },
-        { id: 's2', requirement: 'either' },
-        { id: 's3', requirement: 'either' },
-    ]);
-    assert.deepStrictEqual(def.restrictions, [
-        { kind: 'requireTag', tagId: KIDS_CLEARED },
-        { kind: 'notTogether', typeId: 't1' },
-    ]);
-    assert.equal(Roles.validateDefinition(def).valid, true);
-});
 
 // ── The Roles Manager on a phone (MS-99) ─────────────────────────────────────
 //
@@ -1000,7 +454,9 @@ const path = require('node:path');
 const PUBLIC = path.join(__dirname, '..', 'public');
 
 const rolesManagerHtml = () => fs.readFileSync(path.join(PUBLIC, 'roles-manager.html'), 'utf8');
-const rolesManagerJs = () => fs.readFileSync(path.join(PUBLIC, 'roles-manager.js'), 'utf8');
+// Line endings normalised: a Windows checkout reads CRLF, and the shape
+// checks below are written with \n.
+const rolesManagerJs = () => fs.readFileSync(path.join(PUBLIC, 'roles-manager.js'), 'utf8').replace(/\r\n/g, '\n');
 
 test('the Roles Manager can actually enter the phone shell', () => {
     // A page can carry every `html.shell-mobile` rule in the world and never
@@ -1063,41 +519,6 @@ test('the phone never draws two headers, or two back arrows', () => {
     const back = html.slice(0, html.indexOf('Back to the roles list'));
     assert.doesNotMatch(back.slice(-400), /<template x-if="!inShell">/,
         'an open Role has no way back to the list on a phone');
-});
-
-test('the editor bar clears the shell header instead of hiding behind it', () => {
-    // Both are sticky at the top of the same scrollport and the shell's sits at
-    // z-index 1000. Pinned at 0 the editor's bar — the Role\'s name, its count,
-    // and the only delete on a phone — would never be seen again.
-    assert.match(rolesManagerHtml(), /html\.shell-mobile \.rm-editor-bar\s*{\s*top:\s*var\(--msh-height/);
-});
-
-test('a phone row is a card, and it does not offer delete next to open', () => {
-    const html = rolesManagerHtml();
-    // No pointer means no hover, so a row that only shows its edge on hover
-    // shows nothing at all.
-    const rule = html.match(/html\.shell-mobile \.rm-role-row\s*{([^}]*)}/)[1];
-    assert.match(rule, /border/,
-        'the rows are an undifferentiated stack on a phone');
-
-    // ⚠ DELETE IS NOT ON THE ROW AT ALL any more, at any width (MS-234). It
-    // used to be rendered on a desktop and gated off a phone, which is the
-    // arrangement the next test's comment describes at length. The hazard it
-    // was guarding — a destructive control a thumb-width from the tap that
-    // OPENS a Role — is now gone rather than gated, and the only delete is in
-    // the open Role's own head, where nothing else is competing for the tap.
-    const rows = html.slice(html.indexOf('<ul x-show="hasServantRoles"'), html.indexOf('</ul>', html.indexOf('<ul x-show="hasServantRoles"')));
-    assert.doesNotMatch(rows, /deleteRole/,
-        'a Role row offers delete beside the tap that opens the Role');
-    assert.match(html, /deleteRole\(draftRole\)/,
-        'the open Role has no delete, so a Role cannot be removed at all');
-
-    // And the row rule must not paint over the selected row: the selection is
-    // `.m-picklist__item--current`, one class, and this rule is two — so a
-    // background set here would win on specificity and the selection would
-    // vanish.
-    assert.doesNotMatch(rule, /background/,
-        'the phone row rule repaints the selected row as unselected');
 });
 
 test('being refused never throws you out of the app', () => {
@@ -1365,156 +786,7 @@ const PEOPLE = {
     p3: { name: 'Katherine Johnson' },
 };
 
-test('opening a Role shows the defaults rather than two empty controls', async () => {
-    const page = await mountPage({ roles: { r1: coffeeDefinition() }, people: PEOPLE });
-    page.startEdit(page.roleDefinitions.find(d => d.id === 'r1'));
-
-    assert.equal(page.draft.intensity, 1, 'a Role nobody has configured owes one week');
-    assert.equal(page.draft.allowsAnotherRole, false, 'and uses up the morning');
-});
-
-test('intensity and exclusivity are stored on the Role', async () => {
-    const page = await mountPage({ roles: { r1: coffeeDefinition() }, people: PEOPLE });
-    page.startEdit(page.roleDefinitions.find(d => d.id === 'r1'));
-    page.draft.intensity = 4;
-    page.draft.allowsAnotherRole = true;
-    await page.saveDraft();
-
-    assert.equal(stored('roles').r1.intensity, 4);
-    assert.equal(stored('roles').r1.allowsAnotherRole, true);
-});
-
-test('a cleared intensity box is refused, never silently saved as a free job', async () => {
-    // A number input hands back '' when emptied, and Number('') is 0 — a REAL
-    // intensity meaning the job costs nothing. Saving that silently would empty
-    // the rest budget of whoever does it, so validation stops the save instead.
-    const page = await mountPage({ roles: { r1: coffeeDefinition() }, people: PEOPLE });
-    page.startEdit(page.roleDefinitions.find(d => d.id === 'r1'));
-    page.draft.intensity = '';
-    await page.saveDraft();
-
-    assert.equal(stored('roles').r1.intensity, undefined, 'nothing was written');
-    assert.match(page.draftErrors.join(' '), /intensity/i);
-});
-
-// ⚠ THE BUG THIS REPLACES. Plain `x-model` on a number input writes a STRING,
-// and the model reads intensity strictly — so the moment anybody typed a new
-// number the Role became unsaveable, with an error blaming the value they had
-// just correctly entered.
-test('a typed intensity saves, string or not', async () => {
-    const page = await mountPage({ roles: { r1: coffeeDefinition() }, people: PEOPLE });
-    page.startEdit(page.roleDefinitions.find(d => d.id === 'r1'));
-
-    page.draft.intensity = '1.2';           // what the box actually hands back
-    assert.deepEqual(page.draftErrors, [], 'the number they typed is not a problem');
-
-    await page.saveDraft();
-    assert.equal(stored('roles').r1.intensity, 1.2, 'stored as a number, never a string');
-});
-
-test('an intensity that is not a number at all is still refused', async () => {
-    const page = await mountPage({ roles: { r1: coffeeDefinition() }, people: PEOPLE });
-    page.startEdit(page.roleDefinitions.find(d => d.id === 'r1'));
-
-    page.draft.intensity = 'soon';
-    assert.match(page.draftErrors.join(' '), /intensity/i);
-
-    page.draft.intensity = '-2';
-    assert.match(page.draftErrors.join(' '), /negative/i);
-});
-
-test('intensity 0 is kept, because a free job is a real answer', async () => {
-    const page = await mountPage({ roles: { r1: coffeeDefinition() }, people: PEOPLE });
-    page.startEdit(page.roleDefinitions.find(d => d.id === 'r1'));
-    page.draft.intensity = 0;
-    await page.saveDraft();
-
-    assert.equal(stored('roles').r1.intensity, 0);
-});
-
 // ── The allowlist ────────────────────────────────────────────────────────────
-
-test('an allowlist is built from people and stored as one rule, not one per person', async () => {
-    const page = await mountPage({ roles: { r1: coffeeDefinition() }, people: PEOPLE });
-    page.startEdit(page.roleDefinitions.find(d => d.id === 'r1'));
-
-    page.newRuleKind = Roles.RESTRICTIONS.ALLOWLIST;
-    page.newAllowlistPick = 'p1';
-    page.addToNewAllowlist();
-    page.newAllowlistPick = 'p3';
-    page.addToNewAllowlist();
-    page.addComposedRule();
-
-    assert.deepStrictEqual(page.draft.restrictions, [
-        { kind: 'allowlist', personIds: ['p1', 'p3'] },
-    ]);
-});
-
-test('adding an allowlist replaces any earlier one — a Role has one list', async () => {
-    const page = await mountPage({ roles: { r1: coffeeDefinition() }, people: PEOPLE });
-    page.startEdit(page.roleDefinitions.find(d => d.id === 'r1'));
-    page.newRuleKind = Roles.RESTRICTIONS.ALLOWLIST;
-
-    page.newAllowlistPick = 'p1';
-    page.addToNewAllowlist();
-    page.addComposedRule();
-
-    page.newAllowlistPick = 'p2';
-    page.addToNewAllowlist();
-    page.addComposedRule();
-
-    const lists = page.draft.restrictions.filter(r => r.kind === 'allowlist');
-    assert.equal(lists.length, 1);
-    assert.deepStrictEqual(lists[0].personIds, ['p2']);
-});
-
-test('an empty allowlist is refused rather than saved as a Role nobody can fill', async () => {
-    const page = await mountPage({ roles: { r1: coffeeDefinition() }, people: PEOPLE });
-    page.startEdit(page.roleDefinitions.find(d => d.id === 'r1'));
-    page.newRuleKind = Roles.RESTRICTIONS.ALLOWLIST;
-    page.addComposedRule();
-
-    assert.deepStrictEqual(page.draft.restrictions, []);
-});
-
-test('the same person cannot be added to an allowlist twice', async () => {
-    const page = await mountPage({ people: PEOPLE });
-    page.newAllowlistPick = 'p1';
-    page.addToNewAllowlist();
-    page.newAllowlistPick = 'p1';
-    page.addToNewAllowlist();
-
-    assert.deepStrictEqual(page.newAllowlist, ['p1']);
-    assert.equal(page.allowlistOptions.some(o => o.id === 'p1'), false,
-        'someone already picked is not offered again');
-});
-
-test('an allowlist reads as names, never as ids', async () => {
-    // The names live in the chips, which are the editable list; the sentence
-    // above them says what KIND of rule it is and does not repeat all eleven.
-    const page = await mountPage({ people: PEOPLE });
-    const rule = { kind: 'allowlist', personIds: ['p1', 'p2'] };
-
-    assert.deepStrictEqual(page.allowlistNames(rule), ['Ada Lovelace', 'Grace Hopper']);
-    assert.doesNotMatch(page.allowlistNames(rule).join(' '), /p1|p2/);
-    assert.match(page.ruleSentence(rule), /only these people/i);
-    assert.doesNotMatch(page.ruleSentence(rule), /p1|p2|personIds/);
-});
-
-test('a person who has left is SAID to be missing, not quietly dropped', async () => {
-    // A shorter allowlist than the editor believes they have is how a Role
-    // silently stops being fillable.
-    const page = await mountPage({ people: PEOPLE });
-    const names = page.allowlistNames({ kind: 'allowlist', personIds: ['p1', 'gone'] });
-
-    assert.deepStrictEqual(names, ['Ada Lovelace', 'Someone no longer in the directory']);
-});
-
-test('an empty stored allowlist says so rather than reading as no rule', async () => {
-    const page = await mountPage({ people: PEOPLE });
-    assert.match(page.ruleSentence({ kind: 'allowlist', personIds: [] }), /nobody could ever fill/i);
-    assert.equal(page.isRuleAvailable({ kind: 'allowlist', personIds: [] }), false);
-});
 
 // ── Editing an allowlist that already exists ─────────────────────────────────
 //
@@ -1538,124 +810,7 @@ const openWithAllowlist = async (...ids) => {
 
 const listOf = page => page.draft.restrictions.find(r => r.kind === 'allowlist').personIds;
 
-test('somebody can be added to a list that is already on the Role', async () => {
-    const page = await openWithAllowlist('p1');
-    page.addToAllowlistRule(0, 'p3');
-
-    assert.deepStrictEqual(listOf(page), ['p1', 'p3']);
-    await page.saveDraft();
-    assert.deepStrictEqual(stored('roles').r1.restrictions, [
-        { kind: 'allowlist', personIds: ['p1', 'p3'] },
-    ]);
-});
-
-test('somebody can be taken off a list that is already on the Role', async () => {
-    const page = await openWithAllowlist('p1', 'p2', 'p3');
-    page.removeFromAllowlistRule(0, 'p2');
-
-    assert.deepStrictEqual(listOf(page), ['p1', 'p3']);
-    await page.saveDraft();
-    assert.deepStrictEqual(stored('roles').r1.restrictions, [
-        { kind: 'allowlist', personIds: ['p1', 'p3'] },
-    ]);
-});
-
-test('editing the list leaves the Role\'s other rules alone', async () => {
-    const def = withAllowlist('p1');
-    def.restrictions.unshift({ kind: 'requireTag', tagId: KIDS_CLEARED });
-    const page = await mountPage({ roles: { r1: def }, people: PEOPLE });
-    page.startEdit(page.roleDefinitions.find(d => d.id === 'r1'));
-
-    page.addToAllowlistRule(1, 'p2');
-    assert.deepStrictEqual(page.draft.restrictions, [
-        { kind: 'requireTag', tagId: KIDS_CLEARED },
-        { kind: 'allowlist', personIds: ['p1', 'p2'] },
-    ]);
-});
-
-test('the picker for a list offers only people not already on it', async () => {
-    const page = await openWithAllowlist('p1');
-    const offered = page.allowlistOptionsFor(page.draft.restrictions[0]).map(p => p.id);
-
-    assert.deepStrictEqual(offered.sort(), ['p2', 'p3']);
-});
-
-test('the same person cannot be added to an existing list twice', async () => {
-    const page = await openWithAllowlist('p1');
-    page.addToAllowlistRule(0, 'p1');
-    assert.deepStrictEqual(listOf(page), ['p1']);
-});
-
-test('the list reads as names, and a person who has left can be cleared off it', async () => {
-    // Before this, a name that had left the directory was a dead entry an
-    // editor could see and not remove without rebuilding the whole list.
-    const page = await openWithAllowlist('p1', 'gone');
-    assert.deepStrictEqual(
-        page.allowlistNames(page.draft.restrictions[0]),
-        ['Ada Lovelace', 'Someone no longer in the directory']
-    );
-
-    page.removeFromAllowlistRule(0, 'gone');
-    assert.deepStrictEqual(listOf(page), ['p1']);
-});
-
-test('taking the last person off is refused, and says which control means that', async () => {
-    // An empty allowlist is a Role nobody can ever fill. Removing the RULE is
-    // how you say "anyone" — and that control is right there, so the refusal
-    // points at it instead of leaving a Role that cannot be saved.
-    const page = await openWithAllowlist('p1');
-    page.removeFromAllowlistRule(0, 'p1');
-
-    assert.deepStrictEqual(listOf(page), ['p1'], 'the list was emptied');
-    assert.equal(page.toast.type, 'error');
-    assert.match(page.toast.message, /remove the rule/i);
-});
-
-test('editing anything other than an allowlist does nothing', async () => {
-    // The index comes from the rendered list; a stale one must not turn a tag
-    // rule into a list of people.
-    const page = await mountPage({ roles: { r1: kidsDefinition() }, people: PEOPLE });
-    page.startEdit(page.roleDefinitions.find(d => d.id === 'r1'));
-    page.addTagRule(Roles.RESTRICTIONS.REQUIRE_TAG, KIDS_CLEARED);
-
-    page.addToAllowlistRule(0, 'p1');
-    page.removeFromAllowlistRule(0, 'p1');
-    assert.deepStrictEqual(page.draft.restrictions, [{ kind: 'requireTag', tagId: KIDS_CLEARED }]);
-});
-
 // ── Liturgical intensity ─────────────────────────────────────────────────────
-
-test('a liturgical Role with nothing set reads as one week', async () => {
-    const page = await mountPage({});
-    assert.equal(page.liturgicalIntensity('preacher'), 1);
-});
-
-test('liturgical intensity is written to the Event series, never to /roles', async () => {
-    const page = await mountPage({ events: { sunday_service: { id: 'sunday_service', name: 'Sunday Service' } } });
-    await page.setLiturgicalIntensity('preacher', 3);
-
-    assert.equal(stored('events').sunday_service.liturgicalIntensity.preacher, 3);
-    assert.equal(Object.keys(stored('roles')).length, 0,
-        'a document in /roles would make a locked Role editable (ADR-0016)');
-    assert.equal(page.liturgicalIntensity('preacher'), 3, 'and the screen matches what was stored');
-});
-
-test('setting one liturgical intensity leaves the others alone', async () => {
-    const page = await mountPage({
-        events: { sunday_service: { id: 'sunday_service', liturgicalIntensity: { prayer: 2 } } },
-    });
-    await page.setLiturgicalIntensity('preacher', 3);
-
-    assert.equal(stored('events').sunday_service.liturgicalIntensity.prayer, 2);
-    assert.equal(stored('events').sunday_service.liturgicalIntensity.preacher, 3);
-});
-
-test('a negative liturgical intensity is refused and nothing is written', async () => {
-    const page = await mountPage({ events: { sunday_service: { id: 'sunday_service' } } });
-    await page.setLiturgicalIntensity('preacher', -1);
-
-    assert.equal(stored('events').sunday_service.liturgicalIntensity, undefined);
-});
 
 test('liturgical Roles are still refused by the editor — intensity is the only exception', async () => {
     const page = await mountPage({});
@@ -1765,15 +920,6 @@ test('MS-721: a renamed Role writes only its name (update), keeps the slug, and 
     assert.equal(page.roleDefinitions.find(d => d.id === 'r1').name, 'Kids Team');
 });
 
-test('MS-721: a slot change saves the slots alone', async () => {
-    const { page } = await mountLive({ roles: { r1: kidsDefinition() } });
-    page.addSlot();
-    page.syncLiveRole();
-    await page.saveDraft();
-    assert.equal(stored('roles').r1.slots.length, 4);
-    assert.equal(stored('roles').r1.name, 'Kids Ministry');
-});
-
 test('MS-721: an invalid Role does not save and lists its problems', async () => {
     const { page } = await mountLive({ roles: { r1: kidsDefinition() } });
     page.draft.name = '';
@@ -1827,53 +973,25 @@ test('MS-721: only roles.manager.edit gets a live editor (the rule on roles)', a
 
 // ── MS-721 lead call: without roles.manager.edit the page reads, not edits ──
 
-test('MS-721: without roles.manager.edit every Role control is display text', () => {
-    const html = rolesManagerHtml();
-    // Each input that writes a Role is only rendered for the key holder…
-    for (const field of ['x-model="draft.name"', 'x-model="draft.description"',
-        'x-model.number="draft.intensity"', 'x-model="draft.allowsAnotherRole"']) {
-        const at = html.indexOf(field);
-        assert.ok(at !== -1, field);
-        const opened = html.lastIndexOf('<template x-if="canManageRoles">', at);
-        const closed = html.lastIndexOf('</template>', at);
-        assert.ok(opened !== -1 && opened > closed, field + ' is rendered without the key');
-    }
-    // …and reads as text otherwise.
-    for (const f of ['name', 'description', 'intensity', 'allowsAnotherRole']) {
-        assert.match(html, new RegExp(`x-show="!canManageRoles"[^>]*data-readonly="${f}"`), f);
-    }
-    for (const m of ['class="rm-create" x-show="canManageRoles"', 'class="rm-composer" x-show="canManageRoles"',
-        'x-show="canManageRoles" @click="addSlot()"', 'x-show="canManageRoles" @click="removeRule(index)"',
-        'class="rm-slot__acts" x-show="canManageRoles"']) {
-        assert.ok(html.indexOf(m) !== -1, m);
-    }
-});
-
 test('MS-721: the write entry points refuse without roles.manager.edit', () => {
     const js = rolesManagerJs();
     for (const fn of ['async createRole(name) {\n        if (!this.canManageRoles) return;',
         'async deleteRole(role) {\n        if (!role || !this.canManageRoles) return;',
         'if (!personId || this.savingNonServer || !this.canSetDoesNotServe) return;',
-        'async setLiturgicalIntensity(slug, raw) {\n        if (!this.canSetLiturgicalRest) return;']) {
+        'if (!id || this.savingNonServing || !this.canSetDoesNotServe) return;']) {
         assert.ok(js.indexOf(fn) !== -1, fn);
     }
 });
 
-test('MS-721: liturgical rest and "Doesn\'t serve" follow their own rules, not roles.manager.edit', () => {
-    const Levels = require('../public/account-levels-core.js');
-    const member = Levels.buildPresetPermissions(Levels.PRESET_MEMBER);
-    const custom = (k) => ({ permissionLevel: 'member', accountLevelId: 'level_custom_x', permissions: Object.assign({}, member, { [k]: true }) });
+test('MS-721: "Doesn\'t serve" follows its own rule, not roles.manager.edit', () => {
+    // Liturgical rest moved to the Sunday Service's own Roles & rules tab
+    // (ADR 0085), which is calendar.events.edit like every other Event write.
     const html = rolesManagerHtml();
-    assert.match(html, /<template x-if="canSetLiturgicalRest">/);
-    assert.match(html, /x-show="!canSetLiturgicalRest"[^>]*data-readonly="liturgical"/);
-    assert.match(html, /class="rm-group" x-show="canSetDoesNotServe"/);
+    assert.match(html, /x-show="canSetDoesNotServe" class="m-seg m-seg--fill"/);
+    assert.match(html, /x-show="canSetDoesNotServe && nsKind === 'person'"/);
     const js = rolesManagerJs();
-    assert.match(js, /get canSetLiturgicalRest\(\) \{\n\s+return AccessCore\.canEditEvents\(/);
     assert.match(js, /AccessCore\.EDITOR_WRITE_LEVELS\.indexOf\(AccessCore\.permissionLevelOf\(who\)\)/);
-    // The helpers they ask, against the rule's answer:
-    assert.equal(AccessCore.canEditEvents(custom('calendar.events.edit')), true);
-    assert.equal(AccessCore.canEditEvents(custom('roles.manager.edit')), false);
-    assert.equal(AccessCore.canEditEvents('editor'), true);
+    assert.equal(js.indexOf('canSetLiturgicalRest'), -1, 'liturgical rest is not this page\'s any more');
 });
 
 // ── One Role open at a time, and it writes only itself ──────────────────────
@@ -1999,4 +1117,85 @@ test('Roles that share a slug are said out loud on the page', async () => {
     assert.equal(page.sharedSlugs.length, 1);
     assert.match(page.sharedSlugSentence(page.sharedSlugs[0]), /“Coffee” and “coffee!”/);
     assert.match(rolesManagerHtml(), /x-show="sharedSlugs\.length"/);
+});
+
+
+// ── The ledger (who it needs, rules and rest moved to each event) ───────────
+
+test('saving a Role\'s description keeps the rest of it exactly as stored', async () => {
+    // Who it needs, its rules and its rest are each event's now, but the old
+    // values stay on the Role as what an event reads until it has its own
+    // (EventsCore.effectiveRole). Writing a description must not drop them.
+    const page = await mountPage({ roles: { r1: kidsDefinition() }, people: PEOPLE });
+    const before = JSON.parse(JSON.stringify(stored('roles').r1));
+    page.startEdit(page.roleDefinitions.find(d => d.id === 'r1'));
+    page.draft.description = 'Two adults in the room at all times.';
+    await page.saveDraft();
+
+    const saved = stored('roles').r1;
+    assert.equal(saved.description, 'Two adults in the room at all times.');
+    assert.deepStrictEqual(saved.slots, before.slots, 'the slots went');
+    assert.deepStrictEqual(saved.restrictions || [], before.restrictions || []);
+    assert.equal(saved.slug, before.slug, 'the slug moved, orphaning its serve history');
+});
+
+test('MS-721: without roles.manager.edit a Role reads as text, and nothing writes', () => {
+    const html = rolesManagerHtml();
+    for (const field of ['x-model="draft.name"', 'x-model="draft.description"']) {
+        const at = html.indexOf(field);
+        assert.ok(at !== -1, field);
+        const opened = html.lastIndexOf('<template x-if="isSelected(role) && canManageRoles && draft">', at);
+        const closed = html.lastIndexOf('</template>', at);
+        assert.ok(opened !== -1 && opened > closed, field + ' is rendered without the key');
+    }
+    assert.ok(html.indexOf('class="rm-create" x-show="canManageRoles"') !== -1, 'create shows without the key');
+    assert.match(html, /x-show="canManageRoles" type="button" @click="deleteRole\(role\)"/, 'delete shows without the key');
+    assert.match(html, /:disabled="!canManageRoles"\s*@click="startEdit\(role\)"/, 'a read-only row opens nothing');
+});
+
+test('the ledger says where each Role runs, through to that event\'s rules', async () => {
+    const page = await mountPage({ roles: { r1: kidsDefinition() } });
+    const slug = page.roleDefinitions.find(d => d.id === 'r1').slug;
+    page.allSeries = [
+        { id: 'midweek', name: 'Midweek', roleSlugs: [slug] },
+        { id: 'sunday_service', name: 'Sunday Service', roleSlugs: [slug],
+          roleSettings: { [slug]: { slots: [{ id: 's1', requirement: 'either' }] } } },
+        { id: 'prayer', name: 'Prayer', roleSlugs: ['coffee'] },
+    ];
+    const uses = page.usesOf(slug);
+    assert.deepStrictEqual(uses.map(u => u.id), ['sunday_service', 'midweek'], 'the Sunday comes first');
+    assert.equal(uses[0].count, '1 person', 'the event\'s own answer wins');
+    assert.equal(uses[1].count, '3 people', 'with no answer of its own, the Role\'s old one stands');
+    assert.match(rolesManagerHtml(), /recurring-events\.html\?series=' \+ encodeURIComponent\(use\.id\) \+ '&role='/);
+});
+
+// ── Doesn't serve, for a whole tag or group (ADR 0086) ──────────────────────
+
+test('a whole tag can be marked as not serving, from the tags this editor can see', async () => {
+    const page = await mountPage({
+        people_tags: Object.assign({}, TAGS, { secret: { name: 'Elder only', hiddenFromOthers: true } }),
+        people: {
+            p1: { name: 'Ann', tags: [KIDS_CLEARED] },
+            p2: { name: 'Bob', tags: [] },
+        },
+    });
+    page.nsKind = 'tag';
+    assert.ok(page.nsOptions.every(t => t.id !== 'secret'), 'a hidden tag was offered');
+
+    await page.setNonServing('tag', KIDS_CLEARED, true);
+    assert.deepStrictEqual(stored('serving_settings').church.doesNotServeTagIds, [KIDS_CLEARED]);
+    assert.equal(page.nonServingEntries[0].count, 1, 'the tag says how many it covers');
+    assert.equal(page.nonServingCount, 1);
+
+    await page.setNonServing('tag', KIDS_CLEARED, false);
+    assert.deepStrictEqual(stored('serving_settings').church.doesNotServeTagIds, []);
+});
+
+test('a group can be marked too, and only an editor may mark either', async () => {
+    const page = await mountPage({
+        relationship_groups: { g1: { name: 'Youth group', typeId: 'hg', sharedWithEditors: true, memberIds: ['p1'] } },
+        people: { p1: { name: 'Ann' } },
+    }, { rank: 'member' });
+    await page.setNonServing('group', 'g1', true);
+    assert.equal(stored('serving_settings').church, undefined, 'a member wrote it');
 });

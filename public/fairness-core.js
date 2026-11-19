@@ -382,7 +382,11 @@
         const taken = {};
         heldSeats.forEach(seat => { taken[seat.slotId] = true; });
         const slots = slotsOf(role).filter(slot => !taken[slot.id]);
-        const best = { seats: heldSeats.slice(), score: -1 };
+        // `misses` is how many Try rules a filling breaks (RolesCore.STRENGTHS).
+        // Places filled come first, then fewest misses, then fairness: a
+        // preference may never leave a place empty, and may never be traded
+        // away for a fairer pick either.
+        const best = { seats: heldSeats.slice(), score: -1, misses: Infinity };
         let lastReason = null;
 
         // The order candidates are tried in NEVER CHANGES within a Role: both
@@ -407,16 +411,20 @@
         });
         const ceilingFor = n => bestRemaining[Math.min(n, order.length)];
 
-        const better = (seats, score) => (
+        const better = (seats, score, misses) => (
             seats.length > best.seats.length ||
-            (seats.length === best.seats.length && score > best.score)
+            (seats.length === best.seats.length && (
+                misses < best.misses ||
+                (misses === best.misses && score > best.score)
+            ))
         );
 
-        const walk = (index, seats, score) => {
+        const walk = (index, seats, score, misses) => {
             if (index === slots.length) {
-                if (better(seats, score)) {
+                if (better(seats, score, misses)) {
                     best.seats = seats.slice();
                     best.score = score;
+                    best.misses = misses;
                 }
                 return;
             }
@@ -427,8 +435,12 @@
             // decide.
             const left = slots.length - index;
             if (seats.length + left < best.seats.length) return;
-            if (seats.length + left === best.seats.length &&
-                score + ceilingFor(left) <= best.score) return;
+            // Misses only ever grow down a branch, so one already past the
+            // best can never come back.
+            if (seats.length + left === best.seats.length && (
+                misses > best.misses ||
+                (misses === best.misses && score + ceilingFor(left) <= best.score)
+            )) return;
 
             const slot = slots[index];
             // `seats` is passed straight through as `assigned`: roles-core reads
@@ -460,7 +472,7 @@
             const allowed = {};
             let blocked = null;
             judged.forEach(c => {
-                if (c.eligible) allowed[c.personId] = true;
+                if (c.eligible) allowed[c.personId] = c.misses || 0;
                 else if (!blocked) blocked = c;
             });
 
@@ -469,7 +481,7 @@
             if (!Object.keys(allowed).length && blocked) lastReason = blocked;
 
             order.forEach(candidate => {
-                if (!allowed[candidate.personId]) return;
+                if (allowed[candidate.personId] === undefined) return;
                 walk(
                     index + 1,
                     seats.concat([{
@@ -478,15 +490,16 @@
                         personId: candidate.personId,
                         recency: candidate.recency,
                     }]),
-                    score + candidate.recency
+                    score + candidate.recency,
+                    misses + allowed[candidate.personId]
                 );
             });
 
             // …and the branch where this slot stays empty.
-            walk(index + 1, seats, score);
+            walk(index + 1, seats, score, misses);
         };
 
-        walk(0, heldSeats.slice(), 0);
+        walk(0, heldSeats.slice(), 0, 0);
 
         const filledIds = best.seats.map(s => s.slotId);
         return {

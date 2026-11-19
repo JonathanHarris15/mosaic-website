@@ -33,10 +33,8 @@ const EDIT_KEYS = Object.freeze([
 /** Keys reported beside the edit keys because a door after MS-821 names them. */
 const REPORTED_KEYS = Object.freeze(EDIT_KEYS.concat(['calendar.events.edit']));
 
-const ROLE_FIELDS = Object.freeze([
-    'name', 'slug', 'family', 'slots', 'nextSlotSeq', 'restrictions',
-    'intensity', 'allowsAnotherRole', 'description',
-]);
+// A Role is its name and what it involves (ADR 0085); the rest is each Event's.
+const ROLE_FIELDS = Object.freeze(['name', 'slug', 'family', 'description']);
 
 /**
  * @typedef {Record<string, unknown>} Doc
@@ -215,7 +213,7 @@ function roleShapeProblems(role) {
     if (typeof name !== 'string' || name.length === 0 || name.length > 200) out.push('name missing or over 200 characters');
     if (role.family !== 'servant') out.push('family is not servant');
     const slots = role.slots;
-    if (!Array.isArray(slots) || slots.length === 0 || slots.length > 100) out.push('needs 1 to 100 slots');
+    if ('slots' in role && !(Array.isArray(slots) && slots.length <= 100)) out.push('slots is not a list of at most 100');
     if ('slug' in role) {
         const slug = role.slug;
         if (typeof slug !== 'string' || slug.length > 120 || !/^[a-z0-9_]+$/.test(slug)) out.push('slug is not usable');

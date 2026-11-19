@@ -119,27 +119,12 @@ test('a liturgical Role reports as locked and a Servant Role does not', () => {
     assert.equal(Roles.isLocked(coffee), false);
 });
 
-test('editing a locked Role is rejected by the model, not just hidden in the UI', () => {
-    const preacher = Roles.roleBySlug('preacher', []);
-    assert.throws(() => Roles.addSlot(preacher, Roles.REQUIREMENTS.EITHER), /locked/i);
-    assert.throws(() => Roles.removeSlot(preacher, 's1'), /locked/i);
-    assert.throws(() => Roles.reorderSlots(preacher, 0, 1), /locked/i);
-    assert.throws(
-        () => Roles.setSlotRequirement(preacher, 's1', Roles.REQUIREMENTS.MALE),
-        /locked/i
-    );
-});
-
 test('deleting a locked Role is rejected', () => {
     assert.throws(() => Roles.assertDeletable(Roles.roleBySlug('preacher', [])), /locked/i);
 });
 
 test('deleting a Servant Role is allowed', () => {
     assert.doesNotThrow(() => Roles.assertDeletable(coffee));
-});
-
-test('a Servant Role is still freely editable', () => {
-    assert.doesNotThrow(() => Roles.addSlot(coffee, Roles.REQUIREMENTS.MALE));
 });
 
 // ── The liturgical Roles keep working as they always did ──────────────────────

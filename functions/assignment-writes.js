@@ -30,6 +30,8 @@ const coverCore = require("./shared/cover-core.js");
 const awayCore = require("./shared/away-core.js");
 const place = require("./shared/place-core.js");
 const {loadRoleRegistry} = require("./roles-read");
+const eventsCore = require("./shared/events-core.js");
+const rolesCore = require("./shared/roles-core.js");
 
 /** @typedef {import("firebase-admin/firestore").Firestore} Firestore */
 
@@ -138,23 +140,35 @@ async function reconcileCover(db, occurrenceId, opts) {
 }
 
 /**
- * The Cross-Role Rules stored on an Event series (MS-221).
- *
- * A rule about a PAIR of Roles belongs to neither of them, so it lives on the
- * Event that runs both. A one-off Event has no series and therefore no rules,
- * which is right: the rule is a standing arrangement, not a decision about one
- * date.
- *
+ * The people already on an occurrence's roster — loaded only when one of the
+ * rules judges a line-up, since a line-up has to know who is on the team and
+ * the take itself only ever loads the one person taking.
  * @param {Object} db the Firestore handle
- * @param {?string} seriesId the series the occurrence belongs to
- * @return {Promise<Array<Object>>} its cross-Role rules, or none
+ * @param {Array<Object>} roster the occurrence's assignments
+ * @param {Object} context what takeContext returned
+ * @return {Promise<Array<Object>>} their Person records
  */
-async function seriesRules(db, seriesId) {
-  if (!seriesId) return [];
+async function rosterPeople(db, roster, context) {
+  const rules = ((context.roleDef && context.roleDef.restrictions) || [])
+      .concat(context.crossRoleRules || []);
+  if (!rolesCore.judgesLineups(rules)) return [];
+  const ids = [...new Set((roster || []).map((a) => a.personId).filter(Boolean))];
+  if (!ids.length) return [];
+  const snaps = await db.getAll(...ids.map((id) => db.collection("people").doc(id)));
+  return snaps.filter((d) => d.exists)
+      .map((d) => Object.assign({id: d.id}, d.data()));
+}
+
+/**
+ * The Event series an occurrence belongs to, or null for a one-off Event.
+ * @param {Object} db the Firestore handle
+ * @param {?string} seriesId the series id
+ * @return {Promise<?Object>} the series document's data
+ */
+async function loadSeries(db, seriesId) {
+  if (!seriesId) return null;
   const snap = await db.collection(SERIES).doc(seriesId).get();
-  if (!snap.exists) return [];
-  const rules = snap.data().crossRoleRules;
-  return Array.isArray(rules) ? rules : [];
+  return snap.exists ? Object.assign({id: snap.id}, snap.data()) : null;
 }
 
 /**
@@ -183,7 +197,13 @@ async function takeContext(db, personId, roleSlug, date, seriesId) {
   // resolves, and one whose slug another definition shares resolves to
   // nothing — so the take is refused as a gone Role rather than judged
   // against whichever of the two came back first.
-  const roleDef = (await loadRoleRegistry(db)).find(roleSlug);
+  //
+  // Who the Role needs, its rules and its rest belong to the EVENT that runs
+  // it, so the stored Role is read through this series' version of it
+  // (EventsCore.effectiveRole) — the same answer the editor's picker gets.
+  const series = await loadSeries(db, seriesId);
+  const roleDef = eventsCore.effectiveRole(
+      series, (await loadRoleRegistry(db)).find(roleSlug));
 
   // ⚠ The Event's rules about a PAIR of Roles (MS-221). They live on the
   // SERIES, not on either Role, so a Role whose own definition has no group
@@ -191,7 +211,7 @@ async function takeContext(db, personId, roleSlug, date, seriesId) {
   // below has to ask about these too. Miss that and the groups list arrives
   // empty, `sharedGroups` finds nothing, and the rule silently permits
   // everything a member asks for while the editor's picker refuses it.
-  const crossRoleRules = (await seriesRules(db, seriesId))
+  const crossRoleRules = eventsCore.crossRoleRulesOf(series)
       .filter((r) => ((r && r.roleSlugs) || []).indexOf(roleSlug) !== -1);
 
   const restrictions = (roleDef && roleDef.restrictions) || [];
@@ -404,6 +424,7 @@ async function take(db, spec) {
       slot: slot,
       context: {
         people: context.person ? [context.person] : [],
+        knownPeople: await rosterPeople(db, roster, context),
         relationships: context.relationships,
         groups: context.groups,
         awayPersonIds: context.awayPersonIds,
@@ -456,6 +477,7 @@ module.exports = {
   OCCURRENCES,
   COVER,
   takeContext,
+  rosterPeople,
   reconcileCover,
   answer,
   take,

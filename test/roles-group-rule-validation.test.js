@@ -96,29 +96,6 @@ test('a tag rule with no tag is refused', () => {
 
 // ── A Type unshared after the fact ───────────────────────────────────────────
 
-test('a rule whose Type has since been unshared reports as unavailable', () => {
-    // Degrade loudly, not silently. The Role must still load, and the user must
-    // be able to see that one of its rules has stopped working.
-    const role = {
-        id: 'r1', name: 'Kids', family: Roles.FAMILIES.SERVANT,
-        slots: [{ id: 's1', requirement: Roles.REQUIREMENTS.EITHER }],
-        restrictions: [groupRule('type-study')],
-    };
-    const report = Roles.unavailableRestrictions(role, [sharedHouse]);
-
-    assert.equal(report.length, 1);
-    assert.equal(report[0].typeId, 'type-study');
-});
-
-test('a Role whose rules are all fine reports nothing unavailable', () => {
-    const role = {
-        id: 'r1', name: 'Kids', family: Roles.FAMILIES.SERVANT,
-        slots: [{ id: 's1', requirement: Roles.REQUIREMENTS.EITHER }],
-        restrictions: [groupRule('type-house'), { kind: Roles.RESTRICTIONS.REQUIRE_TAG, tagId: 't' }],
-    };
-    assert.deepEqual(Roles.unavailableRestrictions(role, [sharedHouse]), []);
-});
-
 test('an unavailable rule does not stop the Role validating', () => {
     // The Role is still a legitimate Role; one of its rules just can't run.
     const role = {

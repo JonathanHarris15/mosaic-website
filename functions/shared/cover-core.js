@@ -89,7 +89,10 @@
     // Ask RolesCore about exactly one Person. `candidatesFor` judges a whole
     // list; narrowing the list to one is cheaper than duplicating the rules.
     function reasonFor(def, slot, person, context) {
+        // Everybody the caller knows stays known, so a line-up can still see
+        // who is already on the team while only this one person is judged.
         const results = Roles.candidatesFor(def, slot, Object.assign({}, context, {
+            knownPeople: (context && (context.knownPeople || context.people)) || [],
             people: [person],
         }));
         const verdict = results[0];

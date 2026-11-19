@@ -121,6 +121,7 @@
 
             rows: [],
             roleDefinitions: [],
+            seriesById: {},
             awayStretches: [],
 
             // ── Offering instead of taking (MS-190) ──────────────────────────
@@ -194,6 +195,7 @@
                         this.loadMe(),
                         this.loadMine(),
                     ]);
+                    await this.loadSeries(entries);
                     this.rows = entries.map(e => this.decorate(e));
                 } catch (e) {
                     console.error('Cover list load failed:', e);
@@ -230,10 +232,26 @@
                 }
             },
 
+            // Who a Role needs and who may fill it belong to the Event that runs
+            // it, so each place is judged against its own series' version of
+            // the Role. Best-effort: a series this viewer cannot read leaves
+            // that Role as stored, which is what every place read before.
+            async loadSeries(entries) {
+                const ids = [...new Set((entries || []).map(e => e.seriesId).filter(Boolean))];
+                const found = await Promise.all(ids.map(id =>
+                    db.collection('events').doc(id).get()
+                        .then(doc => (doc.exists ? Object.assign({ id: doc.id }, doc.data()) : null))
+                        .catch(() => null)));
+                const byId = {};
+                found.forEach(s => { if (s) byId[s.id] = s; });
+                this.seriesById = byId;
+            },
+
             decorate(entry) {
                 const dt = partsOf(entry.date);
-                const def = window.RolesCore.roleBySlug(
-                    entry.roleSlug, this.roleDefinitions);
+                const def = window.EventsCore.effectiveRole(
+                    this.seriesById[entry.seriesId] || null,
+                    window.RolesCore.roleBySlug(entry.roleSlug, this.roleDefinitions));
                 const slot = (def && (def.slots || [])
                     .find(s => s.id === entry.slotId)) || null;
 
