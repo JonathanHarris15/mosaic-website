@@ -66,7 +66,7 @@ test('only a declined, open place on a happening, coverable Event is listed', ()
 });
 
 test('the desired list names the Role, never the person, and carries the rung', () => {
-    const desired = Place.desiredCover(OCC, [declined()], slug => (slug === 'coffee' ? 'Coffee' : null));
+    const desired = Place.desiredCover(OCC, [declined()], (/** @type {string} */ slug) => (slug === 'coffee' ? 'Coffee' : null));
     const entry = desired['o1__coffee__s1'];
     assert.equal(entry.roleName, 'Coffee');
     assert.equal(entry.visibility, 'member');

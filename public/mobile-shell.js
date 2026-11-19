@@ -14,16 +14,41 @@
    ============================================================ */
 (function () {
   "use strict";
+  var PREF = "mosaicPrefersDesktop";
   var param = null;
   try {
     var p = new URLSearchParams(window.location.search);
     param = p.get("shell");
-    if (param === "mobile") sessionStorage.setItem("mosaicShell", "mobile");
-    else if (param === "web") sessionStorage.removeItem("mosaicShell");
+    if (param === "mobile") {
+      sessionStorage.setItem("mosaicShell", "mobile");
+      try { localStorage.removeItem(PREF); } catch (e) {}
+    } else if (param === "web") {
+      sessionStorage.removeItem("mosaicShell");
+      try { localStorage.setItem(PREF, "1"); } catch (e) {}
+    }
   } catch (e) {}
 
   var isMobile = false;
   try { isMobile = sessionStorage.getItem("mosaicShell") === "mobile"; } catch (e) {}
+
+  // ⚠ A PHONE BROWSER THAT LANDED HERE DIRECTLY IS STILL A PHONE.
+  // index.html sends a phone to the mobile app, but only if you come in
+  // through index.html. A text message links straight to commitments.html,
+  // a bookmark straight to calendar.html — and with no ?shell=mobile and no
+  // tab memory, those pages drew their desktop layout squeezed onto 390px:
+  // the seven-column month, the desktop toolbar wrapping, the rail panel
+  // overlapping the grid. Same rule as index.html: a touch screen at phone
+  // width is the mobile app, unless this phone chose the desktop site.
+  if (!isMobile && param !== "web") {
+    var prefersDesktop = false;
+    try { prefersDesktop = localStorage.getItem(PREF) === "1"; } catch (e) {}
+    var phone = !!window.matchMedia
+      && window.matchMedia("(pointer: coarse) and (max-width: 820px)").matches;
+    if (phone && !prefersDesktop) {
+      isMobile = true;
+      try { sessionStorage.setItem("mosaicShell", "mobile"); } catch (e) {}
+    }
+  }
 
   // Guard against a sticky session flag leaking the mobile shell into a desktop
   // browser. sessionStorage remembers "mobile" for the whole tab so navigation
