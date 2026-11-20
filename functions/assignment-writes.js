@@ -181,13 +181,16 @@ async function loadSeries(db, seriesId) {
  * @param {string} roleSlug the Role they would take
  * @param {string} date the occurrence date (YYYY-MM-DD)
  * @param {?string} seriesId the series the occurrence belongs to
+ * @param {Array<Object>} [roster] the occurrence's assignments, when the
+ *   caller already has them: a line-up rule then gets the team it judges
  * @return {Promise<Object>} person, roleDef, relationships, groups,
- *   awayPersonIds, crossRoleRules
+ *   awayPersonIds, crossRoleRules, knownPeople
  */
-async function takeContext(db, personId, roleSlug, date, seriesId) {
+async function takeContext(db, personId, roleSlug, date, seriesId, roster) {
   const empty = {
     person: null, roleDef: null,
     relationships: [], groups: [], awayPersonIds: [], crossRoleRules: [],
+    knownPeople: [],
   };
   if (!personId) return empty;
 
@@ -213,11 +216,16 @@ async function takeContext(db, personId, roleSlug, date, seriesId) {
   // below has to ask about these too. Miss that and the groups list arrives
   // empty, `sharedGroups` finds nothing, and the rule silently permits
   // everything a member asks for while the editor's picker refuses it.
+  //
+  // A rule names its Roles inside its options once it is an OR rule, so the
+  // pair is asked of EventsCore.rolesNamedBy, never read off the top.
   const crossRoleRules = eventsCore.crossRoleRulesOf(series)
-      .filter((r) => ((r && r.roleSlugs) || []).indexOf(roleSlug) !== -1);
+      .filter((r) => eventsCore.rolesNamedBy(r).indexOf(roleSlug) !== -1);
 
+  // Kinds INSIDE OR rules count too (RolesCore.kindsIn): a group rule wrapped
+  // in an option still needs the groups, or it silently permits everybody.
   const restrictions = (roleDef && roleDef.restrictions) || [];
-  const kinds = restrictions.map((r) => r && r.kind);
+  const kinds = rolesCore.kindsIn(restrictions);
   const wantsEdges = kinds.indexOf("notTogether") !== -1;
   const wantsGroups = kinds.indexOf("sameGroup") !== -1 ||
     kinds.indexOf("notSameGroup") !== -1 ||
@@ -266,14 +274,19 @@ async function takeContext(db, personId, roleSlug, date, seriesId) {
     });
   }
 
-  return {
+  const context = {
     person: person,
     roleDef: roleDef,
     relationships: relationships,
     groups: groups,
     awayPersonIds: awayPersonIds,
     crossRoleRules: crossRoleRules,
+    knownPeople: [],
   };
+  if (Array.isArray(roster)) {
+    context.knownPeople = await rosterPeople(db, roster, context);
+  }
+  return context;
 }
 
 /**
@@ -479,7 +492,6 @@ module.exports = {
   OCCURRENCES,
   COVER,
   takeContext,
-  rosterPeople,
   reconcileCover,
   answer,
   take,

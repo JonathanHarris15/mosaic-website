@@ -1107,10 +1107,28 @@
     // load only the one person being judged needs to load the team as well.
     /** @param {Array<Record<string, *>>} rules */
     function judgesLineups(rules) {
-        const walk = rule => !!rule && (rule.kind === RESTRICTIONS.LINEUP
-            || (rule.kind === RESTRICTIONS.ANY_OF
-                && (rule.options || []).some(option => conditionsOf(option).some(walk))));
-        return (rules || []).some(walk);
+        return kindsIn(rules).indexOf(RESTRICTIONS.LINEUP) !== -1;
+    }
+
+    // Every kind of condition a set of rules uses — inside an OR rule's options
+    // as well as at the top. A caller that loads data only for the rules that
+    // need it (the server's take loads groups only for a group rule) must ask
+    // here: once rules are stored as OR rules, the top level alone says "anyOf"
+    // and nothing else.
+    /** @param {Array<Record<string, *>> | undefined} rules @returns {string[]} */
+    function kindsIn(rules) {
+        /** @type {string[]} */
+        const out = [];
+        /** @param {Record<string, *>} rule */
+        const visit = rule => {
+            if (!rule) return;
+            if (rule.kind && out.indexOf(rule.kind) === -1) out.push(rule.kind);
+            if (rule.kind === RESTRICTIONS.ANY_OF) {
+                (rule.options || []).forEach((/** @type {Record<string, *>} */ option) => conditionsOf(option).forEach(visit));
+            }
+        };
+        (rules || []).forEach(visit);
+        return out;
     }
 
     // Judge one Person against one slot. Returns `null` when they may fill it,
@@ -1582,6 +1600,7 @@
         coveredByNonServing,
         lineupFits,
         judgesLineups,
+        kindsIn,
         warningsFor,
         // relationship group membership (MS-141)
         inGroup,
