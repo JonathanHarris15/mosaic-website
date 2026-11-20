@@ -21,13 +21,13 @@ test('a series with no settings of its own gets them from each Role, in the new 
     assert.equal(plan.changed, true);
     assert.deepEqual(plan.seeded, ['setup', 'coffee']);
     const s = plan.roleSettings.setup;
-    assert.deepEqual(s.slots.map(x => x.id), ['s1', 's2'], 'slot ids are kept');
-    assert.ok(s.slots.every(x => x.requirement === 'either'));
+    assert.deepEqual(s.slots.map((/** @type {*} */ x) => x.id), ['s1', 's2'], 'slot ids are kept');
+    assert.ok(s.slots.every((/** @type {*} */ x) => x.requirement === 'either'));
     assert.equal(s.nextSlotSeq, 3);
     assert.equal(s.intensity, 2);
     assert.equal(s.allowsAnotherRole, true);
     // Person rule → one OR rule; per-seat sexes → a line-up; team rule → its own.
-    const kinds = s.restrictions.map(r => r.scope + ':' + r.options[0].conditions.map(c => c.kind).join('+'));
+    const kinds = s.restrictions.map((/** @type {*} */ r) => r.scope + ':' + r.options[0].conditions.map((/** @type {*} */ c) => c.kind).join('+'));
     assert.deepEqual(kinds, ['person:requireTag', 'team:lineup', 'team:notSameGroup']);
     assert.equal(plan.roleSettings.preacher, undefined, 'a liturgical Role gets nothing');
 });
@@ -41,9 +41,10 @@ test('what it copies judges people exactly as the old Role did', () => {
     ];
     const before = setup();
     const after = Object.assign({}, before, plan.roleSettings.setup);
+    /** @param {*} def */
     const judge = def => Roles.candidatesFor(def, def.slots[1], {
         people: people, assigned: [{ slotId: 's1', personId: 'a' }],
-    }).map(r => r.eligible);
+    }).map((/** @type {*} */ r) => r.eligible);
     assert.deepEqual(judge(after), judge(before));
 });
 

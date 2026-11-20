@@ -23,6 +23,7 @@ const definition = () => ({
     allowsAnotherRole: true,
 });
 
+/** @param {*} extra */
 const series = extra => Object.assign(
     { id: 'midweek', name: 'Midweek', roleSlugs: ['setup', 'coffee'] }, extra || {}
 );

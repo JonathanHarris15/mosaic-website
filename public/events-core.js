@@ -114,37 +114,43 @@
     // time an editor changes it there.
     const SETTING_FIELDS = ['slots', 'nextSlotSeq', 'restrictions', 'intensity', 'allowsAnotherRole'];
 
+    /** @param {*} series */
     const roleSettingsMapOf = series => (
         series && series.roleSettings && typeof series.roleSettings === 'object'
             ? series.roleSettings : {}
     );
 
+    /** @param {*} series @param {*} roleSlug */
     function roleSettingsOf(series, roleSlug) {
         const own = roleSettingsMapOf(series)[roleSlug];
         return own && typeof own === 'object' ? own : null;
     }
 
+    /** @param {*} series @param {*} definition */
     function effectiveRole(series, definition) {
         if (!definition) return definition;
         const own = roleSettingsOf(series, definition.slug);
         if (!own) return definition;
         const out = Object.assign({}, definition);
-        SETTING_FIELDS.forEach(field => {
+        SETTING_FIELDS.forEach((/** @type {*} */ field) => {
             if (own[field] !== undefined) out[field] = own[field];
         });
         return out;
     }
 
+    /** @param {*} series @param {*} definitions */
     function rolesFor(series, definitions) {
-        return (definitions || []).map(def => effectiveRole(series, def));
+        return (definitions || []).map((/** @type {*} */ def) => effectiveRole(series, def));
     }
 
+    /** @param {*} series @param {*} roleSlug @param {*} settings */
     function withRoleSettings(series, roleSlug, settings) {
         const map = Object.assign({}, roleSettingsMapOf(series));
         map[roleSlug] = settings;
         return Object.assign({}, series, { roleSettings: map });
     }
 
+    /** @param {*} series @param {*} roleSlug */
     function withoutRoleSettings(series, roleSlug) {
         const map = Object.assign({}, roleSettingsMapOf(series));
         if (!(roleSlug in map)) return series;
@@ -161,10 +167,12 @@
     //
     // Each is { kind, typeId, roleSlugs: [a, b] }; RolesCore.validateCrossRoleRule
     // says whether one is well-formed, and this module only arranges them.
+    /** @param {*} series */
     const crossRoleRulesOf = series => (
         series && Array.isArray(series.crossRoleRules) ? series.crossRoleRules : []
     );
 
+    /** @param {*} series @param {*} rules */
     function withCrossRoleRules(series, rules) {
         return Object.assign({}, series, { crossRoleRules: rules });
     }
@@ -173,6 +181,7 @@
     // about a Role that is no longer here can never fire, and one left lying
     // about is worse than absent: put the Role back a year later and a rule
     // nobody remembers writing starts refusing people.
+    /** @param {*} series @param {*} roleSlug */
     function withoutRulesNaming(series, roleSlug) {
         return withCrossRoleRules(series, crossRoleRulesOf(series).filter(
             rule => rolesNamedBy(rule).indexOf(roleSlug) === -1
@@ -181,16 +190,21 @@
 
     // Every Role a rule across Roles names — a plain pair rule's two, or any
     // Role named by a condition in any option of an OR rule.
+    /** @param {*} rule */
     function rolesNamedBy(rule) {
         const out = [];
+        /** @param {*} slug */
+        /** @param {*} slug */
         const add = slug => { if (slug && out.indexOf(slug) === -1) out.push(slug); };
+        /** @param {*} cond */
+        /** @param {*} cond */
         const visit = cond => {
             if (!cond) return;
             ((cond.roleSlugs) || []).forEach(add);
             add(cond.roleSlug);
         };
         visit(rule);
-        ((rule && rule.options) || []).forEach(option => ((option && option.conditions) || []).forEach(visit));
+        ((rule && rule.options) || []).forEach((/** @type {*} */ option) => ((option && option.conditions) || []).forEach(visit));
         return out;
     }
 

@@ -12,6 +12,7 @@ const Roles = require('../public/roles-core.js');
 // the church, in serving_settings/church — not on the tag or group, because a
 // group is an elder's record and an editor cannot write it.
 
+/** @param {*} id @param {*} extra */
 const person = (id, extra) => Object.assign({ id: id, name: id, tags: [] }, extra || {});
 const ann = person('ann', { tags: ['under12'] });
 const bob = person('bob');
@@ -20,7 +21,8 @@ const dan = person('dan', { doesNotServe: true });
 const PEOPLE = [ann, bob, cat, dan];
 const GROUPS = [{ id: 'youth', typeId: 't', leaderId: 'bob', memberIds: ['cat'] }];
 
-const ids = list => list.map(p => p.id);
+/** @param {*} list */
+const ids = list => list.map((/** @type {*} */ p) => p.id);
 
 test('nobody is left out by an empty setting', () => {
     assert.deepEqual(ids(Roles.assignablePeople(PEOPLE, { nonServing: { tagIds: [], groupIds: [] } })), ['ann', 'bob', 'cat']);
@@ -59,8 +61,8 @@ test('nonServingSetting reads a stored document, and a missing one as nothing', 
 });
 
 test('who a tag or group covers can be counted for the page', () => {
-    assert.deepEqual(Roles.coveredByNonServing(PEOPLE, { kind: 'tag', id: 'under12' }, GROUPS).map(p => p.id), ['ann']);
-    assert.deepEqual(Roles.coveredByNonServing(PEOPLE, { kind: 'group', id: 'youth' }, GROUPS).map(p => p.id).sort(), ['bob', 'cat']);
+    assert.deepEqual(Roles.coveredByNonServing(PEOPLE, { kind: 'tag', id: 'under12' }, GROUPS).map((/** @type {*} */ p) => p.id), ['ann']);
+    assert.deepEqual(Roles.coveredByNonServing(PEOPLE, { kind: 'group', id: 'youth' }, GROUPS).map((/** @type {*} */ p) => p.id).sort(), ['bob', 'cat']);
 });
 
 // ── Who may write it ─────────────────────────────────────────────────────────

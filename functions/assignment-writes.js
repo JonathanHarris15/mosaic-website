@@ -152,9 +152,11 @@ async function rosterPeople(db, roster, context) {
   const rules = ((context.roleDef && context.roleDef.restrictions) || [])
       .concat(context.crossRoleRules || []);
   if (!rolesCore.judgesLineups(rules)) return [];
-  const ids = [...new Set((roster || []).map((a) => a.personId).filter(Boolean))];
+  const ids = [...new Set((roster || [])
+      .map((a) => a.personId).filter(Boolean))];
   if (!ids.length) return [];
-  const snaps = await db.getAll(...ids.map((id) => db.collection("people").doc(id)));
+  const snaps = await db.getAll(
+      ...ids.map((id) => db.collection("people").doc(id)));
   return snaps.filter((d) => d.exists)
       .map((d) => Object.assign({id: d.id}, d.data()));
 }

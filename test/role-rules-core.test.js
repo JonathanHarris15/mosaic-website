@@ -12,6 +12,7 @@ const RoleRules = require('../public/role-rules-core.js');
 // This module turns what is stored on the series into that form and back, and
 // does the working-out. The page only draws it.
 
+/** @param {*} extra */
 const stored = extra => Object.assign({
     slug: 'helper',
     name: 'Kids Helper',
@@ -22,7 +23,8 @@ const stored = extra => Object.assign({
     allowsAnotherRole: false,
 }, extra || {});
 
-const conds = form => form.who.options.map(o => o.conditions.map(c => c.kind));
+/** @param {*} form */
+const conds = form => form.who.options.map((/** @type {*} */ o) => o.conditions.map((/** @type {*} */ c) => c.kind));
 
 // ── Reading what is stored ───────────────────────────────────────────────────
 
@@ -81,16 +83,16 @@ test('settings keep the slot ids that exist and add new ones after them', () => 
     const form = RoleRules.formFrom(stored());
     form.count = 3;
     const settings = RoleRules.settingsFrom(form, stored());
-    assert.deepEqual(settings.slots.map(s => s.id), ['s1', 's2', 's3']);
+    assert.deepEqual(settings.slots.map((/** @type {*} */ s) => s.id), ['s1', 's2', 's3']);
     assert.equal(settings.nextSlotSeq, 4);
-    assert.ok(settings.slots.every(s => s.requirement === 'either'));
+    assert.ok(settings.slots.every((/** @type {*} */ s) => s.requirement === 'either'));
 });
 
 test('fewer people drops the last seats, and ids are never reused', () => {
     const form = RoleRules.formFrom(stored());
     form.count = 1;
     const one = RoleRules.settingsFrom(form, stored());
-    assert.deepEqual(one.slots.map(s => s.id), ['s1']);
+    assert.deepEqual(one.slots.map((/** @type {*} */ s) => s.id), ['s1']);
     assert.equal(one.nextSlotSeq, 3);
 });
 
@@ -131,13 +133,14 @@ test('rules across Roles are stored as OR rules', () => {
 
 // ── What this allows ────────────────────────────────────────────────────────
 
+/** @param {*} men @param {*} women */
 const people = (men, women) => [
     ...Array.from({ length: men }, (_, i) => ({ id: 'm' + i, sex: 'male' })),
     ...Array.from({ length: women }, (_, i) => ({ id: 'w' + i, sex: 'female' })),
 ];
 const lineupRule = (strength, ...options) => ({
     strength: strength,
-    options: options.map(sexes => ({ conditions: [{ kind: 'lineup', sexes: sexes }] })),
+    options: options.map((/** @type {*} */ sexes) => ({ conditions: [{ kind: 'lineup', sexes: sexes }] })),
 });
 
 test('no line-up rule allows every mix the people allow', () => {

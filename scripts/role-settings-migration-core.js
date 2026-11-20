@@ -22,30 +22,37 @@ const RoleRules = require('../public/role-rules-core.js');
 
 const OLD_ROLE_FIELDS = ['slots', 'nextSlotSeq', 'restrictions', 'intensity', 'allowsAnotherRole'];
 
+/** @param {*} slug */
 const isServant = slug => Roles.LITURGICAL_SLUGS.indexOf(slug) === -1;
+/** @param {*} a @param {*} b */
 const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 
 // The new-shape settings for one Role on one series.
+/** @param {*} series @param {*} definition */
 function settingsFor(series, definition) {
     const role = Events.effectiveRole(series, definition);
     return RoleRules.settingsFrom(RoleRules.formFrom(role), role);
 }
 
 /**
- * @param {Object} series the stored series (with `id`)
- * @param {Object<string, Object>} definitionsBySlug every stored Role, by slug
+ * @param {Record<string, *>} series the stored series (with `id`)
+ * @param {Record<string, Record<string, *>>} definitionsBySlug every stored Role, by slug
  * @return {{ roleSettings: Object, crossRoleRules: Array, changed: boolean,
  *            seeded: string[], converted: string[], missing: string[] }}
  */
 function planSeries(series, definitionsBySlug) {
     const s = series || {};
     const before = s.roleSettings || {};
+    /** @type {Record<string, *>} */
     const roleSettings = {};
+    /** @type {string[]} */
     const seeded = [];
+    /** @type {string[]} */
     const converted = [];
+    /** @type {string[]} */
     const missing = [];
 
-    (s.roleSlugs || []).filter(isServant).forEach(slug => {
+    (s.roleSlugs || []).filter(isServant).forEach((/** @type {*} */ slug) => {
         const def = definitionsBySlug[slug];
         if (!def) {
             // A Role the series names but nobody defines: nothing to copy, and
@@ -66,23 +73,24 @@ function planSeries(series, definitionsBySlug) {
 
 /**
  * Which old fields a Role Definition still carries.
- * @param {Object} definition a stored Role
+ * @param {Record<string, *>} definition a stored Role
  * @return {string[]} the fields to delete
  */
 function planRoleStrip(definition) {
-    return OLD_ROLE_FIELDS.filter(field => definition && field in definition);
+    return OLD_ROLE_FIELDS.filter((/** @type {*} */ field) => definition && field in definition);
 }
 
 /**
  * Stripping is only safe once every series has its own settings for every
  * Servant Role it runs — otherwise that series would read a Role with no seats.
- * @param {Array<Object>} seriesList every stored series
- * @param {Object<string, Object>} definitionsBySlug every stored Role, by slug
+ * @param {Array<Record<string, *>>} seriesList every stored series
+ * @param {Record<string, Record<string, *>>} definitionsBySlug every stored Role, by slug
  * @return {string[]} "seriesId/slug" for each one still reading the Role
  */
 function unmigrated(seriesList, definitionsBySlug) {
+    /** @type {string[]} */
     const out = [];
-    (seriesList || []).forEach(s => (s.roleSlugs || []).filter(isServant).forEach(slug => {
+    (seriesList || []).forEach((/** @type {*} */ s) => (s.roleSlugs || []).filter(isServant).forEach((/** @type {*} */ slug) => {
         if (definitionsBySlug[slug] && !Events.roleSettingsOf(s, slug)) out.push(s.id + '/' + slug);
     }));
     return out;

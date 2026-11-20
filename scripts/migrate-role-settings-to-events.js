@@ -18,7 +18,9 @@ const path = require('path');
 const Plan = require('./role-settings-migration-core.js');
 const {loadProject} = require('./firebase-project.js');
 
+/** @param {*} argv */
 const committing = argv => argv.includes('--commit');
+/** @param {*} argv */
 const willWrite = argv => committing(argv) && argv.includes('--i-mean-prod');
 
 async function main() {
@@ -46,15 +48,15 @@ async function main() {
         db.collection('roles').get(),
         db.collection('events').get(),
     ]);
-    const roles = rolesSnap.docs.map(d => Object.assign({ id: d.id }, d.data()));
+    const roles = rolesSnap.docs.map((/** @type {*} */ d) => Object.assign({ id: d.id }, d.data()));
     const bySlug = {};
-    roles.forEach(r => { if (r.slug) bySlug[r.slug] = r; });
-    const seriesList = seriesSnap.docs.map(d => Object.assign({ id: d.id }, d.data()))
-        .filter(s => Array.isArray(s.roleSlugs));
+    roles.forEach((/** @type {*} */ r) => { if (r.slug) bySlug[r.slug] = r; });
+    const seriesList = seriesSnap.docs.map((/** @type {*} */ d) => Object.assign({ id: d.id }, d.data()))
+        .filter((/** @type {*} */ s) => Array.isArray(s.roleSlugs));
 
     if (!STRIP) {
         const planned = [];
-        seriesList.forEach(s => {
+        seriesList.forEach((/** @type {*} */ s) => {
             const plan = Plan.planSeries(s, bySlug);
             if (plan.changed) planned.push({ id: s.id, name: s.name, plan });
         });
@@ -62,7 +64,7 @@ async function main() {
             phase: 'copy',
             seriesScanned: seriesList.length,
             seriesToWrite: planned.length,
-            rows: planned.map(p => ({
+            rows: planned.map((/** @type {*} */ p) => ({
                 series: p.id, name: p.name,
                 seeded: p.plan.seeded, converted: p.plan.converted, missing: p.plan.missing,
                 crossRoleRules: p.plan.crossRoleRules.length,
@@ -85,13 +87,13 @@ async function main() {
             + blocking.join(', '));
     }
     const strips = roles
-        .map(r => ({ id: r.id, slug: r.slug, fields: Plan.planRoleStrip(r) }))
-        .filter(r => r.fields.length);
+        .map((/** @type {*} */ r) => ({ id: r.id, slug: r.slug, fields: Plan.planRoleStrip(r) }))
+        .filter((/** @type {*} */ r) => r.fields.length);
     console.log(JSON.stringify({ phase: 'strip', rolesScanned: roles.length, rolesToStrip: strips.length, rows: strips }, null, 2));
     if (!COMMIT) { console.log('Dry run: no writes made.'); return; }
     for (const r of strips) {
         const patch = {};
-        r.fields.forEach(f => { patch[f] = FieldValue.delete(); });
+        r.fields.forEach((/** @type {*} */ f) => { patch[f] = FieldValue.delete(); });
         await db.collection('roles').doc(r.id).update(patch);
     }
     console.log('Old fields removed from', strips.length, 'Roles.');

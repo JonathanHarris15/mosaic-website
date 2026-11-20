@@ -31,6 +31,7 @@ const eli = person('eli', 'male', ['member']);
 const PEOPLE = [ann, bea, cal, dev, eli];
 
 const opt = (...conditions) => ({ conditions: conditions });
+/** @param {*} id */
 const either = id => ({ id: id, requirement: 'either' });
 const role = (slug, count, restrictions) => ({
     slug: slug,
@@ -41,7 +42,7 @@ const role = (slug, count, restrictions) => ({
 });
 
 const eligible = (def, slot, context) => Roles.candidatesFor(def, slot, Object.assign({ people: PEOPLE }, context))
-    .filter(r => r.eligible).map(r => r.personId);
+    .filter((/** @type {*} */ r) => r.eligible).map((/** @type {*} */ r) => r.personId);
 
 // ── Who may do it, with an OR ────────────────────────────────────────────────
 
@@ -78,7 +79,7 @@ test('failing every one of several options says so', () => {
 
 // ── Line-ups ─────────────────────────────────────────────────────────────────
 
-const lineups = (...options) => ({ kind: 'anyOf', options: options.map(sexes => opt({ kind: 'lineup', sexes: sexes })) });
+const lineups = (...options) => ({ kind: 'anyOf', options: options.map((/** @type {*} */ sexes) => opt({ kind: 'lineup', sexes: sexes })) });
 
 test('a line-up of a man and a woman: the first seat may be either', () => {
     const def = role('helpers', 2, [lineups(['male', 'female'])]);
@@ -108,7 +109,7 @@ test('3 men and a woman, or 3 women and a man: a second woman closes off the fir
     const seated = [{ slotId: 's1', personId: 'ann' }, { slotId: 's2', personId: 'bea' }];
     // Two women in: only the 3-women option is left, so a third woman or one man.
     const result = Roles.candidatesFor(def, def.slots[2], { people: PEOPLE, assigned: seated });
-    assert.deepEqual(result.filter(r => r.eligible).map(r => r.personId), ['cal', 'dev', 'eli']);
+    assert.deepEqual(result.filter((/** @type {*} */ r) => r.eligible).map((/** @type {*} */ r) => r.personId), ['cal', 'dev', 'eli']);
     const ann2 = person('ann2', 'female');
     const withAnn2 = Roles.candidatesFor(def, def.slots[2], { people: [ann2], assigned: seated });
     assert.equal(withAnn2[0].eligible, true);
@@ -120,7 +121,7 @@ test('an "either" mark takes anybody, a recorded sex or not', () => {
     const results = Roles.candidatesFor(def, def.slots[1], {
         people: [ann, nobody], assigned: [{ slotId: 's1', personId: 'cal' }],
     });
-    assert.deepEqual(results.map(r => r.eligible), [true, true]);
+    assert.deepEqual(results.map((/** @type {*} */ r) => r.eligible), [true, true]);
 });
 
 test('somebody with no recorded sex cannot take a man’s or woman’s mark', () => {
@@ -188,8 +189,8 @@ test('across Roles: with a man leading, the helpers are a woman and a man', () =
         assigned: [{ slotId: 's1', personId: 'dev' }],
         assignedElsewhere: [{ personId: 'cal', roleSlug: 'leader', allowsAnotherRole: false }],
     });
-    assert.deepEqual(results.filter(r => r.eligible).map(r => r.personId), ['ann', 'bea']);
-    assert.equal(results.find(r => r.personId === 'eli').reason, Roles.REASONS.LINEUP_MISMATCH);
+    assert.deepEqual(results.filter((/** @type {*} */ r) => r.eligible).map((/** @type {*} */ r) => r.personId), ['ann', 'bea']);
+    assert.equal(results.find((/** @type {*} */ r) => r.personId === 'eli').reason, Roles.REASONS.LINEUP_MISMATCH);
 });
 
 test('across Roles: two men helping means only a woman may lead', () => {
@@ -251,10 +252,10 @@ test('at least one first-aider: open until the last seat, then only first-aiders
     const def = role('welcome', 2, [{ kind: 'atLeastTagged', tagId: 'first-aid', atLeast: 1 }]);
     const all = [ann, cal, medic];
     assert.deepEqual(
-        Roles.candidatesFor(def, def.slots[0], { people: all }).filter(r => r.eligible).map(r => r.personId),
+        Roles.candidatesFor(def, def.slots[0], { people: all }).filter((/** @type {*} */ r) => r.eligible).map((/** @type {*} */ r) => r.personId),
         ['ann', 'cal', 'medic']
     );
     const last = Roles.candidatesFor(def, def.slots[1], { people: all, assigned: [{ slotId: 's1', personId: 'ann' }] });
-    assert.deepEqual(last.filter(r => r.eligible).map(r => r.personId), ['medic']);
-    assert.equal(last.find(r => r.personId === 'cal').reason, Roles.REASONS.TOO_FEW_TAGGED);
+    assert.deepEqual(last.filter((/** @type {*} */ r) => r.eligible).map((/** @type {*} */ r) => r.personId), ['medic']);
+    assert.equal(last.find((/** @type {*} */ r) => r.personId === 'cal').reason, Roles.REASONS.TOO_FEW_TAGGED);
 });

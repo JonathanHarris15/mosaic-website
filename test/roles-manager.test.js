@@ -1,4 +1,3 @@
-/* global AccessCore */
 const { test } = require('node:test');
 const assert = require('node:assert');
 
@@ -108,16 +107,11 @@ require('../public/roles-manager.js');
 
 const KIDS_CLEARED = 'tag_kids';
 const SABBATICAL = 'tag_sabbatical';
-const DISCIPLINE = 'tag_discipline';
 
 const TAGS = {
     [KIDS_CLEARED]: { name: 'Kids Cleared' },
     [SABBATICAL]: { name: 'On Sabbatical' },
 };
-
-const MARRIAGE = { name: 'Marriage', kind: 'pairwise', priority: false, sharedWithEditors: true };
-const DISCIPLESHIP = { name: 'Discipleship', kind: 'pairwise', priority: true, sharedWithEditors: false };
-const HOUSE_GROUP = { name: 'House Group', kind: 'group', priority: true, sharedWithEditors: true };
 
 const kidsDefinition = () => ({
     name: 'Kids Ministry',
@@ -788,27 +782,6 @@ const PEOPLE = {
 
 // ── The allowlist ────────────────────────────────────────────────────────────
 
-// ── Editing an allowlist that already exists ─────────────────────────────────
-//
-// An allowlist is the one rule made of MANY things, and the only way to change
-// it used to be to throw it away and name everybody again. Six months later,
-// with one person joining the coffee rota, that is a list retyped from memory —
-// and a name forgotten in the retyping is a Role that quietly stops offering
-// somebody. So the list already on the Role is edited where it sits.
-
-const withAllowlist = (...ids) => {
-    const def = coffeeDefinition();
-    def.restrictions = [{ kind: 'allowlist', personIds: ids }];
-    return def;
-};
-
-const openWithAllowlist = async (...ids) => {
-    const page = await mountPage({ roles: { r1: withAllowlist(...ids) }, people: PEOPLE });
-    page.startEdit(page.roleDefinitions.find(d => d.id === 'r1'));
-    return page;
-};
-
-const listOf = page => page.draft.restrictions.find(r => r.kind === 'allowlist').personIds;
 
 // ── Liturgical intensity ─────────────────────────────────────────────────────
 

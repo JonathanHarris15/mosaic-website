@@ -306,6 +306,7 @@
     // does do is count: every eligible candidate says how many Try rules they
     // would break (`misses`), and the solve fills with the fewest.
     const STRENGTHS = Object.freeze({ MUST: 'must', TRY: 'try' });
+    /** @param {Record<string, *>} rule */
     const isTry = rule => !!rule && rule.strength === STRENGTHS.TRY;
 
     // ── The two Group Types the Membership Directory answers ─────────────────
@@ -445,6 +446,7 @@
     // nobody and applies to every viewer: it is not a privacy rule.
     const NON_SERVING_DOC = Object.freeze({ collection: 'serving_settings', id: 'church' });
 
+    /** @param {?Record<string, *>} stored @returns {{ tagIds: string[], groupIds: string[] }} */
     function nonServingSetting(stored) {
         const s = stored || {};
         const list = v => (Array.isArray(v) ? v.filter(x => typeof x === 'string' && x) : []);
@@ -453,6 +455,7 @@
 
     // The ids of everyone a setting takes out. A group this account cannot read
     // is simply not in `groups`, so it takes nobody out rather than everybody.
+    /** @param {Array<Record<string, *>>} people @param {{ tagIds?: string[], groupIds?: string[] } | null | undefined} setting @param {Array<Record<string, *>> | undefined} groups @returns {Set<string>} */
     function nonServingIds(people, setting, groups) {
         const tagIds = (setting && setting.tagIds) || [];
         const groupIds = (setting && setting.groupIds) || [];
@@ -469,6 +472,7 @@
     }
 
     // Who one tag or group covers, for the page to count and name.
+    /** @param {Array<Record<string, *>>} people @param {{ kind: string, id: string }} entry @param {Array<Record<string, *>> | undefined} groups @returns {Array<Record<string, *>>} */
     function coveredByNonServing(people, entry, groups) {
         const setting = entry && entry.kind === 'group'
             ? { tagIds: [], groupIds: [entry.id] }
@@ -758,6 +762,7 @@
     // the Leader is a woman)". Its conditions name the Role they are about —
     // a line-up by `roleSlug`, a group rule by its `roleSlugs` pair — and it
     // is this Role's business only if one of them names it.
+    /** @param {Record<string, *>} def @param {Record<string, *>} candidate @param {Record<string, *>} context @param {Array<Record<string, *>>} holders @param {Array<Record<string, *>>} [seated] @returns {?Record<string, *>} */
     function crossRoleIneligibility(def, candidate, context, holders, seated) {
         const rules = (context && context.crossRoleRules) || [];
         if (!rules.length) return null;
@@ -778,6 +783,7 @@
 
     // One rule across Roles, for a candidate to `slug`: why it refuses them,
     // or null — including when the rule is not this Role's business at all.
+    /** @param {Record<string, *>} rule @param {string} slug @param {Record<string, *>} candidate @param {Record<string, *>} context @param {Array<Record<string, *>>} others @param {Array<Record<string, *>>} own @returns {?Record<string, *>} */
     function crossRuleBlocks(rule, slug, candidate, context, others, own) {
         if (rule && rule.kind === RESTRICTIONS.ANY_OF) {
             const names = (rule.options || []).some(option => conditionsOf(option).some(
@@ -795,6 +801,7 @@
 
     // How many Try rules this candidate would break by taking the place —
     // the Role's own and the Event's rules across Roles alike.
+    /** @param {Record<string, *>} def @param {Record<string, *>} candidate @param {Record<string, *>} context @param {Array<Record<string, *>>} seated */
     function preferenceMisses(def, candidate, context, seated) {
         let misses = 0;
         restrictionsOf(def).forEach(rule => {
@@ -809,6 +816,7 @@
     }
 
     // One condition of a rule across Roles, judged for a candidate to `slug`.
+    /** @param {Record<string, *>} cond @param {string} slug @param {Record<string, *>} candidate @param {Record<string, *>} context @param {Array<Record<string, *>>} holders @param {Array<Record<string, *>>} seated @returns {?Record<string, *>} */
     function judgeCrossCondition(cond, slug, candidate, context, holders, seated) {
         if (!cond) return null;
 
@@ -907,6 +915,7 @@
     // Returns null when the rule lets them in, or why it does not. An `anyOf`
     // is judged through its options, each condition by this same function, so
     // a condition inside an option means exactly what it means on its own.
+    /** @param {Record<string, *>} rule @param {Record<string, *>} def @param {Record<string, *>} candidate @param {Record<string, *>} context @param {Array<Record<string, *>>} seated @returns {?Record<string, *>} */
     function judgeOwnRule(rule, def, candidate, context, seated) {
         if (!rule) return null;
         if (rule.kind === RESTRICTIONS.REQUIRE_TAG && !carriesTag(candidate, rule.tagId)) {
@@ -1016,8 +1025,10 @@
     // option, that option's own reason ("must be tagged Member"); when every
     // option failed on its line-up, that it is the line-up; otherwise that
     // they fit none of the options.
+    /** @param {Record<string, *>} option @returns {Array<Record<string, *>>} */
     const conditionsOf = option => (option && Array.isArray(option.conditions) ? option.conditions : []);
 
+    /** @param {Array<Record<string, *>> | undefined} options @param {(cond: Record<string, *>) => ?Record<string, *>} judge @returns {?Record<string, *>} */
     function judgeOptions(options, judge) {
         const list = Array.isArray(options) ? options : [];
         if (!list.length) return null;
@@ -1048,14 +1059,15 @@
     //
     // `team` is the sex of each person on it; null for somebody whose sex was
     // never recorded, who can only take an "either" mark.
+    /** @param {string[] | undefined} sexes @param {Array<?string>} team */
     function lineupFits(sexes, team) {
         const marks = Array.isArray(sexes) ? sexes : [];
         if (team.length > marks.length) return false;
-        const men = marks.filter(m => m === 'male').length;
-        const women = marks.filter(m => m === 'female').length;
+        const men = marks.filter((/** @type {string} */ m) => m === 'male').length;
+        const women = marks.filter((/** @type {string} */ m) => m === 'female').length;
         const either = marks.length - men - women;
         let m = 0; let f = 0; let unknown = 0;
-        team.forEach(sex => {
+        team.forEach((/** @type {?string} */ sex) => {
             if (sex === 'male') m++;
             else if (sex === 'female') f++;
             else unknown++;
@@ -1070,7 +1082,9 @@
     // `knownPeople` is for callers that judge one candidate at a time (Cover,
     // Trade, a member's own take): they narrow `people` to the one person, so
     // the people already on the team have to be handed in separately.
+    /** @type {WeakMap<object, Map<string, Record<string, *>>>} */
     const personIndexes = new WeakMap();
+    /** @param {Array<Record<string, *>> | undefined} people @returns {?Map<string, Record<string, *>>} */
     function indexOf(people) {
         if (!Array.isArray(people)) return null;
         let index = personIndexes.get(people);
@@ -1081,6 +1095,7 @@
         return index;
     }
 
+    /** @param {Record<string, *>} context @param {string} id @returns {?Record<string, *>} */
     function knownPerson(context, id) {
         const own = indexOf(context && context.people);
         if (own && own.has(id)) return own.get(id);
@@ -1088,6 +1103,7 @@
         return known && known.has(id) ? known.get(id) : null;
     }
 
+    /** @param {Record<string, *>} context @param {string[]} personIds @returns {Array<?string>} */
     function teamSexes(context, personIds) {
         return personIds
             .map(id => knownPerson(context, id))
@@ -1097,6 +1113,7 @@
 
     // Does any of these rules judge a line-up? A caller that would otherwise
     // load only the one person being judged needs to load the team as well.
+    /** @param {Array<Record<string, *>>} rules */
     function judgesLineups(rules) {
         const walk = rule => !!rule && (rule.kind === RESTRICTIONS.LINEUP
             || (rule.kind === RESTRICTIONS.ANY_OF

@@ -17,6 +17,7 @@
     const EMPTY = Object.freeze({ nonServing: { tagIds: [], groupIds: [] }, groups: [] });
     let pending = null;
 
+    /** @param {*} db */
     function load(db) {
         if (pending) return pending;
         const Roles = global.RolesCore;
@@ -36,8 +37,8 @@
                     // Firestore fails the whole query for anyone not an elder.
                     const snap = await db.collection('relationship_groups')
                         .where('sharedWithEditors', '==', true).get();
-                    groups = snap.docs.map(d => Object.assign({ id: d.id }, d.data()))
-                        .filter(g => setting.groupIds.indexOf(g.id) !== -1);
+                    groups = snap.docs.map((/** @type {*} */ d) => Object.assign({ id: d.id }, d.data()))
+                        .filter((/** @type {*} */ g) => setting.groupIds.indexOf(g.id) !== -1);
                 } catch (e) {
                     groups = [];
                 }
@@ -56,6 +57,5 @@
 
     const NonServing = { load, forget, current: EMPTY, EMPTY };
 
-    if (typeof module !== 'undefined' && module.exports) module.exports = NonServing;
     if (global) global.NonServing = NonServing;
 })(typeof window !== 'undefined' ? window : null);

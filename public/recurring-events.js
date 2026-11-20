@@ -89,6 +89,7 @@
             people: [],
             // The Roles as stored; read them through `roleDefinitions`, which is
             // the open Event's version of each (EventsCore.effectiveRole).
+            /** @type {Array<Record<string, *>>} */
             storedRoleDefinitions: [],
 
             // date → the occurrence document, with its roster attached. Sparse:
@@ -165,21 +166,29 @@
             sharedGroupTypes: [],
             // Person-to-person types an elder has shared ("cannot serve
             // together if..."), for the team rules.
+            /** @type {Array<Record<string, *>>} */
             sharedPairwiseTypes: [],
             groupTypesDenied: false,
             // The tags a rule can name, as this viewer may see them.
+            /** @type {Array<{ id: string, name: string }>} */
             ruleTags: [],
 
             // ── The Roles & rules table ──────────────────────────────────────
             // Which Role row is open, and the form behind each row
             // (RoleRulesCore). Keyed by series and Role, so switching events
             // never shows one Event's rules under another's name.
+            /** @type {?string} */
             openRole: null,
+            /** @type {Record<string, *>} */
             roleForms: {},
+            /** @type {Array<*>} */
             crossForms: [],
+            /** @type {?string} */
             crossFormsFor: null,
             savingRole: '',
+            /** @type {*} */
             nonServingOpts: null,
+            /** @type {Record<string, boolean>} */
             saveAgain: {},
             savingCross: false,
             crossAgain: false,
@@ -769,20 +778,23 @@
                 return this.pairTypeOptions.concat(this.sharedPairwiseTypes);
             },
 
+            /** @param {string} slug */
             roleName(slug) {
-                const def = this.roleDefinitions.find(d => d.slug === slug);
+                const def = this.roleDefinitions.find((/** @type {*} */ d) => d.slug === slug);
                 if (def && def.name) return def.name;
-                const liturgical = Roles.LITURGICAL_ROLES.find(r => r.slug === slug);
+                const liturgical = Roles.LITURGICAL_ROLES.find((/** @type {*} */ r) => r.slug === slug);
                 return (liturgical && liturgical.name) || slug;
             },
 
+            /** @param {string} typeId */
             typeName(typeId) {
-                const type = this.allRuleTypes.find(t => t.id === typeId);
+                const type = this.allRuleTypes.find((/** @type {*} */ t) => t.id === typeId);
                 return (type && type.name) || null;
             },
 
+            /** @param {string} tagId */
             tagName(tagId) {
-                const tag = this.ruleTags.find(t => t.id === tagId);
+                const tag = this.ruleTags.find((/** @type {*} */ t) => t.id === tagId);
                 return (tag && tag.name) || null;
             },
 
@@ -801,7 +813,7 @@
             get tableRoles() {
                 return ((this.chosen && this.chosen.roleSlugs) || [])
                     .filter(slug => Roles.LITURGICAL_SLUGS.indexOf(slug) === -1)
-                    .filter(slug => this.roleDefinitions.some(d => d.slug === slug));
+                    .filter(slug => this.roleDefinitions.some((/** @type {*} */ d) => d.slug === slug));
             },
 
             get liturgicalRows() {
@@ -817,8 +829,8 @@
             get rolesAvailable() {
                 const on = (this.chosen && this.chosen.roleSlugs) || [];
                 return this.roleDefinitions
-                    .filter(d => Roles.LITURGICAL_SLUGS.indexOf(d.slug) === -1)
-                    .filter(d => on.indexOf(d.slug) === -1);
+                    .filter((/** @type {*} */ d) => Roles.LITURGICAL_SLUGS.indexOf(d.slug) === -1)
+                    .filter((/** @type {*} */ d) => on.indexOf(d.slug) === -1);
             },
 
             // Built when the tab opens and whenever the Event changes, never
@@ -830,7 +842,7 @@
                 this.tableRoles.forEach(slug => {
                     const key = this.seriesId + ':' + slug;
                     if (!forms[key]) {
-                        forms[key] = RoleRules.formFrom(this.roleDefinitions.find(d => d.slug === slug) || {});
+                        forms[key] = RoleRules.formFrom(this.roleDefinitions.find((/** @type {*} */ d) => d.slug === slug) || {});
                     }
                 });
                 this.roleForms = forms;
@@ -840,15 +852,18 @@
                 }
             },
 
+            /** @param {string} slug */
             formFor(slug) {
                 return this.roleForms[this.seriesId + ':' + slug] || null;
             },
 
+            /** @param {string} slug */
             toggleRole(slug) {
                 this.openRole = this.openRole === slug ? null : slug;
             },
 
             // How many people a Role needs here, one more or one fewer.
+            /** @param {string} slug @param {number} delta */
             stepCount(slug, delta) {
                 const form = this.formFor(slug);
                 if (!form) return;
@@ -860,10 +875,12 @@
 
             // The three rule lists drawn by the one shared template: what it
             // lists, what kind of rules they are, and where they save.
+            /** @param {string} slug */
             whoBlock(slug) {
                 const form = this.formFor(slug);
                 return { scope: 'who', slug: slug, rules: form ? [form.who] : [] };
             },
+            /** @param {string} slug */
             teamBlock(slug) {
                 const form = this.formFor(slug);
                 return { scope: 'team', slug: slug, rules: form ? form.team : [] };
@@ -871,12 +888,14 @@
             get acrossBlock() {
                 return { scope: 'across', slug: null, rules: this.crossForms };
             },
+            /** @param {*} block */
             saveBlock(block) {
                 return block.scope === 'across' ? this.saveCross() : this.saveRole(block.slug);
             },
 
             // ── Building rules ───────────────────────────────────────────────
 
+            /** @param {string} scope */
             conditionKinds(scope) {
                 if (scope === 'who') {
                     return [
@@ -898,6 +917,7 @@
                 return kinds;
             },
 
+            /** @param {string} slug */
             countOf(slug) {
                 const form = this.formFor(slug);
                 return form ? Math.max(1, Number(form.count) || 1) : 1;
@@ -905,6 +925,7 @@
 
             // A new condition, filled in enough to be whole: a rule that names
             // no Tag would refuse everybody, so it starts on the first one.
+            /** @param {string} scope @param {string} slug */
             freshCondition(scope, slug) {
                 const roleSlug = scope === 'across' ? (this.tableRoles[0] || '') : null;
                 const c = RoleRules.newCondition(scope, this.countOf(scope === 'across' ? roleSlug : slug), roleSlug);
@@ -913,10 +934,11 @@
             },
 
             // The kind changed: give the condition what that kind needs.
+            /** @param {*} c @param {string} scope @param {string} slug */
             reshapeCondition(c, scope, slug) {
                 const keep = { id: c.id, kind: c.kind };
                 if (scope === 'across' && c.roleSlug) keep.roleSlug = c.roleSlug;
-                Object.keys(c).forEach(k => { delete c[k]; });
+                Object.keys(c).forEach((/** @type {*} */ k) => { delete c[k]; });
                 Object.assign(c, keep);
                 const firstTag = (this.ruleTags[0] && this.ruleTags[0].id) || '';
                 const firstGroup = (this.pairTypeOptions[0] && this.pairTypeOptions[0].id) || 'family';
@@ -946,42 +968,51 @@
 
             // A line-up across Roles now about a different Role: as many marks
             // as that Role needs, all "either" until somebody says otherwise.
+            /** @param {*} c */
             fitLineup(c) {
                 if (c.kind === 'lineup') c.sexes = Array(this.countOf(c.roleSlug)).fill('either');
             },
 
+            /** @param {*} c @param {*} block */
             lineupFewer(c, block) {
                 if (c.sexes.length <= 1) return;
                 c.sexes.pop();
                 this.saveBlock(block);
             },
 
+            /** @param {*} c @param {string} personId @param {*} block */
             addPerson(c, personId, block) {
                 if (!personId || c.personIds.indexOf(personId) !== -1) return;
                 c.personIds.push(personId);
                 this.saveBlock(block);
             },
 
+            /** @param {string} mark */
             nextMark(mark) {
                 return mark === 'male' ? 'female' : mark === 'female' ? 'either' : 'male';
             },
 
+            /** @param {string} mark */
             markLabel(mark) {
                 return mark === 'male' ? 'M' : mark === 'female' ? 'W' : 'Any';
             },
 
+            /** @param {*} makeup */
             makeupMarks(makeup) {
                 return Array(makeup.men).fill('male').concat(Array(makeup.women).fill('female'));
             },
 
+            /** @param {*} makeup */
             makeupWords(makeup) {
                 return RoleRules.makeupWords(makeup);
             },
 
+            /** @param {*} rule @param {string} scope @param {string} slug */
             addOption(rule, scope, slug) {
                 rule.options.push({ id: RoleRules.newOption(scope).id, conditions: [this.freshCondition(scope, slug)] });
             },
 
+            /** @param {*} rules @param {string} scope @param {string} slug */
             addRule(rules, scope, slug) {
                 const rule = RoleRules.newRule(scope);
                 rule.options[0].conditions = [this.freshCondition(scope, slug)];
@@ -990,6 +1021,7 @@
 
             // Removing the last condition of an option removes the option; the
             // last option of a team or cross rule removes the rule.
+            /** @param {*} rules @param {number} ruleIndex @param {number} optionIndex @param {number} condIndex @param {string} scope */
             removeCondition(rules, ruleIndex, optionIndex, condIndex, scope) {
                 const rule = rules[ruleIndex];
                 const option = rule.options[optionIndex];
@@ -998,28 +1030,32 @@
                 if (!rule.options.length && scope !== 'who') rules.splice(ruleIndex, 1);
             },
 
+            /** @param {*} rule @param {string} scope */
             sentence(rule, scope) {
                 return RoleRules.sentence(rule, scope, this.ruleNames);
             },
 
             // ── What a Role's rules allow ────────────────────────────────────
 
+            /** @param {string} slug */
             settingsFor(slug) {
-                const def = this.roleDefinitions.find(d => d.slug === slug) || {};
+                const def = this.roleDefinitions.find((/** @type {*} */ d) => d.slug === slug) || {};
                 return RoleRules.settingsFrom(this.formFor(slug), def);
             },
 
             // Everything wrong with a Role's form, in words. A form with any of
             // these is not saved: half a rule is worse than none, because a rule
             // that names no Tag refuses everybody.
+            /** @param {string} slug */
             roleProblems(slug) {
                 const form = this.formFor(slug);
                 if (!form) return [];
                 const settings = this.settingsFor(slug);
+                /** @type {string[]} */
                 const out = [];
                 settings.restrictions.forEach(rule => {
                     Roles.validateRestriction(rule, this.allRuleTypes, { count: settings.slots.length }).errors
-                        .forEach(e => { if (out.indexOf(e) === -1) out.push(e); });
+                        .forEach((/** @type {*} */ e) => { if (out.indexOf(e) === -1) out.push(e); });
                 });
                 return out;
             },
@@ -1031,26 +1067,29 @@
 
             // Who can do it, judged on "who can do it" alone — the team's rules
             // depend on who else is on it, which no date has decided yet.
+            /** @param {string} slug */
             eligibleFor(slug) {
                 const settings = this.settingsFor(slug);
-                const def = Object.assign({}, this.roleDefinitions.find(d => d.slug === slug) || {}, settings, {
-                    restrictions: settings.restrictions.filter(r => r.scope === 'person'),
+                const def = Object.assign({}, this.roleDefinitions.find((/** @type {*} */ d) => d.slug === slug) || {}, settings, {
+                    restrictions: settings.restrictions.filter((/** @type {*} */ r) => r.scope === 'person'),
                 });
                 const people = this.assignable;
                 const ok = {};
                 Roles.candidatesFor(def, settings.slots[0], { people: people })
-                    .forEach(r => { if (r.eligible) ok[r.personId] = true; });
-                return people.filter(p => ok[p.id]);
+                    .forEach((/** @type {*} */ r) => { if (r.eligible) ok[r.personId] = true; });
+                return people.filter((/** @type {*} */ p) => ok[p.id]);
             },
 
+            /** @param {string} slug */
             eligibleSentence(slug) {
                 const e = this.eligibleFor(slug);
-                const men = e.filter(p => p.sex === 'male').length;
-                const women = e.filter(p => p.sex === 'female').length;
+                const men = e.filter((/** @type {*} */ p) => p.sex === 'male').length;
+                const women = e.filter((/** @type {*} */ p) => p.sex === 'female').length;
                 return e.length + ' of ' + this.assignable.length + ' people can do it — '
                     + (men === 1 ? '1 man' : men + ' men') + ', ' + (women === 1 ? '1 woman' : women + ' women') + '.';
             },
 
+            /** @param {string} slug */
             baseMakeups(slug) {
                 const form = this.formFor(slug);
                 if (!form) return [];
@@ -1066,34 +1105,39 @@
                 return RoleRules.linkedSlugs(this.crossForms, this.tableRoles);
             },
 
+            /** @param {string} slug */
             allowedMakeups(slug) {
                 const base = this.baseMakeups(slug);
                 if (this.linkedRoles.indexOf(slug) === -1) return base;
                 const combos = this.combos;
-                return base.filter(m => combos.some(c => c[slug] && c[slug].men === m.men));
+                return base.filter((/** @type {*} */ m) => combos.some((/** @type {*} */ c) => c[slug] && c[slug].men === m.men));
             },
 
+            /** @param {string} slug */
             narrowedAcross(slug) {
                 return this.allowedMakeups(slug).length < this.baseMakeups(slug).length;
             },
 
+            /** @param {string} slug */
             anyMix(slug) {
                 const count = this.countOf(slug);
                 return count > 1 && this.allowedMakeups(slug).length === count + 1;
             },
 
+            /** @param {string} slug */
             ruleCount(slug) {
                 const form = this.formFor(slug);
                 if (!form) return 0;
-                const across = this.crossForms.filter(rule => (rule.options || []).some(o => (o.conditions || []).some(
+                const across = this.crossForms.filter(rule => (rule.options || []).some((/** @type {*} */ o) => (o.conditions || []).some(
                     c => c.roleSlug === slug || ((c.roleSlugs || []).indexOf(slug) !== -1)
                 ))).length;
                 return (form.who.options.length ? 1 : 0) + form.team.length + across;
             },
 
+            /** @param {string} slug */
             tryRules(slug) {
                 const form = this.formFor(slug);
-                return form ? form.team.filter(r => r.strength === 'try') : [];
+                return form ? form.team.filter((/** @type {*} */ r) => r.strength === 'try') : [];
             },
 
             // ── Saving ───────────────────────────────────────────────────────
@@ -1103,6 +1147,7 @@
             // order — the older one last would undo the newer. So a change made
             // while a save is out waits, and the form as it stands then is what
             // goes next.
+            /** @param {string} slug */
             async saveRole(slug) {
                 if (!this.chosen || !this.formFor(slug)) return;
                 if (this.roleProblems(slug).length) return;
@@ -1127,12 +1172,13 @@
             },
 
             crossProblems() {
+                /** @type {string[]} */
                 const out = [];
                 const slugs = (this.chosen && this.chosen.roleSlugs) || [];
-                this.crossForms.forEach(rule => (rule.options || []).forEach(o => (o.conditions || []).forEach(c => {
+                this.crossForms.forEach(rule => (rule.options || []).forEach((/** @type {*} */ o) => (o.conditions || []).forEach((/** @type {*} */ c) => {
                     if (c.kind === 'lineup') {
                         Roles.validateRestriction({ kind: 'lineup', sexes: c.sexes }, [], { count: this.countOf(c.roleSlug) }).errors
-                            .forEach(e => out.push(e));
+                            .forEach((/** @type {*} */ e) => out.push(e));
                         if (slugs.indexOf(c.roleSlug) === -1) out.push('Choose a Role for each line-up.');
                     }
                     if (c.kind === 'notSameGroup' || c.kind === 'sameGroup') {
@@ -1143,7 +1189,7 @@
                         if (!this.typeName(c.typeId)) out.push('Choose a relationship for each rule between Roles.');
                     }
                 })));
-                return out.filter((e, i) => out.indexOf(e) === i);
+                return out.filter((/** @type {*} */ e, /** @type {*} */ i) => out.indexOf(e) === i);
             },
 
             async saveCross() {
@@ -1169,6 +1215,7 @@
 
             // The order of service Roles have no definition, so their rest is
             // the one thing this Event says about them (EventsCore.roleIntensity).
+            /** @param {string} slug @param {*} raw */
             async setLiturgicalRest(slug, raw) {
                 const value = Number(raw);
                 if (!this.chosen || !Number.isFinite(value) || value < 0) {

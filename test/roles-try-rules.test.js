@@ -21,6 +21,7 @@ const bob = person('bob', 'male');
 const cat = person('cat', 'female');
 const PEOPLE = [ann, bob, cat];
 
+/** @param {*} id */
 const slot = id => ({ id: id, requirement: 'either' });
 const role = (restrictions, count) => ({
     slug: 'welcome',
@@ -36,19 +37,19 @@ const tryTag = { kind: 'requireTag', tagId: 'first-aid', strength: 'try' };
 test('a Try rule refuses nobody', () => {
     const def = role([tryTag]);
     const results = Roles.candidatesFor(def, def.slots[0], { people: PEOPLE });
-    assert.deepEqual(results.map(r => r.eligible), [true, true, true]);
+    assert.deepEqual(results.map((/** @type {*} */ r) => r.eligible), [true, true, true]);
 });
 
 test('each eligible person says how many Try rules they would break', () => {
     const def = role([tryTag]);
     const results = Roles.candidatesFor(def, def.slots[0], { people: PEOPLE });
-    assert.deepEqual(results.map(r => r.misses), [0, 1, 1]);
+    assert.deepEqual(results.map((/** @type {*} */ r) => r.misses), [0, 1, 1]);
 });
 
 test('a Must rule still refuses, exactly as before', () => {
     const def = role([{ kind: 'requireTag', tagId: 'first-aid' }]);
     const results = Roles.candidatesFor(def, def.slots[0], { people: PEOPLE });
-    assert.deepEqual(results.map(r => r.eligible), [true, false, false]);
+    assert.deepEqual(results.map((/** @type {*} */ r) => r.eligible), [true, false, false]);
 });
 
 test('a Try rule leaves no warning on a finished roster', () => {
@@ -64,11 +65,12 @@ test('a Try line-up across Roles refuses nobody either', () => {
     const def = role([], 1);
     const rule = { kind: 'anyOf', strength: 'try', options: [{ conditions: [{ kind: 'lineup', roleSlug: 'welcome', sexes: ['female'] }] }] };
     const results = Roles.candidatesFor(def, def.slots[0], { people: PEOPLE, crossRoleRules: [rule] });
-    assert.deepEqual(results.map(r => [r.eligible, r.misses]), [[true, 0], [true, 1], [true, 0]]);
+    assert.deepEqual(results.map((/** @type {*} */ r) => [r.eligible, r.misses]), [[true, 0], [true, 1], [true, 0]]);
 });
 
 // ── The solve ───────────────────────────────────────────────────────────────
 
+/** @param {*} def */
 const solve = def => Fairness.solve({
     seriesId: 'sunday_service',
     date: '2026-08-02',
@@ -89,7 +91,7 @@ test('the solve prefers somebody who keeps a Try rule over a fairer pick who bre
     // Nobody has served, so fairness alone would pick by tie-break; the Try rule
     // must outrank that.
     const result = solve(role([tryTag], 1));
-    assert.deepEqual(result.filled.map(f => f.personId), ['ann']);
+    assert.deepEqual(result.filled.map((/** @type {*} */ f) => f.personId), ['ann']);
 });
 
 test('the solve still fills the place when nobody can keep the Try rule', () => {
@@ -101,5 +103,5 @@ test('the solve still fills the place when nobody can keep the Try rule', () => 
 test('a Try line-up shapes the solve: two women preferred, not required', () => {
     const def = role([{ kind: 'anyOf', strength: 'try', options: [{ conditions: [{ kind: 'lineup', sexes: ['female', 'female'] }] }] }], 2);
     const result = solve(def);
-    assert.deepEqual(result.filled.map(f => f.personId).sort(), ['ann', 'cat']);
+    assert.deepEqual(result.filled.map((/** @type {*} */ f) => f.personId).sort(), ['ann', 'cat']);
 });

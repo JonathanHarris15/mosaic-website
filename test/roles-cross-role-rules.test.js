@@ -259,18 +259,6 @@ test('the picker and the roster judge agree about the same pair of seats', () =>
     assert.equal(warned.pairedRoleSlug, refused.pairedRoleSlug);
 });
 
-// ── Validation, before a rule is ever stored ─────────────────────────────────
-
-const TYPES = [
-    { id: MARRIAGE, name: 'Marriage', kind: 'group', sharedWithEditors: true },
-    { id: HOUSE, name: 'House Group', kind: 'group', sharedWithEditors: true },
-    { id: 'type-mentor', name: 'Mentoring', kind: 'pairwise', sharedWithEditors: true },
-    { id: 'type-secret', name: 'Care', kind: 'group', sharedWithEditors: false },
-];
-const SLUGS = [LEADER, HELPER, 'coffee'];
-
-const check = rule => Roles.validateCrossRoleRule(rule, TYPES, SLUGS);
-
 // ── Where a rule lives ───────────────────────────────────────────────────────
 //
 // On the Event that runs both Roles — the only place that knows they run
