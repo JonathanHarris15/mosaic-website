@@ -253,7 +253,7 @@ async function verdictFor(db, personId, ref, roster) {
   const occurrence = Object.assign({id: occSnap.id}, occSnap.data());
   const rank = await rankOf(db, personId);
   const context = await aw.takeContext(
-      db, personId, ref.roleSlug, ref.date, occurrence.seriesId);
+      db, personId, ref.roleSlug, ref.date, occurrence.seriesId, roster || []);
   const slot = (context.roleDef && (context.roleDef.slots || [])
       .find((sl) => sl.id === (ref.slotId || null))) || null;
 
@@ -266,6 +266,7 @@ async function verdictFor(db, personId, ref, roster) {
     slot: slot,
     context: {
       people: context.person ? [context.person] : [],
+      knownPeople: context.knownPeople,
       relationships: context.relationships,
       groups: context.groups,
       awayPersonIds: context.awayPersonIds,

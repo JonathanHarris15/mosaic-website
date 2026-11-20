@@ -405,6 +405,7 @@
                     this.people = people.docs.map(d =>
                         Object.assign({ id: d.id }, d.data()));
                     this.hidingTags = tags.docs.map(d => d.id);
+                    if (window.NonServing) this.nonServingOpts = await window.NonServing.load(db);
                 } catch (e) {
                     console.warn('People unavailable:', e);
                     this.people = [];
@@ -518,6 +519,7 @@
             },
 
             search: '',
+            nonServingOpts: null,
 
             get askable() {
                 if (!this.asking) return [];
@@ -531,6 +533,8 @@
                 return TradeView.askableFrom(this.people, {
                     rank: this.rank,
                     hidingTags: this.hidingTags,
+                    nonServing: this.nonServingOpts && this.nonServingOpts.nonServing,
+                    groups: this.nonServingOpts && this.nonServingOpts.groups,
                     personId: this.personId,
                     alreadyAsked: asked,
                     occurrence: this.inviteEvents[this.asking.occurrenceId] ||

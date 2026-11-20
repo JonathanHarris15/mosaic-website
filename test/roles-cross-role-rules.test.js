@@ -259,58 +259,13 @@ test('the picker and the roster judge agree about the same pair of seats', () =>
     assert.equal(warned.pairedRoleSlug, refused.pairedRoleSlug);
 });
 
-// ── Validation, before a rule is ever stored ─────────────────────────────────
-
-const TYPES = [
-    { id: MARRIAGE, name: 'Marriage', kind: 'group', sharedWithEditors: true },
-    { id: HOUSE, name: 'House Group', kind: 'group', sharedWithEditors: true },
-    { id: 'type-mentor', name: 'Mentoring', kind: 'pairwise', sharedWithEditors: true },
-    { id: 'type-secret', name: 'Care', kind: 'group', sharedWithEditors: false },
-];
-const SLUGS = [LEADER, HELPER, 'coffee'];
-
-const check = rule => Roles.validateCrossRoleRule(rule, TYPES, SLUGS);
-
-test('a well-formed rule passes', () => {
-    assert.equal(check(notSameMarriage).valid, true);
-    assert.equal(check(sameHouse).valid, true);
-});
-
-test('a rule needs two DIFFERENT Roles', () => {
-    assert.equal(check({ ...notSameMarriage, roleSlugs: [LEADER] }).valid, false);
-    const same = check({ ...notSameMarriage, roleSlugs: [LEADER, LEADER] });
-    assert.equal(same.valid, false);
-    assert.match(same.errors.join(' '), /same Role/i);
-});
-
-test('a rule may only name Roles this event actually runs', () => {
-    const bad = check({ ...notSameMarriage, roleSlugs: [LEADER, 'setup'] });
-    assert.equal(bad.valid, false);
-    assert.match(bad.errors.join(' '), /not one of this event/i);
-});
-
-test('a rule may not use a Type an elder has not shared', () => {
-    assert.equal(check({ ...notSameMarriage, typeId: 'type-secret' }).valid, false);
-});
-
-test('a rule may not use a pairwise Type as a group rule', () => {
-    const bad = check({ ...notSameMarriage, typeId: 'type-mentor' });
-    assert.equal(bad.valid, false);
-    assert.match(bad.errors.join(' '), /connects two people/i);
-});
-
-test('only the two group kinds are cross-Role rules', () => {
-    assert.equal(check({ ...notSameMarriage, kind: Roles.RESTRICTIONS.NOT_TOGETHER }).valid, false);
-    assert.equal(check({ ...notSameMarriage, kind: Roles.RESTRICTIONS.ALLOWLIST }).valid, false);
-    assert.equal(check({}).valid, false);
-});
-
 // ── Where a rule lives ───────────────────────────────────────────────────────
 //
 // On the Event that runs both Roles — the only place that knows they run
 // together. EventsCore arranges them; it never judges one.
 
 const Events = require('../public/events-core.js');
+const addRule = (series, rule) => Events.withCrossRoleRules(series, Events.crossRoleRulesOf(series).concat([rule]));
 
 const series = () => Events.newSeries({
     id: 'sunday_service', name: 'Sunday Service', roleSlugs: [LEADER, HELPER, 'coffee'],
@@ -322,26 +277,12 @@ test('a series with no rules reads as none, never as undefined', () => {
     assert.deepStrictEqual(Events.crossRoleRulesOf({ crossRoleRules: 'nonsense' }), []);
 });
 
-test('a rule is added to the series and the input is left alone', () => {
-    const before = series();
-    const after = Events.addCrossRoleRule(before, notSameMarriage);
-
-    assert.deepStrictEqual(Events.crossRoleRulesOf(after), [notSameMarriage]);
-    assert.deepStrictEqual(Events.crossRoleRulesOf(before), [], 'the original series changed');
-});
-
-test('a rule can be removed by position', () => {
-    let s = Events.addCrossRoleRule(series(), notSameMarriage);
-    s = Events.addCrossRoleRule(s, sameHouse);
-    assert.deepStrictEqual(Events.crossRoleRulesOf(Events.removeCrossRoleRule(s, 0)), [sameHouse]);
-});
-
 test('dropping a Role from the Event drops the rules that named it', () => {
     // ⚠ A rule about a Role that is no longer here can never fire, and one left
     // lying about is worse than absent: put the Role back a year later and a
     // rule nobody remembers writing starts refusing people.
-    let s = Events.addCrossRoleRule(series(), notSameMarriage);
-    s = Events.addCrossRoleRule(s, {
+    let s = addRule(series(), notSameMarriage);
+    s = addRule(s, {
         kind: Roles.RESTRICTIONS.NOT_SAME_GROUP, typeId: MARRIAGE, roleSlugs: ['coffee', HELPER],
     });
 
@@ -410,11 +351,12 @@ const PAGE_HTML = fs.readFileSync(
     path.join(__dirname, '..', 'public', 'recurring-events.html'), 'utf8');
 
 test('every control the rules panel binds to exists on the page', () => {
+    // Rules across Roles are drawn by the same rule list as a Role's own
+    // rules (RoleRulesCore), in the "Rules across roles" card of the table.
     const bound = [
-        'pairRules', 'pairRuleSentence', 'pairRuleAvailable', 'pairRuleErrors',
-        'pairRoleOptions', 'pairTypeOptions', 'addPairRule', 'removePairRule',
-        'newPairKind', 'newPairTypeId', 'newPairRoleA', 'newPairRoleB',
-        'savingPairRule', 'groupTypesDenied',
+        'acrossBlock', 'saveBlock', 'crossProblems', 'combos', 'linkedRoles',
+        'pairTypeOptions', 'conditionKinds', 'reshapeCondition', 'removeCondition',
+        'addOption', 'addRule', 'sentence', 'groupTypesDenied',
     ];
     bound.forEach(name => {
         assert.ok(PAGE_HTML.indexOf(name) !== -1, name + ' is not used by the page');
@@ -431,9 +373,10 @@ test('the relationship-type query is constrained to shared types', () => {
         'the query is unconstrained, so it will error rather than return less');
 });
 
-test('the two rule kinds read as the same sentence the Roles Manager uses', () => {
-    // An editor who has written "no two people from the same" once should not
-    // have to learn a second phrasing to say it across two Roles.
-    assert.match(PAGE_HTML, /cannot be from the same/);
-    assert.match(PAGE_HTML, /must be from the same/);
+test("the two rule kinds read in the same words a Role's own rule uses", () => {
+    // An editor who has written "no two from the same" once should not have to
+    // learn a second phrasing to say it across two Roles.
+    assert.match(PAGE_JS, /'No two from the same'/);
+    assert.match(PAGE_JS, /'Not from the same'/);
+    assert.match(PAGE_JS, /'From the same'/);
 });

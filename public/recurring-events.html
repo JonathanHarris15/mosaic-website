@@ -164,6 +164,109 @@
             .re-pane { border-left: 0; border-right: 0; border-radius: 0; margin: 0 calc(var(--space-base) * -1); }
             .re-pane__body { padding: var(--space-sm); }
         }
+
+        /* ── Roles & rules: the table ────────────────────────────────────────
+           One row per Role on this Event; a row opens into who can do it, the
+           team's rules and what those rules allow. Page-local (`rr-`): these
+           are this tab's own arrangement, not proposed as primitives. */
+        .rr-scroll { overflow-x: auto; }
+        .rr-table { width: 100%; min-width: 760px; border-collapse: separate; border-spacing: 0; border: 1px solid var(--outline-variant); border-radius: var(--radius); background: var(--surface); }
+        .rr-table th { text-align: left; padding: 9px 12px; background: var(--surface-container-low); border-bottom: 1px solid var(--outline-variant); }
+        .rr-table td { padding: 10px 12px; border-bottom: 1px solid var(--outline-variant); vertical-align: middle; }
+        .rr-table tbody:last-child tr:last-child td { border-bottom: 0; }
+        .rr-caps { font-family: var(--font-sans); font-size: var(--label-xs-size, 11px); font-weight: 600; letter-spacing: .12em; text-transform: uppercase; color: var(--on-surface-variant); }
+        .rr-hint { margin: 0; font-size: 12.5px; line-height: 1.45; color: var(--on-surface-variant); text-wrap: pretty; }
+        .rr-link { color: var(--secondary); text-decoration: underline; }
+        .rr-name { font-family: var(--font-serif); font-size: 16px; color: var(--on-surface); }
+        .rr-open > td { background: var(--surface-container-low); }
+        .rr-sub td { background: var(--surface-container-low); padding-top: 7px; padding-bottom: 7px; }
+        .rr-locked { display: inline-flex; align-items: center; gap: 6px; color: var(--outline); }
+        .rr-locked .material-symbols-outlined { font-size: 15px; }
+        .rr-stepper { display: inline-flex; align-items: center; border: 1px solid var(--outline-variant); border-radius: var(--radius); background: var(--surface); }
+        .rr-stepper button { width: 28px; height: 30px; border: 0; background: transparent; color: var(--on-surface-variant); cursor: pointer; font-size: 16px; }
+        .rr-stepper button:hover:not(:disabled) { color: var(--primary); }
+        .rr-stepper span { min-width: 22px; text-align: center; font-size: 15px; font-weight: 600; }
+        .rr-stepper--fixed { opacity: .6; }
+        .rr-unit { display: inline-flex; align-items: center; border: 1px solid var(--outline-variant); border-radius: var(--radius); background: var(--surface); overflow: hidden; }
+        .rr-unit input { width: 48px; border: 0; padding: 6px 4px 6px 9px; font: inherit; font-size: 14px; background: transparent; color: var(--on-surface); }
+        .rr-unit input:focus { outline: none; }
+        .rr-unit:focus-within { border-color: var(--primary); box-shadow: 0 0 0 3px var(--m-focus-ring); }
+        .rr-unit span { padding: 0 9px 0 2px; font-size: 12.5px; color: var(--on-surface-variant); }
+        .rr-lineups { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; margin-top: 6px; font-size: 11.5px; color: var(--on-surface-variant); }
+        .rr-makeup { display: inline-flex; align-items: center; gap: 6px; }
+        .rr-or-word { font-style: italic; color: var(--outline); }
+        .rr-bad-text { color: var(--error); }
+        .rr-rulesbtn { display: inline-flex; align-items: center; gap: 2px; padding: 4px 8px 4px 10px; border-radius: 99px; border: 1px solid var(--outline-variant); background: transparent; font-size: 12.5px; color: var(--secondary); font-weight: 600; cursor: pointer; white-space: nowrap; }
+        .rr-rulesbtn:hover, .rr-rulesbtn--open { background: var(--surface); border-color: var(--secondary); }
+        .rr-rulesbtn--none { color: var(--outline); font-weight: 500; }
+        .rr-rulesbtn--bad { color: var(--error); border-color: var(--error); }
+        .rr-expand > td { background: var(--surface-container-lowest); padding: 14px 16px 18px; }
+
+        /* Line-up marks: M, W, Any. */
+        .rr-marks { display: inline-flex; gap: 3px; align-items: center; }
+        .rr-mark { display: inline-flex; align-items: center; justify-content: center; min-width: 26px; height: 24px; padding: 0 5px; border-radius: var(--radius-sm); border: 1px solid var(--outline-variant); background: var(--surface-container-low); font-family: var(--font-sans); font-size: 10.5px; font-weight: 700; color: var(--outline); }
+        .rr-mark--male { background: color-mix(in srgb, var(--primary) 12%, var(--surface)); border-color: color-mix(in srgb, var(--primary) 30%, var(--surface)); color: var(--primary); }
+        .rr-mark--female { background: color-mix(in srgb, var(--secondary) 14%, var(--surface)); border-color: color-mix(in srgb, var(--secondary) 34%, var(--surface)); color: var(--secondary); }
+        button.rr-mark { cursor: pointer; }
+        button.rr-mark:hover { border-color: var(--primary); }
+
+        /* The open row: three columns wide, "what this allows" under on a laptop. */
+        .rr-exg-c { container-type: inline-size; }
+        .rr-exg { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.5fr) minmax(0, .75fr); gap: var(--space-md) var(--space-lg); align-items: start; }
+        @container (max-width: 1000px) {
+            .rr-exg { grid-template-columns: minmax(0, 1fr) minmax(0, 1.5fr); }
+            .rr-col--allows { grid-column: 1 / -1; }
+        }
+        @container (max-width: 640px) { .rr-exg { grid-template-columns: minmax(0, 1fr); } }
+        .rr-col { min-width: 0; display: flex; flex-direction: column; gap: 8px; }
+        .rr-colhead { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+
+        /* The rule builder. AND stacks down; OR sits side by side. */
+        .rr-rb { display: flex; flex-direction: column; gap: 8px; }
+        .rr-rule-wrap { display: contents; }
+        .rr-and { align-self: flex-start; margin-left: 14px; font-family: var(--font-sans); font-size: 10px; font-weight: 700; letter-spacing: .16em; text-transform: uppercase; color: var(--outline); }
+        .rr-rule { border: 1px solid var(--outline-variant); border-radius: var(--radius); background: var(--surface); padding: 8px 10px 10px; display: flex; flex-direction: column; gap: 8px; }
+        .rr-rule--try { border-style: dashed; background: transparent; }
+        .rr-rule__top { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+        .rr-rule__read { flex: 1 1 12rem; min-width: 0; margin: 0; font-family: var(--font-serif); font-size: 14.5px; line-height: 1.4; color: var(--on-surface); text-wrap: pretty; }
+        .rr-strength { display: inline-flex; padding: 2px; gap: 2px; background: var(--surface-container); border: 1px solid var(--outline-variant); border-radius: var(--radius-sm); flex: 0 0 auto; }
+        .rr-strength button { border: 0; background: transparent; padding: 3px 8px; border-radius: 3px; font-family: var(--font-sans); font-size: 10px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: var(--on-surface-variant); cursor: pointer; white-space: nowrap; }
+        .rr-strength button[aria-pressed=true] { background: var(--primary); color: var(--on-primary); }
+        .rr-count { font-size: 11px; color: var(--on-surface-variant); white-space: nowrap; }
+        .rr-opts { display: flex; flex-wrap: wrap; align-items: stretch; gap: 6px; }
+        .rr-opt-wrap { display: flex; align-items: center; gap: 6px; min-width: 0; max-width: 100%; }
+        .rr-or { font-family: var(--font-sans); font-size: 10px; font-weight: 700; letter-spacing: .16em; text-transform: uppercase; color: var(--secondary); padding: 3px 6px; border-radius: 99px; background: color-mix(in srgb, var(--secondary) 12%, transparent); }
+        .rr-opt { display: flex; flex-direction: column; gap: 5px; padding: 7px 8px; background: var(--surface-container-low); border: 1px solid var(--outline-variant); border-radius: var(--radius); min-width: 0; max-width: 100%; }
+        .rr-cond-wrap { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+        .rr-and2 { font-family: var(--font-sans); font-size: 9.5px; font-weight: 700; letter-spacing: .16em; text-transform: uppercase; color: var(--outline); padding-left: 2px; }
+        .rr-cond { display: flex; align-items: center; gap: 4px; flex-wrap: nowrap; min-width: 0; }
+        .rr-cond > .rr-sel { flex: 0 1 auto; text-overflow: ellipsis; }
+        .rr-lineup-edit { display: inline-flex; align-items: center; gap: 4px; flex-wrap: wrap; }
+        .rr-sel { appearance: none; -webkit-appearance: none; font: inherit; font-size: 12.5px; color: var(--on-surface); padding: 4px 20px 4px 7px; border: 1px solid var(--outline-variant); border-radius: var(--radius-sm); max-width: 100%; min-width: 0; cursor: pointer;
+            background: var(--surface) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%23777' fill='none' stroke-width='1.4'/%3E%3C/svg%3E") no-repeat right 6px center; }
+        .rr-sel--kind { font-weight: 600; }
+        .rr-num { width: 46px; font: inherit; font-size: 12.5px; padding: 4px 4px 4px 7px; border: 1px solid var(--outline-variant); border-radius: var(--radius-sm); background: var(--surface); color: var(--on-surface); }
+        .rr-word { font-size: 12.5px; color: var(--on-surface-variant); }
+        .rr-x { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border: 0; background: transparent; border-radius: 99px; color: var(--outline); cursor: pointer; flex: 0 0 auto; }
+        .rr-x:hover { background: var(--surface-container); color: var(--error); }
+        .rr-x .material-symbols-outlined { font-size: 15px; }
+        .rr-tokens { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 3px; }
+        .rr-tok { display: inline-flex; align-items: center; gap: 2px; padding: 2px 4px 2px 8px; border-radius: 99px; background: var(--surface); border: 1px solid var(--outline-variant); font-size: 12px; }
+        .rr-add { display: inline-flex; align-items: center; gap: 4px; padding: 5px 9px; background: transparent; border: 1px dashed var(--outline-variant); border-radius: var(--radius); color: var(--secondary); font-family: var(--font-sans); font-size: 10.5px; font-weight: 600; letter-spacing: .14em; text-transform: uppercase; cursor: pointer; white-space: nowrap; align-self: center; }
+        .rr-add:hover { background: var(--surface-container-low); border-color: var(--secondary); }
+        .rr-add .material-symbols-outlined { font-size: 15px; }
+        .rr-add--sm { padding: 2px 6px; border-style: dotted; align-self: flex-start; }
+
+        /* What this allows. */
+        .rr-allows { display: flex; flex-direction: column; gap: 8px; padding: 10px 12px; border-radius: var(--radius); background: var(--surface-container-low); border: 1px solid var(--outline-variant); }
+        .rr-allows__row { display: flex; align-items: center; gap: 8px; margin: 0; font-size: 12.5px; color: var(--on-surface); }
+        .rr-bad { display: flex; gap: 6px; align-items: flex-start; font-size: 12.5px; line-height: 1.4; color: var(--error); }
+        .rr-bad .material-symbols-outlined { font-size: 16px; }
+        .rr-across { display: flex; flex-wrap: wrap; gap: var(--space-md) var(--space-lg); align-items: flex-start; }
+        .rr-across__rules { flex: 3 1 480px; min-width: 0; }
+        .rr-across__allows { flex: 1 1 240px; min-width: 0; display: flex; flex-direction: column; gap: 8px; }
+        .rr-combo { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; padding: 6px 10px; border-radius: var(--radius-sm); background: var(--surface); border: 1px solid var(--outline-variant); font-size: 12.5px; }
+        .rr-combo__part { display: inline-flex; align-items: center; gap: 6px; }
     </style>
 
     <script src="vendor/firebase/firebase-app-compat.js"></script>
@@ -180,6 +283,7 @@
     <script src="desktop-nav-boot.js"></script>
     <script src="date-utils.js"></script>
     <script src="roles-core.js"></script>
+    <script src="non-serving.js"></script>
     <script src="events-core.js"></script>
     <script src="events-occurrence-core.js"></script>
     <script src="events-store.js"></script>
@@ -195,6 +299,7 @@
     <script src="commitments-core.js"></script>
     <script src="calendar-view.js"></script>
     <script src="recurring-roster-core.js"></script>
+    <script src="role-rules-core.js"></script>
     <script src="filing-core.js"></script>
     <script src="printable-core.js"></script>
     <script src="printable-store.js"></script>
@@ -591,155 +696,226 @@
                         </template>
 
                         <!-- ══ Roles & rules ══════════════════════════════════ -->
+                        <!-- One row per Role on this Event. Who it needs, who may
+                             fill it, its rest and whether it uses up the morning
+                             are this Event's to say (EventsCore.effectiveRole);
+                             the Role itself keeps only its name and what it
+                             involves. A row opens into who can do it, the team's
+                             rules, and what those rules allow. -->
                         <template x-if="tab === 'roles'">
-                        <div class="re-stack" style="gap:var(--space-md)">
+                        <div class="re-stack" style="gap:var(--space-md)" x-init="buildRoleForms()">
 
-                            <!-- Liturgical: shown, never editable here. An editor
-                                 needs to see the whole shape of a Sunday, and these
-                                 are half of it — but they are filled in the order of
-                                 service, one Sunday at a time. -->
-                            <section x-show="liturgicalRoles.length" class="m-card">
-                                <span class="m-label">Filled in the order of service</span>
-                                <p class="re-standfirst">
-                                    These belong to the Sunday itself, not to the event — you put names
-                                    against them when you build that Sunday's order of service. They can't
-                                    be taken off, because the printed booklet expects them.
-                                </p>
-                                <div class="re-stack" style="margin-top:var(--space-sm)">
-                                    <template x-for="role in liturgicalRoles" :key="role.slug">
-                                        <div class="re-locked-role">
-                                            <span class="material-symbols-outlined text-[17px] text-outline shrink-0">lock</span>
-                                            <span class="text-[14px] text-on-surface flex-grow min-w-0" x-text="role.name"></span>
-                                            <span class="m-label m-label--sm">Locked</span>
-                                        </div>
-                                    </template>
-                                </div>
-                            </section>
+                            <div class="rr-scroll">
+                            <table class="rr-table">
+                                <thead><tr>
+                                    <th class="rr-caps">Role</th>
+                                    <th class="rr-caps" style="width:230px">People · line-ups allowed</th>
+                                    <th class="rr-caps" style="width:118px">Rest</th>
+                                    <th class="rr-caps" style="width:118px">Another role that day</th>
+                                    <th class="rr-caps" style="width:118px">Rules</th>
+                                    <th style="width:40px"></th>
+                                </tr></thead>
 
-                            <!-- Servant Roles: the editor's to choose. -->
-                            <section class="m-card">
-                                <span class="m-label">Roles you've added</span>
-                                <p x-show="!servantRoles.length" class="re-standfirst">
-                                    None yet. Add the jobs that come round every time — welcome team,
-                                    sound desk, coffee.
-                                </p>
-                                <div class="re-stack" style="margin-top:var(--space-sm)">
-                                    <template x-for="role in servantRoles" :key="role.slug">
-                                        <div class="re-rule-row">
-                                            <span class="material-symbols-outlined text-[17px] text-secondary shrink-0">badge</span>
-                                            <span class="text-[14px] text-on-surface flex-grow min-w-0" x-text="role.name"></span>
-                                            <span class="text-[11.5px] text-on-surface-variant shrink-0" x-text="role.needed"></span>
-                                            <button @click="askRemoveSeriesRole(role.slug)" :disabled="saving"
+                                <template x-for="slug in tableRoles" :key="slug">
+                                <tbody>
+                                    <template x-if="formFor(slug)">
+                                    <tr :class="openRole === slug ? 'rr-open' : ''">
+                                        <td><span class="rr-name" x-text="roleName(slug)"></span></td>
+                                        <td>
+                                            <span class="rr-stepper">
+                                                <button type="button" class="re-focus" aria-label="One fewer"
+                                                        @click="stepCount(slug, -1)">−</button>
+                                                <span x-text="formFor(slug).count"></span>
+                                                <button type="button" class="re-focus" aria-label="One more"
+                                                        @click="stepCount(slug, 1)">+</button>
+                                            </span>
+                                            <div class="rr-lineups">
+                                                <span x-show="!allowedMakeups(slug).length" class="rr-bad-text">No line-up fits</span>
+                                                <span x-show="anyMix(slug)">any mix of men and women</span>
+                                                <template x-if="!anyMix(slug)">
+                                                    <span style="display:contents">
+                                                        <template x-for="(m, i) in allowedMakeups(slug)" :key="i">
+                                                            <span class="rr-makeup">
+                                                                <span class="rr-or-word" x-show="i > 0">or</span>
+                                                                <span class="rr-marks"><template x-for="(mk, j) in makeupMarks(m)" :key="j"><span class="rr-mark" :class="'rr-mark--' + mk" x-text="markLabel(mk)"></span></template></span>
+                                                            </span>
+                                                        </template>
+                                                    </span>
+                                                </template>
+                                            </div>
+                                        </td>
+                                        <td>
+                                            <span class="rr-unit">
+                                                <input type="number" min="0" step="0.25" x-model.number="formFor(slug).intensity"
+                                                       @change="saveRole(slug)" :aria-label="'Weeks of rest after ' + roleName(slug)" />
+                                                <span>wks</span>
+                                            </span>
+                                        </td>
+                                        <td>
+                                            <label class="m-check">
+                                                <input type="checkbox" x-model="formFor(slug).allowsAnotherRole" @change="saveRole(slug)" />
+                                                <span x-text="formFor(slug).allowsAnotherRole ? 'Yes' : 'No'"></span>
+                                            </label>
+                                        </td>
+                                        <td>
+                                            <button type="button" class="rr-rulesbtn re-focus" @click="toggleRole(slug)"
+                                                    :class="[ruleCount(slug) ? '' : 'rr-rulesbtn--none', openRole === slug ? 'rr-rulesbtn--open' : '',
+                                                             (roleProblems(slug).length || !allowedMakeups(slug).length) ? 'rr-rulesbtn--bad' : '']"
+                                                    :aria-expanded="openRole === slug ? 'true' : 'false'">
+                                                <span x-text="ruleCount(slug) ? (ruleCount(slug) === 1 ? '1 rule' : ruleCount(slug) + ' rules') : 'Anyone'"></span>
+                                                <span class="material-symbols-outlined text-[17px]" x-text="openRole === slug ? 'expand_less' : 'expand_more'"></span>
+                                            </button>
+                                        </td>
+                                        <td>
+                                            <button type="button" @click="askRemoveSeriesRole(slug)" :disabled="saving"
                                                     class="m-icon-btn m-icon-btn--sm m-icon-btn--ghost re-focus"
-                                                    :aria-label="'Take ' + role.name + ' off'">
+                                                    :aria-label="'Take ' + roleName(slug) + ' off'">
                                                 <span class="material-symbols-outlined text-[17px]">close</span>
                                             </button>
-                                        </div>
+                                        </td>
+                                    </tr>
                                     </template>
-                                </div>
+                                    <template x-if="formFor(slug) && openRole === slug">
+                                    <tr class="rr-expand">
+                                        <td colspan="6">
+                                            <div class="rr-exg-c"><div class="rr-exg">
+                                                <div class="rr-col">
+                                                    <div class="rr-colhead"><span class="m-label">Who can do it</span><span class="rr-hint">Each person must match one option</span></div>
+                                                    <template x-for="block in [whoBlock(slug)]" :key="block.scope"><div data-rr-rules></div></template>
+                                                </div>
+                                                <div class="rr-col">
+                                                    <div class="rr-colhead"><span class="m-label">The team</span><span class="rr-hint">The people on it together</span></div>
+                                                    <template x-for="block in [teamBlock(slug)]" :key="block.scope"><div data-rr-rules></div></template>
+                                                </div>
+                                                <div class="rr-col rr-col--allows">
+                                                    <div class="rr-colhead"><span class="m-label">What this allows</span></div>
+                                                    <div class="rr-allows">
+                                                        <span class="rr-caps">Line-ups</span>
+                                                        <div x-show="!allowedMakeups(slug).length" class="rr-bad">
+                                                            <span class="material-symbols-outlined">error</span>
+                                                            <span>No line-up meets every Must rule. Something has to give.</span>
+                                                        </div>
+                                                        <div x-show="anyMix(slug)" class="rr-allows__row">Any mix of men and women</div>
+                                                        <template x-if="!anyMix(slug)">
+                                                            <div class="re-stack" style="gap:5px">
+                                                                <template x-for="(m, i) in allowedMakeups(slug)" :key="i">
+                                                                    <div class="rr-allows__row">
+                                                                        <span class="rr-marks"><template x-for="(mk, j) in makeupMarks(m)" :key="j"><span class="rr-mark" :class="'rr-mark--' + mk" x-text="markLabel(mk)"></span></template></span>
+                                                                        <span x-text="makeupWords(m)"></span>
+                                                                    </div>
+                                                                </template>
+                                                            </div>
+                                                        </template>
+                                                        <p class="rr-hint" x-show="narrowedAcross(slug)">Narrowed by a rule across roles, below.</p>
+                                                        <hr class="m-divider" />
+                                                        <span class="rr-caps">People</span>
+                                                        <p class="rr-allows__row" x-text="eligibleSentence(slug)"></p>
+                                                        <template x-for="p in roleProblems(slug)" :key="p">
+                                                            <div class="rr-bad"><span class="material-symbols-outlined">warning</span><span x-text="'Not saved yet — ' + p"></span></div>
+                                                        </template>
+                                                        <template x-if="tryRules(slug).length">
+                                                            <div class="re-stack" style="gap:4px">
+                                                                <hr class="m-divider" />
+                                                                <span class="rr-caps">Tries for</span>
+                                                                <template x-for="r in tryRules(slug)" :key="r.id"><p class="rr-hint" x-text="sentence(r, 'team')"></p></template>
+                                                            </div>
+                                                        </template>
+                                                        <p class="rr-hint" x-show="savingRole === slug">Saving…</p>
+                                                    </div>
+                                                </div>
+                                            </div></div>
+                                        </td>
+                                    </tr>
+                                    </template>
+                                </tbody>
+                                </template>
 
-                                <div x-show="seriesRolesAvailable.length" style="margin-top:var(--space-sm);max-width:280px">
-                                    <label class="m-select-wrap">
-                                        <select class="m-select re-focus" :disabled="saving"
-                                                @change="addSeriesRole($event.target.value); $event.target.value = ''">
-                                            <option value="">+ Add a role</option>
-                                            <template x-for="def in seriesRolesAvailable" :key="def.slug">
-                                                <option :value="def.slug" x-text="def.name"></option>
-                                            </template>
-                                        </select>
-                                    </label>
-                                </div>
-                            </section>
+                                <!-- Liturgical: filled in the order of service, one
+                                     person each. The only thing an Event says about
+                                     them is how much rest they owe. -->
+                                <tbody x-show="liturgicalRows.length">
+                                    <tr class="rr-sub"><td colspan="6"><span class="rr-caps">Filled in the order of service · built in, one person each</span></td></tr>
+                                    <template x-for="row in liturgicalRows" :key="row.slug">
+                                        <tr>
+                                            <td><span class="rr-locked"><span class="material-symbols-outlined text-[15px]">lock</span><span class="rr-name" x-text="row.name"></span></span></td>
+                                            <td><span class="rr-stepper rr-stepper--fixed"><button type="button" disabled>−</button><span>1</span><button type="button" disabled>+</button></span></td>
+                                            <td><span class="rr-unit">
+                                                <input type="number" min="0" step="0.25" :value="row.rest"
+                                                       @change="setLiturgicalRest(row.slug, $event.target.value)" :aria-label="'Weeks of rest after ' + row.name" />
+                                                <span>wks</span>
+                                            </span></td>
+                                            <td class="rr-hint">—</td><td class="rr-hint">—</td><td></td>
+                                        </tr>
+                                    </template>
+                                </tbody>
+                            </table>
+                            </div>
 
-                            <!-- ── Rules across two Roles (MS-221) ────────────────
-                                 A Role's own rules live in the Roles Manager, because
-                                 they are facts about that Role wherever it runs. "The
-                                 Kids Leader and the Kids Helper must not be married to
-                                 each other" is not: it is a fact about THIS event, the
-                                 only thing that knows the two run together. So it is
-                                 written here, under the Roles it is about. -->
-                            <section class="m-card">
+                            <p x-show="!tableRoles.length" class="re-standfirst">
+                                No roles yet. Add the jobs that come round every time — welcome team,
+                                sound desk, coffee.
+                            </p>
+
+                            <div x-show="rolesAvailable.length" class="flex items-center gap-2" style="flex-wrap:wrap">
+                                <label class="m-select-wrap" style="width:280px">
+                                    <select class="m-select re-focus" :disabled="saving"
+                                            @change="addSeriesRole($event.target.value); $event.target.value = ''">
+                                        <option value="">+ Add a role</option>
+                                        <template x-for="def in rolesAvailable" :key="def.slug">
+                                            <option :value="def.slug" x-text="def.name"></option>
+                                        </template>
+                                    </select>
+                                </label>
+                                <span class="rr-hint">or <a href="roles-manager.html" class="rr-link">make a new one on the Roles page</a></span>
+                            </div>
+
+                            <!-- ── Rules across roles ─────────────────────────────
+                                 For anything no single Role can say: how two teams
+                                 are made up together, or a leader and helper who
+                                 must not be married. -->
+                            <section class="m-card" style="display:flex;flex-direction:column;gap:12px">
                                 <div class="flex items-center gap-2">
                                     <span class="material-symbols-outlined text-[18px] text-secondary">hub</span>
-                                    <span class="m-label">Rules across two roles</span>
+                                    <span class="m-label">Rules across roles</span>
                                 </div>
-                                <p class="re-standfirst" style="max-width:62ch">
-                                    For things no single role can say — a leader and their helper who must not
-                                    be from one household, or a team drawn from one house group.
+                                <p class="re-standfirst" style="max-width:80ch;margin-top:-6px">
+                                    For anything no single role can say — how two teams are made up together,
+                                    or a leader and helper who must not be from one household.
                                 </p>
-
-                                <div x-show="pairRules.length" class="re-stack" style="margin-top:var(--space-sm)">
-                                    <template x-for="(rule, index) in pairRules" :key="index">
-                                        <div class="re-rule-row"
-                                             :class="pairRuleAvailable(rule) ? '' : 're-rule-row--unavailable'">
-                                            <span class="material-symbols-outlined text-[18px] shrink-0"
-                                                  :class="pairRuleAvailable(rule) ? 'text-secondary' : 'text-error'"
-                                                  x-text="rule.kind === 'sameGroup' ? 'groups' : 'group_remove'"></span>
-                                            <span class="re-rule-row__text" x-text="pairRuleSentence(rule)"></span>
-                                            <button @click="removePairRule(index)" :disabled="savingPairRule"
-                                                    class="m-icon-btn m-icon-btn--sm m-icon-btn--ghost re-focus"
-                                                    aria-label="Remove this rule">
-                                                <span class="material-symbols-outlined text-[17px]">close</span>
-                                            </button>
+                                <div class="rr-across">
+                                    <div class="rr-across__rules">
+                                        <template x-for="block in [acrossBlock]" :key="block.scope"><div data-rr-rules></div></template>
+                                    </div>
+                                    <div class="rr-across__allows" x-show="linkedRoles.length">
+                                        <div class="rr-colhead"><span class="m-label">What this allows</span></div>
+                                        <div class="rr-allows">
+                                            <span class="rr-caps">Together</span>
+                                            <div x-show="!combos.length" class="rr-bad">
+                                                <span class="material-symbols-outlined">error</span>
+                                                <span>No combination meets every Must rule.</span>
+                                            </div>
+                                            <template x-for="(combo, i) in combos" :key="i">
+                                                <div class="rr-combo">
+                                                    <template x-for="s in linkedRoles" :key="s">
+                                                        <span class="rr-combo__part">
+                                                            <span x-text="roleName(s)"></span>
+                                                            <span class="rr-marks"><template x-for="(mk, j) in makeupMarks(combo[s])" :key="j"><span class="rr-mark" :class="'rr-mark--' + mk" x-text="markLabel(mk)"></span></template></span>
+                                                        </span>
+                                                    </template>
+                                                </div>
+                                            </template>
                                         </div>
-                                    </template>
-                                </div>
-
-                                <div class="re-composer">
-                                    <div class="re-composer__row">
-                                        <label class="m-select-wrap" style="flex:1 1 0;min-width:0">
-                                            <select x-model="newPairRoleA" class="m-select re-focus">
-                                                <option value="">Pick a role…</option>
-                                                <template x-for="option in pairRoleOptions" :key="option.slug">
-                                                    <option :value="option.slug" x-text="option.name"></option>
-                                                </template>
-                                            </select>
-                                        </label>
-                                        <span class="re-composer__and">and</span>
-                                        <label class="m-select-wrap" style="flex:1 1 0;min-width:0">
-                                            <select x-model="newPairRoleB" class="m-select re-focus">
-                                                <option value="">Pick a role…</option>
-                                                <template x-for="option in pairRoleOptions" :key="option.slug">
-                                                    <option :value="option.slug" x-text="option.name"></option>
-                                                </template>
-                                            </select>
-                                        </label>
                                     </div>
-                                    <div class="re-composer__row">
-                                        <!-- The same two sentence openers the Roles Manager
-                                             uses for the one-Role version, on purpose. -->
-                                        <label class="m-select-wrap" style="flex:0 0 260px">
-                                            <select x-model="newPairKind" class="m-select re-focus">
-                                                <option value="notSameGroup">cannot be from the same</option>
-                                                <option value="sameGroup">must be from the same</option>
-                                            </select>
-                                        </label>
-                                        <label class="m-select-wrap" style="flex:1 1 0;min-width:0">
-                                            <select x-model="newPairTypeId" class="m-select re-focus">
-                                                <option value="">Choose a relationship…</option>
-                                                <template x-for="option in pairTypeOptions" :key="option.id">
-                                                    <option :value="option.id" x-text="option.name"></option>
-                                                </template>
-                                            </select>
-                                        </label>
-                                        <button @click="addPairRule()" :disabled="savingPairRule"
-                                                class="m-btn m-btn--secondary m-btn--sm re-motion re-press re-focus"
-                                                style="flex:0 0 auto">
-                                            <span class="m-btn__label">Add rule</span>
-                                        </button>
-                                    </div>
-
-                                    <template x-for="problem in pairRuleErrors" :key="problem">
-                                        <p class="text-[13px] text-error" x-text="problem"></p>
-                                    </template>
-
-                                    <!-- An empty picker and a failed read look identical
-                                         from the outside and mean opposite things. -->
-                                    <p x-show="groupTypesDenied" class="text-[13px] text-error">
-                                        The relationship types could not be read, so only Family and Marriage
-                                        are on offer. Ask an elder or admin to check.
-                                    </p>
                                 </div>
+                                <template x-for="p in crossProblems()" :key="p">
+                                    <p class="text-[13px] text-error" x-text="'Not saved yet — ' + p"></p>
+                                </template>
+                                <!-- An empty picker and a failed read look identical
+                                     from the outside and mean opposite things. -->
+                                <p x-show="groupTypesDenied" class="text-[13px] text-error">
+                                    The relationship types could not be read, so only Family and Marriage
+                                    are on offer. Ask an elder or admin to check.
+                                </p>
                             </section>
                         </div>
                         </template>
@@ -1341,5 +1517,182 @@
             </div>
         </div>
     </div>
+    <!-- ── One rule list, drawn the same way in all three places ──────────
+         "Who can do it", "The team" and "Rules across roles" are the same
+         thing: rules that all hold, each with options any one of which will
+         do, each option a list of conditions that must all hold. Written once
+         here and copied into every [data-rr-rules] before Alpine starts, so the
+         three can never drift. Each slot is an x-for over one `block` —
+         { scope, slug, rules } — and saves through saveBlock(block). -->
+    <template id="rr-rules-tpl">
+        <div class="rr-rb">
+            <template x-for="(rule, ri) in block.rules" :key="rule.id">
+                <div class="rr-rule-wrap">
+                    <span class="rr-and" x-show="ri > 0">and</span>
+                    <div class="rr-rule" :class="rule.strength === 'try' ? 'rr-rule--try' : ''">
+                        <div class="rr-rule__top">
+                            <template x-if="block.scope !== 'who'">
+                                <span class="rr-strength">
+                                    <button type="button" :aria-pressed="rule.strength !== 'try' ? 'true' : 'false'"
+                                            @click="rule.strength = 'must'; saveBlock(block)"
+                                            title="The rota never breaks it, and an editor who does is warned">Must</button>
+                                    <button type="button" :aria-pressed="rule.strength === 'try' ? 'true' : 'false'"
+                                            @click="rule.strength = 'try'; saveBlock(block)"
+                                            title="The rota prefers it, but breaks it rather than leave a place empty">Try to</button>
+                                </span>
+                            </template>
+                            <p class="rr-rule__read" x-text="sentence(rule, block.scope)"></p>
+                            <template x-if="block.scope === 'who'">
+                                <span class="rr-count" x-text="eligibleFor(block.slug).length + ' of ' + assignable.length"></span>
+                            </template>
+                            <template x-if="block.scope !== 'who'">
+                                <button type="button" class="rr-x" @click="block.rules.splice(ri, 1); saveBlock(block)" aria-label="Remove this rule">
+                                    <span class="material-symbols-outlined">delete</span>
+                                </button>
+                            </template>
+                        </div>
+
+                        <div class="rr-opts">
+                            <template x-for="(option, oi) in rule.options" :key="option.id">
+                                <div class="rr-opt-wrap">
+                                    <span class="rr-or" x-show="oi > 0">or</span>
+                                    <div class="rr-opt">
+                                        <template x-for="(c, ci) in option.conditions" :key="c.id">
+                                            <div class="rr-cond-wrap">
+                                                <span class="rr-and2" x-show="ci > 0">and</span>
+                                                <div class="rr-cond">
+                                                    <select class="rr-sel rr-sel--kind re-focus" x-model="c.kind" @change="reshapeCondition(c, block.scope, block.slug); saveBlock(block)" aria-label="Kind of condition">
+                                                        <template x-for="k in conditionKinds(block.scope)" :key="k.value">
+                                                            <option :value="k.value" x-text="k.label" :selected="k.value === c.kind"></option>
+                                                        </template>
+                                                    </select>
+
+                                                    <!-- Across roles: which Role this line-up or count is about. -->
+                                                    <template x-if="block.scope === 'across' && (c.kind === 'lineup' || c.kind === 'atLeastTagged')">
+                                                        <select class="rr-sel re-focus" x-model="c.roleSlug" aria-label="Which role"
+                                                                @change="fitLineup(c); saveBlock(block)">
+                                                            <template x-for="s in tableRoles" :key="s"><option :value="s" x-text="roleName(s)" :selected="s === c.roleSlug"></option></template>
+                                                        </select>
+                                                    </template>
+                                                    <template x-if="block.scope === 'across' && c.kind === 'lineup'"><span class="rr-word">is</span></template>
+
+                                                    <template x-if="c.kind === 'requireTag' || c.kind === 'excludeTag'">
+                                                        <select class="rr-sel re-focus" x-model="c.tagId" @change="saveBlock(block)" aria-label="Tag">
+                                                            <option value="">Choose a tag…</option>
+                                                            <template x-for="t in ruleTags" :key="t.id"><option :value="t.id" x-text="t.name" :selected="t.id === c.tagId"></option></template>
+                                                        </select>
+                                                    </template>
+
+                                                    <template x-if="c.kind === 'sex'">
+                                                        <select class="rr-sel re-focus" x-model="c.sex" @change="saveBlock(block)" aria-label="A man or a woman">
+                                                            <option value="male" :selected="c.sex === 'male'">a man</option>
+                                                            <option value="female" :selected="c.sex === 'female'">a woman</option>
+                                                        </select>
+                                                    </template>
+
+                                                    <template x-if="c.kind === 'allowlist'">
+                                                        <span class="rr-tokens">
+                                                            <template x-for="(pid, pi) in (c.personIds || [])" :key="pid">
+                                                                <span class="rr-tok"><span x-text="personName(pid)"></span>
+                                                                    <button type="button" class="rr-x" @click="c.personIds.splice(pi, 1); saveBlock(block)" :aria-label="'Take ' + personName(pid) + ' off'"><span class="material-symbols-outlined">close</span></button>
+                                                                </span>
+                                                            </template>
+                                                            <select class="rr-sel re-focus" aria-label="Add someone"
+                                                                    @change="addPerson(c, $event.target.value, block); $event.target.value = ''">
+                                                                <option value="">Add someone…</option>
+                                                                <template x-for="p in assignable" :key="p.id"><option :value="p.id" x-text="p.name"></option></template>
+                                                            </select>
+                                                        </span>
+                                                    </template>
+
+                                                    <template x-if="c.kind === 'lineup'">
+                                                        <span class="rr-lineup-edit">
+                                                            <span class="rr-marks">
+                                                                <template x-for="(mk, mi) in c.sexes" :key="mi">
+                                                                    <button type="button" class="rr-mark re-focus" :class="'rr-mark--' + mk"
+                                                                            @click="c.sexes.splice(mi, 1, nextMark(mk)); saveBlock(block)"
+                                                                            title="Click: man, woman, either" x-text="markLabel(mk)"></button>
+                                                                </template>
+                                                            </span>
+                                                            <button type="button" class="rr-x" @click="lineupFewer(c, block)" aria-label="One fewer"><span class="material-symbols-outlined">remove</span></button>
+                                                            <button type="button" class="rr-x" @click="c.sexes.push('either'); saveBlock(block)" aria-label="One more"><span class="material-symbols-outlined">add</span></button>
+                                                        </span>
+                                                    </template>
+
+                                                    <template x-if="c.kind === 'atLeastTagged'">
+                                                        <span class="rr-lineup-edit">
+                                                            <input class="rr-num re-focus" type="number" min="1" x-model.number="c.atLeast" @change="saveBlock(block)" aria-label="How many" />
+                                                            <span class="rr-word">tagged</span>
+                                                            <select class="rr-sel re-focus" x-model="c.tagId" @change="saveBlock(block)" aria-label="Tag">
+                                                                <option value="">Choose a tag…</option>
+                                                                <template x-for="t in ruleTags" :key="t.id"><option :value="t.id" x-text="t.name" :selected="t.id === c.tagId"></option></template>
+                                                            </select>
+                                                        </span>
+                                                    </template>
+
+                                                    <template x-if="c.kind === 'notSameGroup' || c.kind === 'sameGroup'">
+                                                        <select class="rr-sel re-focus" x-model="c.typeId" @change="saveBlock(block)" aria-label="Relationship">
+                                                            <template x-for="t in pairTypeOptions" :key="t.id"><option :value="t.id" x-text="t.name" :selected="t.id === c.typeId"></option></template>
+                                                        </select>
+                                                    </template>
+                                                    <template x-if="block.scope === 'across' && (c.kind === 'notSameGroup' || c.kind === 'sameGroup')">
+                                                        <span class="rr-lineup-edit">
+                                                            <span class="rr-word">:</span>
+                                                            <select class="rr-sel re-focus" x-model="c.roleSlugs[0]" @change="saveBlock(block)" aria-label="First role">
+                                                                <template x-for="s in tableRoles" :key="s"><option :value="s" x-text="roleName(s)" :selected="s === c.roleSlugs[0]"></option></template>
+                                                            </select>
+                                                            <span class="rr-word">and</span>
+                                                            <select class="rr-sel re-focus" x-model="c.roleSlugs[1]" @change="saveBlock(block)" aria-label="Second role">
+                                                                <template x-for="s in tableRoles" :key="s"><option :value="s" x-text="roleName(s)" :selected="s === c.roleSlugs[1]"></option></template>
+                                                            </select>
+                                                        </span>
+                                                    </template>
+
+                                                    <template x-if="c.kind === 'notTogether'">
+                                                        <select class="rr-sel re-focus" x-model="c.typeId" @change="saveBlock(block)" aria-label="Relationship">
+                                                            <template x-for="t in sharedPairwiseTypes" :key="t.id"><option :value="t.id" x-text="t.name" :selected="t.id === c.typeId"></option></template>
+                                                        </select>
+                                                    </template>
+
+                                                    <button type="button" class="rr-x" @click="removeCondition(block.rules, ri, oi, ci, block.scope); saveBlock(block)" aria-label="Remove this condition">
+                                                        <span class="material-symbols-outlined">close</span>
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </template>
+                                        <button type="button" class="rr-add rr-add--sm" @click="option.conditions.push(freshCondition(block.scope, block.slug)); saveBlock(block)">
+                                            <span class="material-symbols-outlined">add</span>and
+                                        </button>
+                                    </div>
+                                </div>
+                            </template>
+                            <button type="button" class="rr-add" @click="addOption(rule, block.scope, block.slug); saveBlock(block)">
+                                <span class="material-symbols-outlined">add</span><span x-text="block.scope === 'who' && !rule.options.length ? 'Add a condition' : 'or'"></span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </template>
+
+            <template x-if="block.scope !== 'who'">
+                <button type="button" class="rr-add" style="align-self:flex-start" @click="addRule(block.rules, block.scope, block.slug); saveBlock(block)">
+                    <span class="material-symbols-outlined">add</span>Add a rule
+                </button>
+            </template>
+        </div>
+    </template>
+    <script>
+        // Copy the rule list into every slot before Alpine (deferred) starts.
+        // The slots sit inside x-if/x-for <template>s, whose contents are not
+        // in the document, so walk into each template's content too.
+        (function () {
+            var tpl = document.getElementById('rr-rules-tpl');
+            var walk = function (root) {
+                root.querySelectorAll('[data-rr-rules]').forEach(function (el) { el.innerHTML = tpl.innerHTML; });
+                root.querySelectorAll('template').forEach(function (t) { if (t !== tpl) walk(t.content); });
+            };
+            walk(document);
+        })();
+    </script>
 </body>
 </html>

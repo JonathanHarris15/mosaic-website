@@ -239,12 +239,25 @@ A non-liturgical service contribution — kids ministry, setup/teardown, coffee,
 _Avoid_: Ministry role, volunteer role (use Servant Role), duty
 
 **Role Definition**:
-The editable specification of a **Servant Role**, authored in the **Roles Manager**: a name, an ordered set of **slots** (each requiring **male**, **female**, or **either** — three people needed means three slots), and optional **restriction rules** that read existing Shepherding Tags and Relationships (e.g. "no married couple in this Role", "exclude anyone tagged X"). Liturgical Roles are the locked, code-defined counterpart and have no editable Role Definition.
-
-Every restriction here is a rule the Role makes about **itself**, and holds wherever that Role runs. A rule about *two* Roles is a [[Cross-Role Rule]] and lives somewhere else.
-
-It also carries a **Role Description** — see below.
+What a **Servant Role** *is*, authored in the **Roles Manager**: its name and its **Role Description**. Who it needs, who may fill it, its rest and whether it uses up the morning are not the Role's — they are the [[Role Settings]] of each Event that runs it ([ADR 0085](docs/adr/0085-a-roles-needs-and-rules-belong-to-the-event.md)). A definition stored before that still carries slots, rules and rest; an Event reads them until it has given its own. Liturgical Roles are the locked, code-defined counterpart and have no editable Role Definition.
 _Avoid_: Role template, role config
+
+**Role Settings** (a Role on an Event):
+What one Event says about one of its Servant Roles: how many people it needs, the rules about who may fill it, how much rest it owes, and whether it uses up the morning. Stored on the series (`roleSettings[slug]`) and read through `EventsCore.effectiveRole`, so the picker, [[Auto-assign]], [[Cover]], [[Trade]] and the server's take all see the same Role. Set on the Roles & rules tab of [[Recurring Events]]. Setup needs two men on a Sunday and one of anybody on a Wednesday; that is two Role Settings for one Role.
+- **Its rules can say OR** — see [[Serving Rule]].
+_Avoid_: role config, role override, per-event role
+
+**Serving Rule**:
+A rule about who may fill a Role on an Event. All of a Role's rules hold at once; a rule may have **options**, any one of which will do, and each option is a list of **conditions** that must all hold. One level only — no options inside options.
+- **About each person** (*who can do it*): tagged, not tagged, a man or a woman, one of these people.
+- **About the team** (the people on it together): a **line-up**, at least n tagged, no two from the same group, all from the same group, cannot serve together if related.
+- **Across Roles**: the same conditions, each naming the Role it is about — a [[Cross-Role Rule]].
+- **Must, or Try to.** A Must rule is never broken by the rota, and an editor who breaks it is warned. A Try rule refuses nobody and warns nobody; the rota keeps it when it can.
+_Avoid_: constraint, restriction (the stored field is `restrictions`, but the word for it is rule)
+
+**Line-up**:
+How many men and how many women a Role's team is made of on a date — "a man and a woman", "three men and a woman", "one man and one of either". **Unordered**: it never says which seat. How many people a Role needs is a plain number; the line-up is a [[Serving Rule]] about who fills them, and options give "a man and a woman, or two men".
+_Avoid_: slot requirement, gender mix, composition
 
 **Role Description**:
 What the job actually is, in the editor's own words: *"Arrive by 9:15, put the urns on, and set out the mugs on the side table."* Written on the [[Role Definition]] in the [[Roles Manager]], and read at **every moment somebody meets that Role** — beside the date on their [[Commitment]]s page, on the row waiting for their answer, on the [[Cover]] list, when somebody asks them personally through a [[Trade]], and in both directions of a Trade's picker. A Role's **name is a label**, and a label is not an answer to "what am I meant to do?".
@@ -258,7 +271,7 @@ What the job actually is, in the editor's own words: *"Arrive by 9:15, put the u
 _Avoid_: instructions, notes, job description, role info
 
 **Cross-Role Rule**:
-A serving rule about a **pair** of Roles rather than one — "the Children's Ministry Leader and the Children's Ministry Helper cannot be from the same Marriage". Neither Role can state it, because neither is the thing being constrained: **the pair is**. So it belongs to the [[Event]] that runs both, which is also the only thing that knows they run together, and it is authored on [[Recurring Events]] rather than in the [[Roles Manager]].
+A [[Serving Rule]] whose conditions name Roles — about a **pair** of Roles rather than one, or how several teams are made up together ("the Helpers are a woman and a man and the Leader is a man, or the Helpers are two men and the Leader is a woman") — "the Children's Ministry Leader and the Children's Ministry Helper cannot be from the same Marriage". Neither Role can state it, because neither is the thing being constrained: **the pair is**. So it belongs to the [[Event]] that runs both, which is also the only thing that knows they run together, and it is authored on [[Recurring Events]] rather than in the [[Roles Manager]].
 
 Said in the **same words a Role's own group rule uses** — *must be from the same* / *cannot be from the same* — over the same Group Types (Family, Marriage, or any [[Shared Relationship Type]] of the group kind). An editor who has written one of these once should not have to learn a second phrasing to say it across two Roles.
 
@@ -300,9 +313,8 @@ The surface that puts named People into a single Event's Roles — every Role th
 _Avoid_: Roster tab, assignment tab, staffing screen
 
 **Roles Manager**:
-The editor+ dashboard card where **Role Definitions** are authored and managed. Distinct from the **Roles tab**, which assigns a single date by hand, and from [[Auto-assign]], which drafts a stretch of dates at once.
-- **One Roles Manager, opened on both.** The phone does not get a port of this screen; it opens the same page inside the shell (`?shell=mobile`), reachable from the phone's home grid, which is the phone's dashboard. This screen is where a Role's slots and restriction rules are decided, so a second copy of it would be a second place for those rules to drift from the model.
-- **On a phone it is a list, then an editor** — never both, because there is only room for one. The list's rows become cards you tap; delete moves into the editor's own bar, and the only back arrow is the shell's, which the page answers: out of the Role you have open, or out of the page if you have none.
+The editor+ dashboard card that lists every **Servant Role** as a ledger: its name, what it involves, and the Events it runs in — each a way through to that Event's [[Role Settings]], where who it needs, its rules and its rest are decided ([ADR 0085](docs/adr/0085-a-roles-needs-and-rules-belong-to-the-event.md)). Beside the ledger: the built-in Sunday Roles, and who is a [[Non-server]]. Distinct from the **Roles tab**, which assigns a single date by hand, and from [[Auto-assign]], which drafts a stretch of dates at once.
+- **One Roles Manager, opened on both.** The phone opens the same page inside the shell (`?shell=mobile`), where each Role is a card.
 _Avoid_: Scheduler page, role admin
 
 **Auto-assign**:
@@ -355,7 +367,7 @@ An off-Track state, toggled beside the Membership Stage slider. Marking a Person
 _Avoid_: Archived, hidden, deleted, dormant
 
 **Non-server** (a Person):
-Somebody no rota ever offers a Role to — the youngest children, anyone too frail, anyone in a season of not serving. Held as a field on the Person (`doesNotServe`) and managed from the [[Roles Manager]], because it is a fact about the **person** rather than about any Role: a Role's `allowlist` answers *who may do this one*, and copying "does none of it" onto every Role is how the two go out of step the next time a Role is added. Absolute, like [[Inactive]] — not a candidate who lost, so there is no reason to show and no [[Warning]] to leave. **Hides nobody**: the name stays everywhere else in Mosaic, which is what separates it from a tag carrying `hidePeople`. It applies to elders and super admins too, since it is not a privacy rule for anyone to see past.
+Somebody no rota ever offers a Role to — the youngest children, anyone too frail, anyone in a season of not serving. Held as a field on the Person (`doesNotServe`), **or** by carrying a Shepherding Tag or belonging to a Relationship Group an editor has marked as not serving ([ADR 0086](docs/adr/0086-a-whole-tag-or-group-can-not-serve.md)) — a tag or group covers whoever carries it, now and later. Managed from the [[Roles Manager]], because it is a fact about the **person** rather than about any Role: a Role's `allowlist` answers *who may do this one*, and copying "does none of it" onto every Role is how the two go out of step the next time a Role is added. Absolute, like [[Inactive]] — not a candidate who lost, so there is no reason to show and no [[Warning]] to leave. **Hides nobody**: the name stays everywhere else in Mosaic, which is what separates it from a tag carrying `hidePeople`. It applies to elders and super admins too, since it is not a privacy rule for anyone to see past.
 _Avoid_: excluded, blocked, ineligible, banned, exempt
 
 **Away** (a Person, on dates) — ADR-0023:

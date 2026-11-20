@@ -218,46 +218,9 @@
 
     // ── Slot identity ─────────────────────────────────────────────────────────
 
-    // Slot ids are `s<n>`. The next one is one past the highest `n` ever used in
-    // this definition — not `slots.length + 1`, which would re-issue the id of a
-    // removed middle slot and hand its assignments to a brand-new slot.
-    // ⚠ NEVER BELOW THE COUNTER (MS-823). This used to read the highest slot
-    // id still present, so removing the last slot and adding another handed
-    // the removed id to a new slot — and every Assignment and serve still
-    // pointing at the old one attached itself to a slot with a different
-    // requirement. The definition now remembers the next number it may issue.
-    // One with no counter (stored before this) starts from its highest slot,
-    // which is what it would have done anyway.
-    /**
-     * @param {?Record<string, *> | undefined} def A Role definition.
-     * @returns {number}
-     */
-    function slotSeqOf(def) {
-        const highest = (def && def.slots ? def.slots : []).reduce((/** @type {number} */ max, /** @type {*} */ slot) => {
-            const n = parseInt(String(slot && slot.id).replace(/^s/, ''), 10);
-            return Number.isFinite(n) && n > max ? n : max;
-        }, 0);
-        const stored = def && Number.isInteger(def.nextSlotSeq) ? def.nextSlotSeq : 0;
-        return Math.max(highest + 1, stored);
-    }
-
-    /**
-     * @param {?Record<string, *> | undefined} def A Role definition.
-     * @returns {string}
-     */
-    function nextSlotId(def) {
-        return 's' + slotSeqOf(def);
-    }
-
     // ── Reading a definition ──────────────────────────────────────────────────
 
     const slotsOf = def => (def && Array.isArray(def.slots) ? def.slots : []);
-
-    // The ordered slot ids — the order an editor authored, which the Roles tab
-    // renders and auto-assign fills in turn.
-    function slotOrder(def) {
-        return slotsOf(def).map(slot => slot.id);
-    }
 
     // How many people this Role needs: one per slot.
     function slotCount(def) {
@@ -273,15 +236,8 @@
             name: name,
             slug: slugify(name),
             family: FAMILIES.SERVANT,
-            slots: [{ id: 's1', requirement: REQUIREMENTS.EITHER }],
-            // The next slot number this Role may issue (MS-823).
-            nextSlotSeq: 2,
-            restrictions: [],
-            // Written explicitly rather than left absent, so the Roles Manager
-            // form has something to render and the defaults are visible to the
-            // editor rather than implied.
-            intensity: DEFAULT_INTENSITY,
-            allowsAnotherRole: false,
+            // Who it needs, its rules and its rest are each Event's (ADR 0085):
+            // an Event that adds this Role gives it its own settings then.
             description: '',
         };
     }
@@ -308,55 +264,6 @@
         return text || null;
     }
 
-    // Every mutator returns a new definition; none touches its input, so a UI can
-    // hold the previous value for cancel/undo. Each refuses a locked Role: the
-    // guard lives here, in the model, so a UI that forgets to hide the edit
-    // controls still cannot rewrite a liturgical Role.
-    function withSlots(def, slots) {
-        return Object.assign({}, def, { slots: slots });
-    }
-
-    function addSlot(def, requirement) {
-        assertEditable(def);
-        if (!isRequirement(requirement)) {
-            throw new Error('Unknown slot requirement: ' + requirement);
-        }
-        const seq = slotSeqOf(def);
-        return Object.assign(withSlots(def, slotsOf(def).concat([
-            { id: 's' + seq, requirement: requirement },
-        ])), { nextSlotSeq: seq + 1 });
-    }
-
-    function removeSlot(def, slotId) {
-        assertEditable(def);
-        // Remembered BEFORE the slot goes, so its number is never issued again.
-        return Object.assign(withSlots(def, slotsOf(def).filter((/** @type {{id: string}} */ slot) => slot.id !== slotId)),
-            { nextSlotSeq: slotSeqOf(def) });
-    }
-
-    function setSlotRequirement(def, slotId, requirement) {
-        assertEditable(def);
-        if (!isRequirement(requirement)) {
-            throw new Error('Unknown slot requirement: ' + requirement);
-        }
-        return withSlots(def, slotsOf(def).map(slot => (
-            slot.id === slotId ? Object.assign({}, slot, { requirement: requirement }) : slot
-        )));
-    }
-
-    // Move the slot at `from` to sit at `to`. Identity and requirement travel
-    // with the slot — reordering re-sequences, it never rewrites a slot.
-    function reorderSlots(def, from, to) {
-        assertEditable(def);
-        const slots = slotsOf(def);
-        const inRange = i => Number.isInteger(i) && i >= 0 && i < slots.length;
-        if (!inRange(from) || !inRange(to) || from === to) return withSlots(def, slots.slice());
-
-        const next = slots.slice();
-        next.splice(to, 0, next.splice(from, 1)[0]);
-        return withSlots(def, next);
-    }
-
     // ── Restrictions: who may fill a slot ─────────────────────────────────────
     //
     // Rules are written against data that already exists — Shepherding Tags and
@@ -370,7 +277,29 @@
         NOT_SAME_GROUP: 'notSameGroup',     // no two people from one Relationship Group
         SAME_GROUP: 'sameGroup',            // everyone from ONE Relationship Group
         ALLOWLIST: 'allowlist',             // only these named people
+        // Rules that can say OR. An `anyOf` is a set of OPTIONS — any one will
+        // do — each a list of conditions that must all hold. The conditions are
+        // the kinds above, plus two that only make sense inside one:
+        ANY_OF: 'anyOf',                    // { options: [[cond, …], …] }
+        SEX: 'sex',                         // { sex: 'male' | 'female' } — this person
+        LINEUP: 'lineup',                   // { sexes: [...], roleSlug? } — the team, unordered
+        AT_LEAST_TAGGED: 'atLeastTagged',   // { tagId, atLeast } — the team has at least n tagged
     });
+
+    // The marks a line-up is written in. "either" takes anybody.
+    const LINEUP_MARKS = ['male', 'female', 'either'];
+
+    // ── Must, or Try to ──────────────────────────────────────────────────────
+    //
+    // A rule is MUST unless it says otherwise: nobody is offered a place it
+    // refuses, the solve never breaks it, and an editor who breaks it by hand
+    // is warned. A TRY rule is a preference — it refuses nobody and warns
+    // nobody, and the solve breaks it rather than leave a place empty. What it
+    // does do is count: every eligible candidate says how many Try rules they
+    // would break (`misses`), and the solve fills with the fewest.
+    const STRENGTHS = Object.freeze({ MUST: 'must', TRY: 'try' });
+    /** @param {Record<string, *>} rule */
+    const isTry = rule => !!rule && rule.strength === STRENGTHS.TRY;
 
     // ── The two Group Types the Membership Directory answers ─────────────────
     //
@@ -420,6 +349,12 @@
         PAIRED_ROLE_CONFLICT: 'pairedRoleConflict',     // shares a group with whoever holds the paired Role
         NOT_IN_PAIRED_GROUP: 'notInPairedGroup',        // must share one with them, and does not
         NOT_IN_REQUIRED_GROUP: 'notInRequiredGroup',    // not in the group this Role is drawn from
+        // The team would no longer fit any line-up the rules allow.
+        LINEUP_MISMATCH: 'lineupMismatch',
+        // An OR rule with several options, and this person fits none of them.
+        NO_OPTION_FITS: 'noOptionFits',
+        // The team could no longer reach "at least n tagged X".
+        TOO_FEW_TAGGED: 'tooFewTagged',
         // Only a whole-roster answer can produce these two: nobody can be
         // offered a Role or a place that has since stopped existing, but a
         // roster written last month can certainly still name one.
@@ -495,6 +430,49 @@
         return !!(person && person.doesNotServe);
     }
 
+    // ── Doesn't serve, for a whole tag or group (ADR 0086) ───────────────────
+    //
+    // Stored once for the church in serving_settings/church. Everybody carrying
+    // one of the tags, or leading or in one of the groups, is a Non-server —
+    // now and whenever they join later. Like a Person's own mark it hides
+    // nobody and applies to every viewer: it is not a privacy rule.
+    const NON_SERVING_DOC = Object.freeze({ collection: 'serving_settings', id: 'church' });
+
+    /** @param {?Record<string, *>} stored @returns {{ tagIds: string[], groupIds: string[] }} */
+    function nonServingSetting(stored) {
+        const s = stored || {};
+        const list = v => (Array.isArray(v) ? v.filter(x => typeof x === 'string' && x) : []);
+        return { tagIds: list(s.doesNotServeTagIds), groupIds: list(s.doesNotServeGroupIds) };
+    }
+
+    // The ids of everyone a setting takes out. A group this account cannot read
+    // is simply not in `groups`, so it takes nobody out rather than everybody.
+    /** @param {Array<Record<string, *>>} people @param {{ tagIds?: string[], groupIds?: string[] } | null | undefined} setting @param {Array<Record<string, *>> | undefined} groups @returns {Set<string>} */
+    function nonServingIds(people, setting, groups) {
+        const tagIds = (setting && setting.tagIds) || [];
+        const groupIds = (setting && setting.groupIds) || [];
+        const out = new Set();
+        if (!tagIds.length && !groupIds.length) return out;
+        (people || []).forEach(p => {
+            if (p && ((p.tags) || []).some(t => tagIds.indexOf(t) !== -1)) out.add(p.id);
+        });
+        (groups || []).filter(g => g && groupIds.indexOf(g.id) !== -1).forEach(g => {
+            if (g.leaderId) out.add(g.leaderId);
+            (g.memberIds || []).forEach(id => out.add(id));
+        });
+        return out;
+    }
+
+    // Who one tag or group covers, for the page to count and name.
+    /** @param {Array<Record<string, *>>} people @param {{ kind: string, id: string }} entry @param {Array<Record<string, *>> | undefined} groups @returns {Array<Record<string, *>>} */
+    function coveredByNonServing(people, entry, groups) {
+        const setting = entry && entry.kind === 'group'
+            ? { tagIds: [], groupIds: [entry.id] }
+            : { tagIds: [entry && entry.id], groupIds: [] };
+        const ids = nonServingIds(people, setting, groups);
+        return (people || []).filter(p => p && ids.has(p.id));
+    }
+
     // ── Who may even be offered ──────────────────────────────────────────────
     //
     // DISTINCT FROM ELIGIBILITY, and the difference is the whole design of the
@@ -541,9 +519,13 @@
         const opts = options || {};
         const hiding = opts.hidingTags || [];
         const seesHiddenPeople = seesHidden(opts.account || opts.rank);
+        const notServing = nonServingIds(people, opts.nonServing, opts.groups);
 
         return (people || []).filter(person => {
             if (isInactive(person)) return false;
+            // The whole-tag and whole-group Non-servers, for the same reason as
+            // the Person's own mark below and on the same side of the bypass.
+            if (person && notServing.has(person.id)) return false;
             // ⚠ ABOVE THE ELDER BYPASS. That bypass exists because those tags
             // hide people FROM everyone else for elders — a privacy rule. This
             // is not one. A four-year-old is not offered for coffee to an elder
@@ -764,72 +746,389 @@
     //   holders — everyone in a DIFFERENT Role at this Event, as
     //             [{ personId, roleSlug }]. The same list `busy` is built from,
     //             unnarrowed: this asks about OTHER PEOPLE, not this candidate.
-    function crossRoleIneligibility(def, candidate, context, holders) {
+    //   seated  — everyone already in THIS Role (its other seats), which a
+    //             line-up across Roles counts as part of this Role's team.
+    //
+    // A rule may also be an `anyOf` (see judgeOptions): "(the Helpers are a
+    // woman and a man AND the Leader is a man) OR (the Helpers are two men AND
+    // the Leader is a woman)". Its conditions name the Role they are about —
+    // a line-up by `roleSlug`, a group rule by its `roleSlugs` pair — and it
+    // is this Role's business only if one of them names it.
+    /** @param {Record<string, *>} def @param {Record<string, *>} candidate @param {Record<string, *>} context @param {Array<Record<string, *>>} holders @param {Array<Record<string, *>>} [seated] @returns {?Record<string, *>} */
+    function crossRoleIneligibility(def, candidate, context, holders, seated) {
         const rules = (context && context.crossRoleRules) || [];
-        if (!rules.length || !holders || !holders.length) return null;
+        if (!rules.length) return null;
 
         const slug = slugOf(def);
         if (!slug) return null;
+        const others = holders || [];
+        const own = seated || [];
 
         for (const rule of rules) {
-            const pair = (rule && rule.roleSlugs) || [];
-            // A pair is two DIFFERENT Roles. One naming the same Role twice is
-            // the Role's own NOT_SAME_GROUP rule written in the wrong place, and
-            // honouring it here would judge a Role against itself twice over.
-            if (pair.length !== 2 || pair[0] === pair[1]) continue;
-            if (pair.indexOf(slug) === -1) continue;
+            if (isTry(rule)) continue;
+            const blocked = crossRuleBlocks(rule, slug, candidate, context, others, own);
+            if (blocked) return blocked;
+        }
 
-            const otherSlug = pair[0] === slug ? pair[1] : pair[0];
-            const opposite = holders.filter(
-                h => h && h.roleSlug === otherSlug && h.personId && h.personId !== candidate.id
-            );
-            // Nobody in the paired Role yet, so there is nothing to be judged
-            // against — the same way the first person into a SAME_GROUP Role is
-            // unconstrained. The rule bites when the second seat is taken.
-            if (!opposite.length) continue;
+        return null;
+    }
 
-            if (rule.kind === RESTRICTIONS.NOT_SAME_GROUP) {
-                for (const holder of opposite) {
-                    const shared = sharedGroups(
-                        context.groups, rule.typeId, candidate.id, holder.personId,
-                        context.groupIndex
-                    );
-                    if (shared.length) {
-                        return {
-                            reason: REASONS.PAIRED_ROLE_CONFLICT,
-                            typeId: rule.typeId,
-                            groupId: shared[0].id,
-                            groupName: shared[0].name,
-                            conflictsWith: holder.personId,
-                            pairedRoleSlug: otherSlug,
-                        };
-                    }
-                }
+    // One rule across Roles, for a candidate to `slug`: why it refuses them,
+    // or null — including when the rule is not this Role's business at all.
+    /** @param {Record<string, *>} rule @param {string} slug @param {Record<string, *>} candidate @param {Record<string, *>} context @param {Array<Record<string, *>>} others @param {Array<Record<string, *>>} own @returns {?Record<string, *>} */
+    function crossRuleBlocks(rule, slug, candidate, context, others, own) {
+        if (rule && rule.kind === RESTRICTIONS.ANY_OF) {
+            const names = (rule.options || []).some(option => conditionsOf(option).some(
+                cond => cond && (cond.roleSlug === slug || ((cond.roleSlugs || []).indexOf(slug) !== -1))
+            ));
+            if (!names) return null;
+            return judgeOptions(rule.options,
+                cond => judgeCrossCondition(cond, slug, candidate, context, others, own));
+        }
+        // A plain pair rule: { kind, typeId, roleSlugs: [a, b] }.
+        const pair = (rule && rule.roleSlugs) || [];
+        if (pair.indexOf(slug) === -1) return null;
+        return judgeCrossCondition(rule, slug, candidate, context, others, own);
+    }
+
+    // How many Try rules this candidate would break by taking the place —
+    // the Role's own and the Event's rules across Roles alike.
+    /** @param {Record<string, *>} def @param {Record<string, *>} candidate @param {Record<string, *>} context @param {Array<Record<string, *>>} seated */
+    function preferenceMisses(def, candidate, context, seated) {
+        let misses = 0;
+        restrictionsOf(def).forEach(rule => {
+            if (isTry(rule) && judgeOwnRule(rule, def, candidate, context, seated)) misses++;
+        });
+        const slug = slugOf(def);
+        const holders = (context && context.assignedElsewhere) || [];
+        ((context && context.crossRoleRules) || []).forEach(rule => {
+            if (isTry(rule) && crossRuleBlocks(rule, slug, candidate, context, holders, seated)) misses++;
+        });
+        return misses;
+    }
+
+    // One condition of a rule across Roles, judged for a candidate to `slug`.
+    /** @param {Record<string, *>} cond @param {string} slug @param {Record<string, *>} candidate @param {Record<string, *>} context @param {Array<Record<string, *>>} holders @param {Array<Record<string, *>>} seated @returns {?Record<string, *>} */
+    function judgeCrossCondition(cond, slug, candidate, context, holders, seated) {
+        if (!cond) return null;
+
+        if (cond.kind === RESTRICTIONS.LINEUP) {
+            // This Role's own team, with the candidate in it; any other Role's
+            // team as it stands. Either can close an option off.
+            const team = cond.roleSlug === slug
+                ? teamSexes(context, seated.map(a => a.personId)).concat([candidate.sex || null])
+                : teamSexes(context, holders
+                    .filter(h => h && h.roleSlug === cond.roleSlug && h.personId !== candidate.id)
+                    .map(h => h.personId));
+            return lineupFits(cond.sexes, team)
+                ? null
+                : { reason: REASONS.LINEUP_MISMATCH, pairedRoleSlug: cond.roleSlug === slug ? null : cond.roleSlug };
+        }
+
+        const pair = cond.roleSlugs || [];
+        // A pair is two DIFFERENT Roles. One naming the same Role twice is
+        // the Role's own NOT_SAME_GROUP rule written in the wrong place, and
+        // honouring it here would judge a Role against itself twice over.
+        if (pair.length !== 2 || pair[0] === pair[1]) return null;
+
+        // A pair this candidate is not in can still decide which option of an
+        // OR is live, so it is judged between the people already holding it.
+        if (pair.indexOf(slug) === -1) {
+            const a = holders.filter(h => h && h.roleSlug === pair[0]).map(h => h.personId);
+            const b = holders.filter(h => h && h.roleSlug === pair[1]).map(h => h.personId);
+            if (!a.length || !b.length) return null;
+            if (cond.kind === RESTRICTIONS.NOT_SAME_GROUP) {
+                const clash = a.some(x => b.some(y => sharedGroups(context.groups, cond.typeId, x, y, context.groupIndex).length));
+                return clash ? { reason: REASONS.PAIRED_ROLE_CONFLICT, typeId: cond.typeId, pairedRoleSlug: pair[0] } : null;
             }
+            if (cond.kind === RESTRICTIONS.SAME_GROUP) {
+                const all = a.concat(b);
+                const works = groupsFor(context.groups, cond.typeId, all[0], context.groupIndex)
+                    .some(group => all.every(id => inGroup(group, id)));
+                return works ? null : { reason: REASONS.NOT_IN_PAIRED_GROUP, typeId: cond.typeId, pairedRoleSlug: pair[0] };
+            }
+            return null;
+        }
 
-            if (rule.kind === RESTRICTIONS.SAME_GROUP) {
-                const own = groupsFor(context.groups, rule.typeId, candidate.id, context.groupIndex);
-                // No group is ever committed to, for the same reason the
-                // within-Role version doesn't: one group must satisfy EVERY
-                // holder of the paired Role, but which one is not decided here.
-                const works = own.some(
-                    group => opposite.every(h => inGroup(group, h.personId))
+        const otherSlug = pair[0] === slug ? pair[1] : pair[0];
+        const opposite = holders.filter(
+            h => h && h.roleSlug === otherSlug && h.personId && h.personId !== candidate.id
+        );
+        // Nobody in the paired Role yet, so there is nothing to be judged
+        // against — the same way the first person into a SAME_GROUP Role is
+        // unconstrained. The rule bites when the second seat is taken.
+        if (!opposite.length) return null;
+
+        if (cond.kind === RESTRICTIONS.NOT_SAME_GROUP) {
+            for (const holder of opposite) {
+                const shared = sharedGroups(
+                    context.groups, cond.typeId, candidate.id, holder.personId,
+                    context.groupIndex
                 );
-                if (!works) {
+                if (shared.length) {
                     return {
-                        reason: REASONS.NOT_IN_PAIRED_GROUP,
-                        typeId: rule.typeId,
-                        conflictsWith: opposite[0].personId,
+                        reason: REASONS.PAIRED_ROLE_CONFLICT,
+                        typeId: cond.typeId,
+                        groupId: shared[0].id,
+                        groupName: shared[0].name,
+                        conflictsWith: holder.personId,
                         pairedRoleSlug: otherSlug,
                     };
                 }
             }
-
-            // An unknown kind is skipped, not treated as a blanket refusal —
-            // the same forgiveness the within-Role loop gives a typo.
         }
 
+        if (cond.kind === RESTRICTIONS.SAME_GROUP) {
+            const own = groupsFor(context.groups, cond.typeId, candidate.id, context.groupIndex);
+            // No group is ever committed to, for the same reason the
+            // within-Role version doesn't: one group must satisfy EVERY
+            // holder of the paired Role, but which one is not decided here.
+            const works = own.some(
+                group => opposite.every(h => inGroup(group, h.personId))
+            );
+            if (!works) {
+                return {
+                    reason: REASONS.NOT_IN_PAIRED_GROUP,
+                    typeId: cond.typeId,
+                    conflictsWith: opposite[0].personId,
+                    pairedRoleSlug: otherSlug,
+                };
+            }
+        }
+
+        // An unknown kind is skipped, not treated as a blanket refusal —
+        // the same forgiveness the within-Role loop gives a typo.
         return null;
+    }
+
+    // ── One rule, judged against one candidate ───────────────────────────────
+    //
+    // `seated` is everyone already in THIS Role at this Event (other seats).
+    // Returns null when the rule lets them in, or why it does not. An `anyOf`
+    // is judged through its options, each condition by this same function, so
+    // a condition inside an option means exactly what it means on its own.
+    /** @param {Record<string, *>} rule @param {Record<string, *>} def @param {Record<string, *>} candidate @param {Record<string, *>} context @param {Array<Record<string, *>>} seated @returns {?Record<string, *>} */
+    function judgeOwnRule(rule, def, candidate, context, seated) {
+        if (!rule) return null;
+        if (rule.kind === RESTRICTIONS.REQUIRE_TAG && !carriesTag(candidate, rule.tagId)) {
+            return { reason: REASONS.MISSING_REQUIRED_TAG, tagId: rule.tagId };
+        }
+        if (rule.kind === RESTRICTIONS.EXCLUDE_TAG && carriesTag(candidate, rule.tagId)) {
+            return { reason: REASONS.EXCLUDED_BY_TAG, tagId: rule.tagId };
+        }
+        // The named few who serve communion or run coffee. A rule that is
+        // ABSENT means everyone; an EMPTY one means nobody, which is why
+        // validation refuses it rather than letting it empty a rota.
+        if (rule.kind === RESTRICTIONS.ALLOWLIST) {
+            const allowed = (rule.personIds || []).indexOf(candidate.id) !== -1;
+            if (!allowed) return { reason: REASONS.NOT_ON_ALLOWLIST };
+        }
+        if (rule.kind === RESTRICTIONS.NOT_TOGETHER) {
+            const clash = seated.find(a => joinedBy(
+                context.relationships, rule.typeId, candidate.id, a.personId,
+                context.edgeIndex
+            ));
+            if (clash) {
+                return {
+                    reason: REASONS.RELATIONSHIP_CONFLICT,
+                    typeId: rule.typeId,
+                    conflictsWith: clash.personId,
+                };
+            }
+        }
+        // Spread the Role: nobody may sit with someone from their own group.
+        if (rule.kind === RESTRICTIONS.NOT_SAME_GROUP) {
+            for (const seat of seated) {
+                const shared = sharedGroups(
+                    context.groups, rule.typeId, candidate.id, seat.personId,
+                    context.groupIndex
+                );
+                if (shared.length) {
+                    return {
+                        reason: REASONS.SAME_GROUP_CONFLICT,
+                        typeId: rule.typeId,
+                        groupId: shared[0].id,
+                        groupName: shared[0].name,
+                        conflictsWith: seat.personId,
+                    };
+                }
+            }
+        }
+
+        // Staff the Role from ONE group. The only cohesive rule in the model:
+        // the first person seated is unconstrained, and everyone after them
+        // must share a group with EVERY seat already taken.
+        //
+        // No single group is ever committed to. A candidate passes if any one
+        // group satisfies every seat, so the Role can't get pinned to whichever
+        // group happened to match first and then wrongly exclude the rest.
+        if (rule.kind === RESTRICTIONS.SAME_GROUP) {
+            const own = groupsFor(context.groups, rule.typeId, candidate.id, context.groupIndex);
+            if (own.length === 0) {
+                return { reason: REASONS.NOT_IN_REQUIRED_GROUP, typeId: rule.typeId };
+            }
+            const worksForEverySeat = own.some(
+                group => seated.every(seat => inGroup(group, seat.personId))
+            );
+            if (!worksForEverySeat) {
+                return { reason: REASONS.NOT_IN_REQUIRED_GROUP, typeId: rule.typeId };
+            }
+        }
+
+        if (rule.kind === RESTRICTIONS.SEX) {
+            if (!candidate.sex) return { reason: REASONS.SEX_UNKNOWN };
+            if (candidate.sex !== rule.sex) return { reason: REASONS.SEX_MISMATCH };
+        }
+
+        if (rule.kind === RESTRICTIONS.LINEUP) {
+            const team = teamSexes(context, seated.map(a => a.personId)).concat([candidate.sex || null]);
+            if (!lineupFits(rule.sexes, team)) return { reason: REASONS.LINEUP_MISMATCH };
+        }
+
+        // "At least one first-aider on Welcome." Judged as still-reachable,
+        // like a line-up: the seats left after this one could all go to people
+        // carrying the tag, so it only refuses once that is no longer true.
+        if (rule.kind === RESTRICTIONS.AT_LEAST_TAGGED) {
+            const need = Number(rule.atLeast) || 0;
+            const tagged = seated
+                .map(a => knownPerson(context, a.personId))
+                .filter(p => p && carriesTag(p, rule.tagId)).length
+                + (carriesTag(candidate, rule.tagId) ? 1 : 0);
+            const left = Math.max(0, slotsOf(def).length - seated.length - 1);
+            if (tagged + left < need) {
+                return { reason: REASONS.TOO_FEW_TAGGED, tagId: rule.tagId, atLeast: need };
+            }
+        }
+
+        if (rule.kind === RESTRICTIONS.ANY_OF) {
+            return judgeOptions(rule.options,
+                cond => judgeOwnRule(cond, def, candidate, context, seated));
+        }
+
+        // A rule kind we don't know is skipped rather than treated as a
+        // blanket exclusion — a typo in the config must not empty the list.
+        return null;
+    }
+
+    // ── Options: any one will do ─────────────────────────────────────────────
+    //
+    // An option passes when every one of its conditions does; the rule passes
+    // when any option does. Refused, it says why as plainly as it can: with one
+    // option, that option's own reason ("must be tagged Member"); when every
+    // option failed on its line-up, that it is the line-up; otherwise that
+    // they fit none of the options.
+    /** @param {Record<string, *>} option @returns {Array<Record<string, *>>} */
+    const conditionsOf = option => (option && Array.isArray(option.conditions) ? option.conditions : []);
+
+    /** @param {Array<Record<string, *>> | undefined} options @param {(cond: Record<string, *>) => ?Record<string, *>} judge @returns {?Record<string, *>} */
+    function judgeOptions(options, judge) {
+        const list = Array.isArray(options) ? options : [];
+        if (!list.length) return null;
+        const failures = [];
+        for (const option of list) {
+            let failed = null;
+            for (const cond of conditionsOf(option)) {
+                failed = judge(cond);
+                if (failed) break;
+            }
+            if (!failed) return null;
+            failures.push(failed);
+        }
+        if (failures.length === 1) return failures[0];
+        if (failures.every(f => f.reason === REASONS.LINEUP_MISMATCH)) {
+            return { reason: REASONS.LINEUP_MISMATCH };
+        }
+        return { reason: REASONS.NO_OPTION_FITS, failures: failures };
+    }
+
+    // ── Line-ups ─────────────────────────────────────────────────────────────
+    //
+    // A line-up is UNORDERED — how many men, how many women, how many of
+    // either — so it is judged on counts, never on which seat is which. The
+    // question asked of a part-filled team is "can this still become one of
+    // the line-ups?", which lets the first seat go to anybody the line-up has
+    // room for and closes the options off as the seats fill.
+    //
+    // `team` is the sex of each person on it; null for somebody whose sex was
+    // never recorded, who can only take an "either" mark.
+    /** @param {string[] | undefined} sexes @param {Array<?string>} team */
+    function lineupFits(sexes, team) {
+        const marks = Array.isArray(sexes) ? sexes : [];
+        if (team.length > marks.length) return false;
+        const men = marks.filter((/** @type {string} */ m) => m === 'male').length;
+        const women = marks.filter((/** @type {string} */ m) => m === 'female').length;
+        const either = marks.length - men - women;
+        let m = 0; let f = 0; let unknown = 0;
+        team.forEach((/** @type {?string} */ sex) => {
+            if (sex === 'male') m++;
+            else if (sex === 'female') f++;
+            else unknown++;
+        });
+        return Math.max(0, m - men) + Math.max(0, f - women) + unknown <= either;
+    }
+
+    // Who the people already in a team are, by id. Somebody this context does
+    // not know at all is left out rather than guessed at: a rule should not
+    // refuse on the strength of a person it cannot see.
+    //
+    // `knownPeople` is for callers that judge one candidate at a time (Cover,
+    // Trade, a member's own take): they narrow `people` to the one person, so
+    // the people already on the team have to be handed in separately.
+    /** @type {WeakMap<object, Map<string, Record<string, *>>>} */
+    const personIndexes = new WeakMap();
+    /** @param {Array<Record<string, *>> | undefined} people @returns {?Map<string, Record<string, *>>} */
+    function indexOf(people) {
+        if (!Array.isArray(people)) return null;
+        let index = personIndexes.get(people);
+        if (!index) {
+            index = new Map(people.map(p => [p && p.id, p]));
+            personIndexes.set(people, index);
+        }
+        return index;
+    }
+
+    /** @param {Record<string, *>} context @param {string} id @returns {?Record<string, *>} */
+    function knownPerson(context, id) {
+        const own = indexOf(context && context.people);
+        if (own && own.has(id)) return own.get(id);
+        const known = indexOf(context && context.knownPeople);
+        return known && known.has(id) ? known.get(id) : null;
+    }
+
+    /** @param {Record<string, *>} context @param {string[]} personIds @returns {Array<?string>} */
+    function teamSexes(context, personIds) {
+        return personIds
+            .map(id => knownPerson(context, id))
+            .filter(Boolean)
+            .map(p => p.sex || null);
+    }
+
+    // Does any of these rules judge a line-up? A caller that would otherwise
+    // load only the one person being judged needs to load the team as well.
+    /** @param {Array<Record<string, *>>} rules */
+    function judgesLineups(rules) {
+        return kindsIn(rules).indexOf(RESTRICTIONS.LINEUP) !== -1;
+    }
+
+    // Every kind of condition a set of rules uses — inside an OR rule's options
+    // as well as at the top. A caller that loads data only for the rules that
+    // need it (the server's take loads groups only for a group rule) must ask
+    // here: once rules are stored as OR rules, the top level alone says "anyOf"
+    // and nothing else.
+    /** @param {Array<Record<string, *>> | undefined} rules @returns {string[]} */
+    function kindsIn(rules) {
+        /** @type {string[]} */
+        const out = [];
+        /** @param {Record<string, *>} rule */
+        const visit = rule => {
+            if (!rule) return;
+            if (rule.kind && out.indexOf(rule.kind) === -1) out.push(rule.kind);
+            if (rule.kind === RESTRICTIONS.ANY_OF) {
+                (rule.options || []).forEach((/** @type {Record<string, *>} */ option) => conditionsOf(option).forEach(visit));
+            }
+        };
+        (rules || []).forEach(visit);
+        return out;
     }
 
     // Judge one Person against one slot. Returns `null` when they may fill it,
@@ -866,79 +1165,15 @@
         }
 
         for (const rule of restrictionsOf(def)) {
-            if (rule.kind === RESTRICTIONS.REQUIRE_TAG && !carriesTag(candidate, rule.tagId)) {
-                return { reason: REASONS.MISSING_REQUIRED_TAG, tagId: rule.tagId };
-            }
-            if (rule.kind === RESTRICTIONS.EXCLUDE_TAG && carriesTag(candidate, rule.tagId)) {
-                return { reason: REASONS.EXCLUDED_BY_TAG, tagId: rule.tagId };
-            }
-            // The named few who serve communion or run coffee. A rule that is
-            // ABSENT means everyone; an EMPTY one means nobody, which is why
-            // validation refuses it rather than letting it empty a rota.
-            if (rule.kind === RESTRICTIONS.ALLOWLIST) {
-                const allowed = (rule.personIds || []).indexOf(candidate.id) !== -1;
-                if (!allowed) return { reason: REASONS.NOT_ON_ALLOWLIST };
-            }
-            if (rule.kind === RESTRICTIONS.NOT_TOGETHER) {
-                const clash = seated.find(a => joinedBy(
-                    context.relationships, rule.typeId, candidate.id, a.personId,
-                    context.edgeIndex
-                ));
-                if (clash) {
-                    return {
-                        reason: REASONS.RELATIONSHIP_CONFLICT,
-                        typeId: rule.typeId,
-                        conflictsWith: clash.personId,
-                    };
-                }
-            }
-            // Spread the Role: nobody may sit with someone from their own group.
-            if (rule.kind === RESTRICTIONS.NOT_SAME_GROUP) {
-                for (const seat of seated) {
-                    const shared = sharedGroups(
-                        context.groups, rule.typeId, candidate.id, seat.personId,
-                        context.groupIndex
-                    );
-                    if (shared.length) {
-                        return {
-                            reason: REASONS.SAME_GROUP_CONFLICT,
-                            typeId: rule.typeId,
-                            groupId: shared[0].id,
-                            groupName: shared[0].name,
-                            conflictsWith: seat.personId,
-                        };
-                    }
-                }
-            }
-
-            // Staff the Role from ONE group. The only cohesive rule in the model:
-            // the first person seated is unconstrained, and everyone after them
-            // must share a group with EVERY seat already taken.
-            //
-            // No single group is ever committed to. A candidate passes if any one
-            // group satisfies every seat, so the Role can't get pinned to whichever
-            // group happened to match first and then wrongly exclude the rest.
-            if (rule.kind === RESTRICTIONS.SAME_GROUP) {
-                const own = groupsFor(context.groups, rule.typeId, candidate.id, context.groupIndex);
-                if (own.length === 0) {
-                    return { reason: REASONS.NOT_IN_REQUIRED_GROUP, typeId: rule.typeId };
-                }
-                const worksForEverySeat = own.some(
-                    group => seated.every(seat => inGroup(group, seat.personId))
-                );
-                if (!worksForEverySeat) {
-                    return { reason: REASONS.NOT_IN_REQUIRED_GROUP, typeId: rule.typeId };
-                }
-            }
-
-            // A rule kind we don't know is skipped rather than treated as a
-            // blanket exclusion — a typo in the config must not empty the list.
+            if (isTry(rule)) continue;
+            const blocked = judgeOwnRule(rule, def, candidate, context, seated);
+            if (blocked) return blocked;
         }
 
         // Last, because it is the only rule this Role did not write. Its own
         // rules explain themselves; "your wife is leading" needs the editor to
         // already know why the other reasons did not apply.
-        return crossRoleIneligibility(def, candidate, context, (context && context.assignedElsewhere) || []);
+        return crossRoleIneligibility(def, candidate, context, (context && context.assignedElsewhere) || [], seated);
     }
 
     // Judge every candidate for one slot of one Role on one Event.
@@ -979,10 +1214,14 @@
             (busy[a.personId] || (busy[a.personId] = [])).push(a);
         });
 
+        // Only worth asking when there is a Try rule to ask about.
+        const anyTry = restrictionsOf(def).some(isTry) || (ctx.crossRoleRules || []).some(isTry);
+
         return (ctx.people || []).map(candidate => {
             const blocked = ineligibilityFor(def, slot, candidate, ctx, seated, busy);
+            const misses = !blocked && anyTry ? preferenceMisses(def, candidate, ctx, seated) : 0;
             return Object.assign(
-                { personId: candidate.id, eligible: !blocked, reason: null },
+                { personId: candidate.id, eligible: !blocked, reason: null, misses: misses },
                 blocked || {}
             );
         });
@@ -1133,9 +1372,61 @@
     const GROUP_RULES = [RESTRICTIONS.SAME_GROUP, RESTRICTIONS.NOT_SAME_GROUP];
     const PAIRWISE_RULES = [RESTRICTIONS.NOT_TOGETHER];
 
-    function validateRestriction(rule, availableTypes) {
+    //
+    // `options.count`, when given, is how many people the Role needs on this
+    // Event: a line-up naming a different number can never be met.
+    function validateRestriction(rule, availableTypes, options) {
         const errors = [];
         const kind = rule && rule.kind;
+        const opts = options || {};
+
+        // OR: at least one option, each with at least one condition, each
+        // condition a rule in its own right. One level only — an option inside
+        // an option is brackets inside brackets, which nobody reading a rota
+        // rule should have to parse.
+        if (kind === RESTRICTIONS.ANY_OF) {
+            const list = Array.isArray(rule.options) ? rule.options : [];
+            if (!list.length) errors.push('This rule needs at least one option.');
+            list.forEach(option => {
+                const conds = conditionsOf(option);
+                if (!conds.length) errors.push('Each option needs at least one condition.');
+                conds.forEach(cond => {
+                    if (cond && cond.kind === RESTRICTIONS.ANY_OF) {
+                        errors.push('An option cannot hold another set of options.');
+                        return;
+                    }
+                    validateRestriction(cond, availableTypes, opts).errors
+                        .forEach(e => { if (errors.indexOf(e) === -1) errors.push(e); });
+                });
+            });
+            return { valid: errors.length === 0, errors: errors };
+        }
+
+        if (kind === RESTRICTIONS.AT_LEAST_TAGGED) {
+            if (!rule.tagId) errors.push('This rule needs a Tag.');
+            if (!(Number(rule.atLeast) >= 1)) errors.push('Say how many — at least one.');
+            if (typeof opts.count === 'number' && Number(rule.atLeast) > opts.count) {
+                errors.push('This asks for ' + rule.atLeast + ' tagged people, but the Role only needs ' + opts.count + '.');
+            }
+            return { valid: errors.length === 0, errors: errors };
+        }
+
+        if (kind === RESTRICTIONS.SEX) {
+            if (rule.sex !== 'male' && rule.sex !== 'female') errors.push('Say whether this is a man or a woman.');
+            return { valid: errors.length === 0, errors: errors };
+        }
+
+        if (kind === RESTRICTIONS.LINEUP) {
+            const marks = Array.isArray(rule.sexes) ? rule.sexes : [];
+            if (!marks.length) errors.push('A line-up needs at least one person.');
+            if (marks.some(m => LINEUP_MARKS.indexOf(m) === -1)) {
+                errors.push('Each place in a line-up is a man, a woman or either.');
+            }
+            if (typeof opts.count === 'number' && marks.length && marks.length !== opts.count) {
+                errors.push('This line-up names ' + marks.length + ' people, but the Role needs ' + opts.count + '.');
+            }
+            return { valid: errors.length === 0, errors: errors };
+        }
 
         if (TAG_RULES.indexOf(kind) !== -1) {
             if (!rule.tagId) errors.push('This rule needs a Tag.');
@@ -1192,56 +1483,6 @@
         return { valid: errors.length === 0, errors: errors };
     }
 
-    // A Cross-Role Rule, checked before it is stored (MS-221). Same Type rules
-    // as a group restriction — it IS one, said about two Roles instead of one —
-    // so the check above does that half, and this one adds the pair.
-    //
-    // `availableSlugs`, when given, is the Roles the Event actually runs. A rule
-    // naming a Role that is not on this Event can never fire, and an editor who
-    // wrote one would be watching for a refusal that never comes.
-    function validateCrossRoleRule(rule, availableTypes, availableSlugs) {
-        const errors = [];
-        const kind = rule && rule.kind;
-
-        if (GROUP_RULES.indexOf(kind) === -1) {
-            return {
-                valid: false,
-                errors: ['A cross-Role rule is either "must be in the same" or "no two people from the same".'],
-            };
-        }
-
-        const pair = (rule && rule.roleSlugs) || [];
-        if (pair.length !== 2 || !pair[0] || !pair[1]) {
-            errors.push('A cross-Role rule needs two Roles.');
-        } else if (pair[0] === pair[1]) {
-            // Not a pedantic check. This one is already sayable — it is the
-            // Role's own rule — and letting it be written here too would mean
-            // two places to look for why somebody was refused.
-            errors.push('Those are the same Role. A rule about one Role belongs on the Role itself.');
-        } else if (availableSlugs) {
-            pair.forEach(slug => {
-                if (availableSlugs.indexOf(slug) === -1) {
-                    errors.push('"' + slug + '" is not one of this event\'s Roles, so the rule could never apply.');
-                }
-            });
-        }
-
-        const all = errors.concat(validateRestriction(
-            { kind: kind, typeId: rule && rule.typeId }, availableTypes
-        ).errors);
-        return { valid: all.length === 0, errors: all };
-    }
-
-    // The Role's restrictions that can no longer run — typically because a Type
-    // was shared when the rule was written and has since been made private again.
-    // Reported so the Roles Manager can show the rule as unavailable rather than
-    // dropping it silently or pretending it still applies.
-    function unavailableRestrictions(def, availableTypes) {
-        return restrictionsOf(def)
-            .filter(rule => !validateRestriction(rule, availableTypes).valid)
-            .map(rule => ({ kind: rule.kind, typeId: rule.typeId, tagId: rule.tagId }));
-    }
-
     // ── Validation ────────────────────────────────────────────────────────────
 
     // Returns every problem at once rather than the first — the Roles Manager
@@ -1295,8 +1536,10 @@
             }
         });
 
+        // Slots are each Event's now (ADR 0085). A Role stored before still
+        // carries them until the migration strips them, and those are checked.
         const slots = slotsOf(def);
-        if (slots.length === 0) {
+        if (def && 'slots' in def && slots.length === 0) {
             errors.push('A Role needs at least one slot.');
         }
 
@@ -1324,6 +1567,8 @@
         REQUIREMENTS,
         REQUIREMENT_VALUES,
         RESTRICTIONS,
+        LINEUP_MARKS,
+        STRENGTHS,
         DIRECTORY_GROUP_TYPES,
         REASONS,
         LITURGICAL_ROLES,
@@ -1349,6 +1594,13 @@
         isInactive,
         doesNotServe,
         candidatesFor,
+        NON_SERVING_DOC,
+        nonServingSetting,
+        nonServingIds,
+        coveredByNonServing,
+        lineupFits,
+        judgesLineups,
+        kindsIn,
         warningsFor,
         // relationship group membership (MS-141)
         inGroup,
@@ -1360,21 +1612,12 @@
         MAX_DESCRIPTION,
         descriptionOf,
         // reading
-        slotOrder,
         slotCount,
-        nextSlotId,
-        slotSeqOf,
         // building
         newDefinition,
-        addSlot,
-        removeSlot,
-        setSlotRequirement,
-        reorderSlots,
         // validation
         validateDefinition,
         validateRestriction,
-        validateCrossRoleRule,
-        unavailableRestrictions,
     };
 
     if (typeof module !== 'undefined' && module.exports) {

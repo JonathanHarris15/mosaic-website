@@ -37,9 +37,10 @@
     const RolesCore = inNode ? require('./roles-core.js') : g.RolesCore;
     const LiveFields = inNode ? require('./live-fields-core.js') : g.LiveFields;
 
-    // What an editor can change on a Role. The slot counter (`nextSlotSeq`)
-    // is not one of them — it travels with the slots (MS-823).
-    const FIELDS = Object.freeze(['name', 'description', 'intensity', 'allowsAnotherRole', 'slots', 'restrictions']);
+    // What an editor can change on a Role: its name and what it involves.
+    // Who it needs, its rules and its rest are each Event's (ADR 0085), set on
+    // that Event's Roles & rules tab and never written here.
+    const FIELDS = Object.freeze(['name', 'description']);
 
     /** @param {*} v */
     const clone = v => (v == null || typeof v !== 'object' ? v : JSON.parse(JSON.stringify(v)));
@@ -157,42 +158,21 @@
     // (and could land it on a neighbour's, or a liturgical one).
     /** @param {Record<string, *>} role */
     function draftFrom(role) {
-        return Object.assign(clone(role), {
-            slug: slugOf(role),
-            intensity: RolesCore.intensityOf(role),
-            allowsAnotherRole: RolesCore.allowsAnotherRole(role),
-        });
-    }
-
-    // What the editor typed, in the shape the model reads. A number input
-    // hands back a string, and `intensity` is read strictly on purpose — a
-    // STORED string is genuinely bad data. ⚠ Only a value that really is a
-    // number is coerced: an EMPTY box stays rejected, because Number('') is 0,
-    // a real intensity meaning the job costs nothing.
-    /** @param {Record<string, *> | null} draft */
-    function normalise(draft) {
-        if (!draft) return null;
-        const raw = draft.intensity;
-        if (typeof raw !== 'string' || raw.trim() === '') return draft;
-        const parsed = Number(raw);
-        if (!Number.isFinite(parsed)) return draft;
-        return Object.assign({}, draft, { intensity: parsed });
+        return Object.assign(clone(role), { slug: slugOf(role) });
     }
 
     // Every problem at once, so the editor fixes them together.
     /**
      * @param {Record<string, *> | null} draft
-     * @param {Array<*>} knownTypes Relationship Types a rule may name.
      * @returns {string[]}
      */
-    function errorsFor(draft, knownTypes) {
+    function errorsFor(draft) {
         if (!draft) return [];
-        const errors = RolesCore.validateDefinition(normalise(draft)).errors.slice();
-        (draft.restrictions || []).forEach((/** @type {*} */ rule, /** @type {number} */ i) => {
-            RolesCore.validateRestriction(rule, knownTypes || []).errors
-                .forEach((/** @type {string} */ message) => errors.push(`Rule ${i + 1}: ${message}`));
-        });
-        return errors;
+        // Only what this editor writes is judged: a rule stored on the Role
+        // before ADR 0085 is not this page's to fix, and must not stop a rename.
+        return RolesCore.validateDefinition({
+            name: draft.name, slug: draft.slug, family: draft.family, description: draft.description,
+        }).errors.slice();
     }
 
     // The document a Role is. ⚠ EVERY FIELD A ROLE HAS MUST BE LISTED HERE:
@@ -207,12 +187,6 @@
             name: String(draft.name || '').trim(),
             slug: draft.slug || RolesCore.slugify(draft.name),
             family: RolesCore.FAMILIES.SERVANT,
-            slots: draft.slots,
-            // Never below what this Role has already issued (MS-823).
-            nextSlotSeq: RolesCore.slotSeqOf(draft),
-            restrictions: draft.restrictions || [],
-            intensity: RolesCore.intensityOf({ intensity: Number(draft.intensity) }),
-            allowsAnotherRole: draft.allowsAnotherRole === true,
             description: String(draft.description || '').trim(),
         };
     }
@@ -231,7 +205,6 @@
         /** @type {Record<string, *>} */
         const out = {};
         fields.forEach(f => { out[f] = definition[f]; });
-        if ('slots' in out) out.nextSlotSeq = definition.nextSlotSeq;
         if (!stored || !stored.slug) out.slug = definition.slug;
         return out;
     }
@@ -261,7 +234,6 @@
      * @param {{
      *   role: Record<string, *>,
      *   store: { update: (id: string, patch: Record<string, *>) => Promise<*> },
-     *   knownTypes?: () => Array<*>,
      *   onState?: (state: SessionState) => void,
      *   onSaved?: (id: string, write: Record<string, *>) => void,
      *   onFailed?: (id: string, error: *) => void,
@@ -276,23 +248,20 @@
         if (RolesCore.isLocked(role)) throw new Error('Liturgical Roles are built in and cannot be edited');
         const id = String(role.id);
         const store = opts.store;
-        const knownTypes = opts.knownTypes || (() => []);
         const onState = opts.onState || (() => {});
         const onSaved = opts.onSaved || (() => {});
         const onFailed = opts.onFailed || (() => {});
 
-        // The Role as this session last knew it stored, and the one value it
-        // carries that is not a form field.
+        // The Role as this session last knew it stored.
         let stored = clone(role);
         const opened = draftFrom(role);
-        let slotSeq = RolesCore.slotSeqOf(opened);
         // Fixed for the life of the session — see draftFrom.
         const slug = opened.slug;
         let closed = false;
         let batching = false;
 
         /** @param {Record<string, *>} values */
-        const fullDraft = values => Object.assign({}, stored, values, { slug, nextSlotSeq: slotSeq });
+        const fullDraft = values => Object.assign({}, stored, values, { slug });
 
         /** @type {Record<string, *>} */
         const initial = {};
@@ -306,7 +275,7 @@
             setTimeout: opts.setTimeout || defaultSetTimeout,
             clearTimeout: opts.clearTimeout,
             validate: (/** @type {Record<string, *>} */ values) => {
-                const errors = errorsFor(fullDraft(values), knownTypes());
+                const errors = errorsFor(fullDraft(values));
                 return errors.length ? { role: errors.join(' ') } : null;
             },
             save: async (/** @type {Record<string, *>} */ patch) => {
@@ -335,7 +304,7 @@
                 // The problems are shown once a change has been refused for
                 // them — not the moment a Role opens.
                 showProblems: Object.keys(st.invalid).length > 0 && st.dirty.length > 0,
-                values: Object.assign(clone(st.draft), { nextSlotSeq: slotSeq }),
+                values: clone(st.draft),
             };
         }
 
@@ -354,7 +323,6 @@
                 if (closed || String(forId) !== id || !values) return false;
                 batching = true;
                 try {
-                    if (Number.isInteger(values.nextSlotSeq) && values.nextSlotSeq > slotSeq) slotSeq = values.nextSlotSeq;
                     FIELDS.forEach(f => live.edit(f, clone(values[f])));
                 } finally {
                     batching = false;
@@ -375,8 +343,6 @@
                 if (closed || !data) return;
                 if (meta && meta.pendingWrites) return;
                 stored = Object.assign({ id }, stored, data);
-                const seq = RolesCore.slotSeqOf(data);
-                if (seq > slotSeq) slotSeq = seq;
                 live.remote(data);
             },
 
@@ -415,8 +381,7 @@
         withStored,
         proposeNew,
         draftFrom,
-        normalise,
-        errorsFor,
+                errorsFor,
         definitionFrom,
         writeFor,
         openSession,

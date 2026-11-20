@@ -63,6 +63,7 @@ function loadComponent(scriptFile, factoryName, overrides, config) {
     sandbox.RolesCore = require('../public/roles-core.js');
     sandbox.FamilyCore = require('../public/family-core.js');
     sandbox.EventsCore = require('../public/events-core.js');
+    sandbox.RoleRulesCore = require('../public/role-rules-core.js');
     sandbox.FairnessCore = require('../public/fairness-core.js');
     sandbox.DateUtils = require('../public/date-utils.js');
     sandbox.AutoAssignCore = require('../public/auto-assign-core.js');
@@ -789,7 +790,7 @@ test('liturgical Roles are never offered on an Event', () => {
         { slug: 'preacher', name: 'Preacher', slots: [] },
     ];
 
-    const offered = page.seriesRolesAvailable.map(r => r.slug);
+    const offered = page.rolesAvailable.map(r => r.slug);
     assert.deepStrictEqual(offered, ['kids']);
     Roles.LITURGICAL_SLUGS.forEach(slug => {
         assert.strictEqual(offered.indexOf(slug), -1, slug + ' must not be offered on an Event');
@@ -1457,9 +1458,10 @@ test('opening the Sunday Service creates it if it has never existed', async () =
     assert.deepStrictEqual(db.__writes.map(w => w.path), ['events/sunday_service']);
 
     // Every liturgical Role is shown, and every one of them is locked.
-    const shown = page.liturgicalRoles.map(r => r.slug).sort();
+    const shown = page.liturgicalRows.map(r => r.slug).sort();
     assert.deepStrictEqual(shown, Roles.LITURGICAL_SLUGS.slice().sort());
-    assert.ok(page.liturgicalRoles.every(r => r.locked));
+    // …and none of them is a row an editor can open and give rules to.
+    assert.deepStrictEqual(page.tableRoles.filter(s => Roles.LITURGICAL_SLUGS.indexOf(s) !== -1), []);
 });
 
 test('a repair that cannot be written still leaves the rota readable', async () => {
@@ -1485,10 +1487,10 @@ test('a liturgical Role is never offered for removal, and refuses if asked', asy
     await page.reconcileSunday();
 
     // Not in the removable list...
-    assert.deepStrictEqual(page.servantRoles, []);
+    assert.deepStrictEqual(Array.from(page.tableRoles), []);
     // ...and not offered for adding either, since it is already on and locked.
     assert.deepStrictEqual(
-        page.seriesRolesAvailable.filter(d => Roles.LITURGICAL_SLUGS.indexOf(d.slug) !== -1), []);
+        page.rolesAvailable.filter(d => Roles.LITURGICAL_SLUGS.indexOf(d.slug) !== -1), []);
 
     // And the store refuses even if something reached past the screen.
     db.__writes.length = 0;
@@ -2624,7 +2626,8 @@ test('a liturgical Role on the Event screen is named, not slugged', () => {
     page.roleDefinitions = [SOUND];
 
     const named = {};
-    page.seriesRoles.forEach(r => { named[r.slug] = r.name; });
+    page.liturgicalRows.forEach(r => { named[r.slug] = r.name; });
+    page.tableRoles.forEach(slug => { named[slug] = page.roleName(slug); });
 
     assert.strictEqual(named.worship_helper, 'Music Helper');
     assert.strictEqual(named.service_leader, 'Service Leader');
@@ -2635,27 +2638,28 @@ test('a liturgical Role on the Event screen is named, not slugged', () => {
     page.series = [{
         id: 'sunday_service', roleSlugs: Roles.LITURGICAL_SLUGS.slice(), lockedRoleSlugs: [],
     }];
-    page.seriesRoles.forEach(r => {
+    page.liturgicalRows.forEach(r => {
         assert.notStrictEqual(r.name, r.slug, r.slug + ' renders as its slug');
     });
 });
 
-test('a Role says how many people it needs each time, not how many "places"', () => {
-    // A slot is the model's word. What an editor is deciding is how many people
-    // have to be there on the day.
-    const page = seriesPage({ id: 'x', roleSlugs: ['coffee', 'kids', 'greeter'], lockedRoleSlugs: [] });
+test('a Role row starts from how many people the Event needs on it', () => {
+    // How many people is the Event's to say (EventsCore.effectiveRole); until
+    // it has said, the Role's own old answer stands in.
+    const page = seriesPage({
+        id: 'x', roleSlugs: ['coffee', 'kids'], lockedRoleSlugs: [],
+        roleSettings: { coffee: { slots: [{ id: 's1', requirement: 'either' }, { id: 's2', requirement: 'either' }, { id: 's3', requirement: 'either' }] } },
+    });
     page.roleDefinitions = [
-        { slug: 'coffee', name: 'Coffee', slots: [{ id: 's1' }] },
-        { slug: 'kids', name: "Children's Ministry", slots: [{ id: 's1' }, { id: 's2' }] },
-        { slug: 'greeter', name: 'Greeter', slots: [] },
+        { slug: 'coffee', name: 'Coffee', slots: [{ id: 's1', requirement: 'either' }] },
+        { slug: 'kids', name: "Children's Ministry", slots: [{ id: 's1', requirement: 'male' }, { id: 's2', requirement: 'female' }] },
     ];
+    page.buildRoleForms();
 
-    const need = {};
-    page.seriesRoles.forEach(r => { need[r.slug] = r.needed; });
-
-    assert.strictEqual(need.coffee, 'Needs 1 person');
-    assert.strictEqual(need.kids, 'Needs 2 people');
-    assert.strictEqual(need.greeter, 'Nobody needed yet');
+    assert.strictEqual(page.countOf('coffee'), 3);
+    assert.strictEqual(page.countOf('kids'), 2);
+    // The old "Person 1: a man, Person 2: a woman" reads as one line-up rule.
+    assert.deepStrictEqual(Array.from(page.formFor('kids').team[0].options[0].conditions[0].sexes), ['male', 'female']);
 });
 
 // ── The Calendar on a phone ───────────────────────────────────────────────────

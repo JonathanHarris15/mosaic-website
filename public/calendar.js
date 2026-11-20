@@ -711,7 +711,10 @@
             // gone cannot be filled by anybody.
             placesToFill(occurrence) {
                 if (!this.isEditor) return 0;
-                return View.openPlaces(occurrence, this.roleDefinitions);
+                // Each series says what its own Roles need, so count against
+                // that series' version of each (EventsCore.effectiveRole).
+                const series = { roleSettings: occurrence.seriesRoleSettings };
+                return View.openPlaces(occurrence, window.EventsCore.rolesFor(series, this.roleDefinitions));
             },
 
             placesToFillLabel(occurrence) {

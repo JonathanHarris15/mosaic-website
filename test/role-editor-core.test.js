@@ -149,17 +149,6 @@ test('a refused save keeps the change, reports it, and the retry sends it', asyn
     assert.equal(session.state.status, 'saved');
 });
 
-test('a slot change carries the slot counter, so a removed slot\'s id is never re-issued', async () => {
-    const role = def('r1', 'Coffee', { slots: [{ id: 's1', requirement: 'either' }, { id: 's2', requirement: 'male' }], nextSlotSeq: 3 });
-    const { session, store } = open(role);
-    const removed = Roles.removeSlot(RoleEditor.draftFrom(role), 's2');
-    session.edit('r1', removed);
-    await session.flush();
-    assert.deepStrictEqual(store.writes[0].patch, { slots: [{ id: 's1', requirement: 'either' }], nextSlotSeq: 3 });
-    const added = Roles.addSlot(Object.assign(removed, session.state.values), 'female');
-    assert.equal(added.slots[1].id, 's3');
-});
-
 // ── The slug never follows the name ──────────────────────────────────────────
 
 test('renaming a Role stored without a slug keeps the slug it already reads as', async () => {
@@ -198,15 +187,6 @@ test('another editor\'s change lands in fields this editor is not changing; our 
     assert.equal(session.state.values.description, 'From elsewhere');
     session.remote({ description: 'Echo' }, { pendingWrites: true });
     assert.equal(session.state.values.description, 'From elsewhere');
-});
-
-test('a slot counter another editor raised is never lowered by this session', async () => {
-    const role = def('r1', 'Coffee');
-    const { session, store } = open(role);
-    session.remote({ nextSlotSeq: 9 });
-    session.edit('r1', Roles.addSlot(RoleEditor.draftFrom(role), 'either'));
-    await session.flush();
-    assert.equal(store.writes[0].patch.nextSlotSeq, 9);
 });
 
 test('a locked liturgical Role cannot have a session at all', () => {

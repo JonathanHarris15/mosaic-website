@@ -87,88 +87,15 @@ test('a Role Definition may not claim the liturgical family', () => {
     assert.ok(result.errors.some(e => /family/i.test(e)));
 });
 
-test('a new Role Definition starts with one either-slot and validates', () => {
+test('a new Role Definition is its name and what it involves, and validates', () => {
+    // Who it needs, its rules and its rest are each Event's (ADR 0085).
     const def = Roles.newDefinition('Setup');
     assert.equal(def.name, 'Setup');
-    assert.equal(def.slots.length, 1);
-    assert.equal(def.slots[0].requirement, Roles.REQUIREMENTS.EITHER);
+    assert.deepEqual(Object.keys(def).sort(), ['description', 'family', 'name', 'slug']);
     assert.equal(Roles.validateDefinition(def).valid, true);
 });
 
 // ── Slot helpers: ordered, stable, non-mutating ───────────────────────────────
-
-test('slots keep the order they were authored in', () => {
-    const def = kidsTeam();
-    assert.deepEqual(def.slots.map(s => s.requirement), ['female', 'either', 'either']);
-    assert.deepEqual(Roles.slotOrder(def), ['s1', 's2', 's3']);
-});
-
-test('adding a slot appends it and leaves the original untouched', () => {
-    const before = kidsTeam();
-    const after = Roles.addSlot(before, Roles.REQUIREMENTS.MALE);
-
-    assert.equal(before.slots.length, 3, 'original must not be mutated');
-    assert.equal(after.slots.length, 4);
-    assert.equal(after.slots[3].requirement, Roles.REQUIREMENTS.MALE);
-    assert.notEqual(after, before);
-});
-
-test('an added slot gets an id that no existing slot uses', () => {
-    const def = Roles.addSlot(kidsTeam(), Roles.REQUIREMENTS.MALE);
-    const ids = def.slots.map(s => s.id);
-    assert.equal(new Set(ids).size, ids.length);
-});
-
-test('slot ids stay unique even after a middle slot is removed', () => {
-    // Removing s2 then adding must not re-issue s2 — an old assignment could
-    // still point at it, and the new slot would silently inherit that person.
-    let def = Roles.removeSlot(kidsTeam(), 's2');
-    def = Roles.addSlot(def, Roles.REQUIREMENTS.EITHER);
-    assert.equal(def.slots.filter(s => s.id === 's2').length, 0);
-    assert.equal(Roles.validateDefinition(def).valid, true);
-});
-
-test('removing a slot drops exactly that slot and leaves the original untouched', () => {
-    const before = kidsTeam();
-    const after = Roles.removeSlot(before, 's2');
-
-    assert.equal(before.slots.length, 3, 'original must not be mutated');
-    assert.deepEqual(after.slots.map(s => s.id), ['s1', 's3']);
-});
-
-test('removing a slot that is not there changes nothing', () => {
-    const before = kidsTeam();
-    const after = Roles.removeSlot(before, 'nope');
-    assert.deepEqual(after.slots.map(s => s.id), ['s1', 's2', 's3']);
-});
-
-test('reordering slots changes their order but not their identity', () => {
-    const before = kidsTeam();
-    const after = Roles.reorderSlots(before, 0, 2);
-
-    assert.deepEqual(after.slots.map(s => s.id), ['s2', 's3', 's1']);
-    assert.deepEqual(before.slots.map(s => s.id), ['s1', 's2', 's3'], 'original untouched');
-    // The female requirement travels with the slot, not with the position.
-    assert.equal(after.slots[2].requirement, Roles.REQUIREMENTS.FEMALE);
-});
-
-test('reordering to the same position is a no-op', () => {
-    const after = Roles.reorderSlots(kidsTeam(), 1, 1);
-    assert.deepEqual(after.slots.map(s => s.id), ['s1', 's2', 's3']);
-});
-
-test('reordering with an out-of-range index leaves the order alone', () => {
-    for (const [from, to] of [[-1, 1], [0, 9], [5, 0]]) {
-        const after = Roles.reorderSlots(kidsTeam(), from, to);
-        assert.deepEqual(after.slots.map(s => s.id), ['s1', 's2', 's3']);
-    }
-});
-
-test('changing a slot requirement leaves the slot id and position alone', () => {
-    const after = Roles.setSlotRequirement(kidsTeam(), 's2', Roles.REQUIREMENTS.MALE);
-    assert.deepEqual(after.slots.map(s => s.id), ['s1', 's2', 's3']);
-    assert.equal(after.slots[1].requirement, Roles.REQUIREMENTS.MALE);
-});
 
 test('a slot requirement cannot be set to something outside the three values', () => {
     assert.throws(

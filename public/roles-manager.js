@@ -1,27 +1,21 @@
-// Roles Manager (MS-120, ADR-0016) — the authoring home for Role Definitions.
+// Roles Manager (MS-120, ADR-0016) — the home of what each Servant Role IS.
 //
-// This page is the SURFACE, not the model. RolesCore owns what a Role
-// Definition is, what a slot is, which restriction rules exist, what validates,
-// and which Roles are locked. Everything here reads or persists that; no rule
-// about Roles is restated in this file.
+// A Role is its name and what it involves. Who it needs, who may fill it, how
+// much rest it owes and whether it uses up the morning belong to each EVENT that
+// runs it (EventsCore.effectiveRole), and are set on that event's Roles & rules
+// tab. So this page is a ledger: every Role one row — name, description, the
+// events it runs in (each a way through to them) — and beside it the two things
+// that are true across the whole church: the built-in Sunday Roles, and who
+// does not serve.
 //
-// The one roles list (ADR-0016, Option A): liturgical and servant Roles render
-// together, because the user's question is "who is serving", not "which storage
-// is this Role in". Liturgical Roles are code-defined and locked, so they are
-// listed with no edit or delete control at all — absent, not disabled.
+// The row being written in is the open Role, and it saves itself through
+// RoleEditorCore's session exactly as the open Role always has (MS-721).
+// RolesCore owns what a Role is; nothing about Roles is restated here.
 //
-// ⚠ The shepherding boundary (ADR-0017). A relationship rule may only name a
-// Relationship Type an elder has marked Shared with Editors. The query for them
-// MUST carry `where('sharedWithEditors', '==', true)`: Firestore evaluates read
-// rules per returned document and fails the whole list query if any document
-// would fail, so an unconstrained query does not return fewer rows — it errors,
-// and the error looks exactly like "this church has no relationship types".
-// That is also why a failure here says so out loud instead of rendering empty.
-//
-// Tags cross the same boundary, by a different road. /people_tags IS readable
-// by everyone, so nothing stops the query — the filter is ours to apply, and
-// loadShepherdingTags applies it once for the whole page. A tag an elder has
-// marked hidden is never offered as a rule and never named in one.
+// ⚠ The shepherding boundary (ADR-0017). "Doesn't serve" offers only the tags
+// this account may see and the groups an elder has shared with editors; the
+// group query MUST carry `where('sharedWithEditors', '==', true)`, or Firestore
+// fails the whole query rather than returning less.
 //
 // Loaded as a classic <script> and registered with Alpine; the factory is
 // exposed on window so the page's decisions can be tested without a browser.
@@ -44,47 +38,21 @@ window.RolesManager = () => ({
     /** @type {Array<{ slug: string, names: string[] }>} */
     sharedSlugs: [],
 
-    // Only the tags this account may see. The ids of the rest are held apart in
-    // hiddenTagIds — an existing rule can say it is unavailable without the name
-    // that was the point of hiding it.
-    shepherdingTags: [],
-    hiddenTagIds: [],
-    sharedRelationshipTypes: [],
-    relationshipTypesDenied: false,
-
-    // The Role Definition being edited: the working copy the form binds to.
+    // The Role Definition being edited: the working copy the row binds to.
     // `draftId` is the document it came from. Only the open Role's session
     // (RoleEditorCore) writes it, and only the fields that changed.
     draft: null,
     draftId: null,
     saveAttempted: false,
 
-    // What the pane is showing (MS-234). Three destinations, one pane: the Role
-    // you have open, the six locked Sunday Roles, or the people no rota offers.
-    //
-    // ⚠ The last two are NOT about the Role you have open, which is why they
-    // stopped being cards stacked under the list. They are church-wide, read
-    // rarely, and each one wants width rather than a 372px column — so they are
-    // two rows under the list and they open here. Only one thing can be open,
-    // which is what lets the phone keep showing exactly one of list-or-pane.
-    pane: 'role',
-
-    // The rule being composed, before it is added to the draft. One pair of
-    // pickers, not one per kind: the kind decides what the second list offers,
-    // so the two read as a sentence — "Cannot serve together if | Marriage".
-    newRuleKind: 'requireTag',
-    newRuleValue: '',
-
-    // The allowlist picker's own state: people are chosen one at a time into a
-    // pending list, so the rule is built whole rather than a rule per person.
+    // Names for "Doesn't serve".
     people: [],
     peopleDenied: false,
-    newAllowlist: [],
-    newAllowlistPick: '',
 
-    // The Sunday Service series document — where liturgical intensity lives.
-    series: null,
-    savingIntensity: '',
+    // Every event series, so a Role's row can say where it runs. Who a Role
+    // needs, its rules and its rest belong to those events now
+    // (EventsCore.effectiveRole), and each one is a way through to them.
+    allSeries: [],
     newRoleName: '',
 
     loading: true,
@@ -104,17 +72,7 @@ window.RolesManager = () => ({
     get canManageRoles() {
         return this.mayManageRoles(this.account || this.currentPermissionLevel);
     },
-    // MS-721 lead call (Oct 8, 9:44 PM): two controls on this page are not
-    // Role writes, so they follow their own doors in firestore.rules rather
-    // than roles.manager.edit — read-only Roles must not take away what
-    // people can already do.
-    //  - Liturgical rest writes events/sunday_service:
-    //    editsWith('calendar.events.edit') → AccessCore.canEditEvents.
-    //  - "Doesn't serve" writes people/{id}.doesNotServe: the people rule's
-    //    isEditor() — the editor level names or a Pastoral Assistant.
-    get canSetLiturgicalRest() {
-        return AccessCore.canEditEvents(this.account || this.currentPermissionLevel);
-    },
+
     get canSetDoesNotServe() {
         const who = this.account || this.currentPermissionLevel;
         return AccessCore.EDITOR_WRITE_LEVELS.indexOf(AccessCore.permissionLevelOf(who)) !== -1
@@ -162,26 +120,12 @@ window.RolesManager = () => ({
             this.currentUser = user;
             try {
                 await this.loadEverything();
-                this.openFirstRole();
             } finally {
                 this.loading = false;
             }
         });
     },
 
-    // ⚠ A Role is ALWAYS open (MS-234). What stood here was a 520px dashed box
-    // saying "Choose a Role on the left" — the first impression of the whole
-    // screen, carrying no information, on a page that is half empty until you
-    // click. The only empty pane left is a church with no Servant Roles at all,
-    // and that one says what a serving Role is.
-    //
-    // Runs after loadEverything, never before: `servantRoles` reads
-    // `roleDefinitions`, and seeding from an empty list would open nothing and
-    // then not try again.
-    openFirstRole() {
-        if (this.draft || !this.hasServantRoles) return;
-        this.startEdit(this.servantRoles[0]);
-    },
 
     // Kept for any shell header that DOES draw a back arrow. This page's no
     // longer does — it is a drawer destination, so it carries a hamburger, and
@@ -190,8 +134,8 @@ window.RolesManager = () => ({
     listenForShellBack() {
         if (typeof document === 'undefined' || !document.addEventListener) return;
         document.addEventListener('mobile-header:back', () => {
-            if (this.paneOpen) {
-                this.backToList();
+            if (this.draft) {
+                this.closeRole();
                 return;
             }
             window.location.href = this.homeHref;
@@ -203,10 +147,9 @@ window.RolesManager = () => ({
     async loadEverything() {
         await Promise.all([
             this.loadRoleDefinitions(),
-            this.loadShepherdingTags(),
-            this.loadSharedRelationshipTypes(),
             this.loadPeople(),
-            this.loadSeries(),
+            this.loadAllSeries(),
+            this.loadNonServing(),
         ]);
     },
 
@@ -221,6 +164,8 @@ window.RolesManager = () => ({
                 id: d.id,
                 name: (d.data() || {}).name || '',
                 doesNotServe: (d.data() || {}).doesNotServe === true,
+                // For counting who a tag that does not serve covers.
+                tags: Array.isArray((d.data() || {}).tags) ? d.data().tags : [],
             }));
         } catch (e) {
             console.error('Could not read people:', e);
@@ -229,17 +174,34 @@ window.RolesManager = () => ({
         }
     },
 
-    // The Sunday Service series, which is where liturgical intensity lives —
-    // never in /roles, because that collection is editor-writable and a document
-    // there would make a locked Role editable (ADR-0016).
-    async loadSeries() {
+
+    // Every event series. Failing to read them costs the "Runs in" column,
+    // never the page.
+    async loadAllSeries() {
         try {
-            const doc = await db.collection('events').doc(EventsCore.SUNDAY_SERVICE_ID).get();
-            this.series = doc.exists ? Object.assign({ id: doc.id }, doc.data()) : null;
+            const snap = await db.collection('events').get();
+            this.allSeries = snap.docs.map(d => Object.assign({ id: d.id }, d.data()))
+                .filter(s => Array.isArray(s.roleSlugs));
         } catch (e) {
-            console.error('Could not read the Sunday Service:', e);
-            this.series = null;
+            console.error('Could not read the events:', e);
+            this.allSeries = [];
         }
+    },
+
+    // Where a Role runs: each event carrying it, and how many people that
+    // event needs on it (its own answer, or the Role's old one until it has
+    // given one).
+    usesOf(slug) {
+        const def = this.roleDefinitions.find(d => d.slug === slug) || { slug: slug };
+        return this.allSeries
+            .filter(s => s.roleSlugs.indexOf(slug) !== -1)
+            .map(s => {
+                const role = EventsCore.effectiveRole(s, def);
+                const count = RolesCore.slotCount(role);
+                return { id: s.id, name: s.name || s.id, count: count === 1 ? '1 person' : count + ' people' };
+            })
+            .sort((a, b) => (a.id === EventsCore.SUNDAY_SERVICE_ID ? -1 : b.id === EventsCore.SUNDAY_SERVICE_ID ? 1
+                : String(a.name).localeCompare(String(b.name))));
     },
 
     // ── Loading ──────────────────────────────────────────────────────────────
@@ -261,55 +223,6 @@ window.RolesManager = () => ({
         }
     },
 
-    // ⚠ Hidden tags are filtered HERE, once, and nowhere else. `shepherdingTags`
-    // is what the picker offers, what addTagRule checks against, and what
-    // ruleSentence names a rule from — so a tag an elder has marked hidden is
-    // out of all three by being out of this list. `hiddenTagIds` keeps the ids
-    // (never the names) so a rule already built on one can say it is
-    // unavailable rather than pretend the tag was deleted.
-    //
-    // The filter is in memory, not in the query: /people_tags is readable by
-    // everyone, because the tag list is how the Peoples page draws its filters.
-    // Hiding is what the app does with them, not what Firestore refuses.
-    async loadShepherdingTags() {
-        try {
-            const snap = await db.collection('people_tags').orderBy('name', 'asc').get();
-            const all = snap.docs.map(doc => ({
-                id: doc.id,
-                name: doc.data().name || doc.id,
-                hiddenFromOthers: doc.data().hiddenFromOthers === true,
-            }));
-            this.shepherdingTags = RolesCore.visibleTags(all, this.account || this.currentPermissionLevel)
-                .map(tag => ({ id: tag.id, name: tag.name }));
-            const visible = this.shepherdingTags.map(tag => tag.id);
-            this.hiddenTagIds = all.map(tag => tag.id).filter(id => visible.indexOf(id) === -1);
-        } catch (e) {
-            console.error('Error loading Shepherding Tags:', e);
-            this.shepherdingTags = [];
-            this.hiddenTagIds = [];
-        }
-    },
-
-    // Shared Relationship Types only — see the boundary note at the top of this
-    // file before touching this query.
-    async loadSharedRelationshipTypes() {
-        try {
-            const snap = await db.collection('relationship_types')
-                .where('sharedWithEditors', '==', true)
-                .get();
-            this.sharedRelationshipTypes = snap.docs
-                .map(doc => RelationshipCore.normalizeType(Object.assign({ id: doc.id }, doc.data())))
-                // The rules and the in-memory filter are a pair: fail closed here
-                // too, so a document that somehow arrives unshared is dropped.
-                .filter(RelationshipCore.isSharedWithEditors)
-                .sort((a, b) => (a.name || '').localeCompare(b.name || ''));
-            this.relationshipTypesDenied = false;
-        } catch (e) {
-            console.error('Error loading Shared Relationship Types:', e);
-            this.sharedRelationshipTypes = [];
-            this.relationshipTypesDenied = true;
-        }
-    },
 
     /** @param {{ names: string[] }} shared */
     sharedSlugSentence(shared) {
@@ -335,90 +248,6 @@ window.RolesManager = () => ({
         return this.servantRoles.length > 0;
     },
 
-    peopleNeeded(role) {
-        return RolesCore.slotCount(role);
-    },
-
-    // ── What a row in the list says ──────────────────────────────────────────
-    //
-    // The row is the edit control now, so it has to say enough at a glance that
-    // you know which Role to open without opening any of them.
-
-    peopleNeededLabel(role) {
-        const needed = this.peopleNeeded(role);
-        return needed === 1 ? 'Needs 1 person' : `Needs ${needed} people`;
-    },
-
-    restrictionCount(role) {
-        return ((role && role.restrictions) || []).length;
-    },
-
-    ruleCountLabel(role) {
-        const count = this.restrictionCount(role);
-        return count === 1 ? '1 rule' : `${count} rules`;
-    },
-
-    // How much rest the Role owes, on the row. Says the unit, because a bare
-    // number of weeks read as a number of anything is a rota that rests people
-    // for four days — and takes the singular, which the locked card's own
-    // static "weeks' rest" never did.
-    restLabel(role) {
-        const weeks = RolesCore.intensityOf(role);
-        return weeks === 1 ? "1 week's rest" : `${weeks} weeks' rest`;
-    },
-
-    // One mark per place, in the order they are set, so "two women and a man"
-    // is readable without opening the Role. The mark is short enough to fit a
-    // row; `title` carries the words for anyone who needs them.
-    placeMarks(role) {
-        const marks = {
-            [RolesCore.REQUIREMENTS.MALE]: 'M',
-            [RolesCore.REQUIREMENTS.FEMALE]: 'W',
-            [RolesCore.REQUIREMENTS.EITHER]: '•',
-        };
-        return ((role && role.slots) || []).map(slot => ({
-            id: slot.id,
-            mark: marks[slot.requirement] || '•',
-            label: this.requirementLabel(slot.requirement),
-            either: slot.requirement === RolesCore.REQUIREMENTS.EITHER,
-        }));
-    },
-
-    // The one thing on a row that needs acting on: a rule that cannot run.
-    //
-    // ⚠ Asks the model, never the screen. `unavailableRestrictions` has been in
-    // RolesCore since MS-170 with no reader at all — the editor could only find
-    // out by opening every Role in turn and reading the red sentences. The
-    // available set is the same one `isRuleAvailable` uses, so the row and the
-    // opened Role can never disagree about which rules are broken.
-    unavailableRuleLabel(role) {
-        const bad = RolesCore.unavailableRestrictions(role, this.knownRelationshipTypes);
-        if (!bad.length) return '';
-        return bad.length === 1 ? '1 rule needs attention' : `${bad.length} rules need attention`;
-    },
-
-    // ── The three things the pane can be showing ─────────────────────────────
-
-    // Opening a church-wide destination closes whatever Role was open, because
-    // there is one pane. Leaving a Role open behind it would put an unsaved
-    // draft somewhere the editor cannot see it.
-    openPane(name) {
-        if (this.draft) this.closeRole();
-        this.pane = name;
-    },
-
-    // Below the split's collapse the list and the pane are one at a time, and
-    // this is the question the page asks to decide which.
-    get paneOpen() {
-        return this.pane !== 'role' || !!this.draft;
-    },
-
-    // The only way back on a narrow screen — out of whatever is open, to the
-    // list. A Role is re-opened on a desktop by the seed, never here.
-    backToList() {
-        if (this.draft) this.closeRole();
-        this.pane = 'role';
-    },
 
     // Servant Roles only — the liturgical ones are counted nowhere, because
     // they live in their own locked card and are not part of this list.
@@ -488,10 +317,6 @@ window.RolesManager = () => ({
         this.draft = RoleEditorCore.draftFrom(stored);
         this.draftId = stored.id;
         this.openSession(stored);
-        // One pane: opening a Role takes it back off whichever church-wide
-        // destination was showing.
-        this.pane = 'role';
-        this.resetRuleForm();
         // On a narrow screen the editor replaces the list rather than sitting
         // beside it, so the view has to move with it — otherwise opening a Role
         // lands you halfway down a screen that has just changed underneath you.
@@ -512,7 +337,6 @@ window.RolesManager = () => ({
         const sent = this.endSession();
         this.draft = null;
         this.draftId = null;
-        this.resetRuleForm();
         return sent;
     },
 
@@ -553,7 +377,6 @@ window.RolesManager = () => ({
         this.liveRole = RoleEditorCore.openSession({
             role,
             store: { update: (docId, patch) => db.collection('roles').doc(docId).update(patch) },
-            knownTypes: () => this.knownRelationshipTypes,
             onState: (st) => { if (current()) this.showSessionState(st); },
             // Keyed by id, so a save that lands after its Role was left still
             // puts the list right — and only that Role's row.
@@ -639,12 +462,6 @@ window.RolesManager = () => ({
         return sent;
     },
 
-    resetRuleForm() {
-        this.newRuleKind = RolesCore.RESTRICTIONS.REQUIRE_TAG;
-        this.newRuleValue = '';
-        this.newAllowlist = [];
-        this.newAllowlistPick = '';
-    },
 
     async deleteRole(role) {
         if (!role || !this.canManageRoles) return;
@@ -677,142 +494,7 @@ window.RolesManager = () => ({
         }
     },
 
-    // ── Slots ────────────────────────────────────────────────────────────────
-    //
-    // Every slot operation goes through RolesCore, which returns a new
-    // definition rather than mutating — that is what keeps slot ids stable and
-    // lets the session see exactly what changed. Three people needed means
-    // three slots.
 
-    addSlot(requirement) {
-        if (!this.draft) return;
-        this.draft = RolesCore.addSlot(this.draft, requirement || RolesCore.REQUIREMENTS.EITHER);
-    },
-
-    removeSlot(slotId) {
-        if (!this.draft) return;
-        if (RolesCore.slotCount(this.draft) <= 1) {
-            this.showToast('A Role needs at least one slot — delete the Role instead', 'error');
-            return;
-        }
-        this.draft = RolesCore.removeSlot(this.draft, slotId);
-    },
-
-    setSlotRequirement(slotId, requirement) {
-        if (!this.draft) return;
-        this.draft = RolesCore.setSlotRequirement(this.draft, slotId, requirement);
-    },
-
-    moveSlot(from, to) {
-        if (!this.draft) return;
-        this.draft = RolesCore.reorderSlots(this.draft, from, to);
-    },
-
-    get draftPeopleNeeded() {
-        return RolesCore.slotCount(this.draft);
-    },
-
-    get draftPeopleNeededLabel() {
-        return this.peopleNeededLabel(this.draft);
-    },
-
-    // The choices a slot offers, in the model's own order.
-    get requirementOptions() {
-        return RolesCore.REQUIREMENT_VALUES;
-    },
-
-    requirementLabel(requirement) {
-        return {
-            [RolesCore.REQUIREMENTS.MALE]: 'A man',
-            [RolesCore.REQUIREMENTS.FEMALE]: 'A woman',
-            [RolesCore.REQUIREMENTS.EITHER]: 'Anyone',
-        }[requirement] || 'Anyone';
-    },
-
-    // ── Restriction rules ────────────────────────────────────────────────────
-
-    get draftRestrictions() {
-        return (this.draft && this.draft.restrictions) || [];
-    },
-
-    // A Shared Type is one kind or the other, and each kind builds a different
-    // rule: "these two may not serve together" is about a pair, "no two from one
-    // house group" is about a roster. RolesCore treats the mismatch as an error
-    // rather than a no-op, so the two lists are kept apart here.
-    get relationshipRuleOptions() {
-        return this.sharedRelationshipTypes.filter(type => type.kind === 'pairwise');
-    },
-
-    get customGroupTypes() {
-        return this.sharedRelationshipTypes.filter(type => type.kind === 'group');
-    },
-
-    // ⚠ EVERY type lookup goes through here. The two the Membership Directory
-    // answers are not in `sharedRelationshipTypes` and never will be, so a
-    // `.find` over that list alone reports a perfectly good Family rule as
-    // "unavailable — an elder is no longer sharing this type", which is both
-    // wrong and unfixable by the person reading it.
-    get knownRelationshipTypes() {
-        return RolesCore.DIRECTORY_GROUP_TYPES.concat(this.sharedRelationshipTypes);
-    },
-
-    relationshipTypeById(typeId) {
-        return this.knownRelationshipTypes.find(t => t && t.id === typeId) || null;
-    },
-
-    // The two the Membership Directory answers come FIRST and are always there.
-    // They need no elder to share them: a Family is a household an editor
-    // already keeps, not an arbitrary grouping somebody has to invent, and
-    // making the commonest rule in a church wait on a setup step nobody knows
-    // about is how it never gets written.
-    get directoryGroupTypes() {
-        return RolesCore.DIRECTORY_GROUP_TYPES;
-    },
-
-    get groupRuleOptions() {
-        return this.directoryGroupTypes.concat(this.customGroupTypes);
-    },
-
-    // Said out loud, because an empty picker and a denied query look identical
-    // from the outside and mean opposite things. Both kinds count: a church that
-    // has shared one Group Type has shared something, and must not be told
-    // otherwise.
-    get relationshipTypesNotice() {
-        if (this.relationshipTypesDenied) {
-            return 'We couldn\'t load relationship types — this account may not have permission to read them. ' +
-                'Nothing is missing from your Roles; ask an elder or admin to check.';
-        }
-        // Family and Marriage are always on offer, so "nothing to build from"
-        // is now only ever true of the PAIRWISE side.
-        if (this.relationshipRuleOptions.length === 0 && this.customGroupTypes.length === 0) {
-            return 'Family and Marriage come from the Membership Directory and are always available. ' +
-                'For anything else — a house group, a book study — an elder can share a relationship ' +
-                'type in Manage Tags and Relationships.';
-        }
-        return '';
-    },
-
-    // The kinds of rule on offer, as sentence openers. A relationship rule is
-    // offered only when there is a Shared Type to build one from — a choice
-    // whose second picker is always empty is a dead end, and the notice below
-    // the form already explains why it isn't there.
-    get ruleKindOptions() {
-        const options = [
-            { value: RolesCore.RESTRICTIONS.REQUIRE_TAG, label: 'Must be tagged' },
-            { value: RolesCore.RESTRICTIONS.EXCLUDE_TAG, label: 'Cannot be tagged' },
-        ];
-        if (this.relationshipRuleOptions.length) {
-            options.push({ value: RolesCore.RESTRICTIONS.NOT_TOGETHER, label: 'Cannot serve together if' });
-        }
-        if (this.groupRuleOptions.length) {
-            options.push({ value: RolesCore.RESTRICTIONS.NOT_SAME_GROUP, label: 'No two people from the same' });
-            options.push({ value: RolesCore.RESTRICTIONS.SAME_GROUP, label: 'Everyone from the same' });
-        }
-        // Last, because it is the blunt one: naming people directly is right for
-        // the four who serve communion, and wrong for anything a tag could say.
-        options.push({ value: RolesCore.RESTRICTIONS.ALLOWLIST, label: 'Only these people' });
-        return options;
-    },
 
     // The cap the model enforces, so the box and the refusal agree (MS-222).
     get descriptionLimit() { return RolesCore.MAX_DESCRIPTION; },
@@ -822,19 +504,6 @@ window.RolesManager = () => ({
         return RolesCore.MAX_DESCRIPTION - written;
     },
 
-    get composingAllowlist() {
-        return this.newRuleKind === RolesCore.RESTRICTIONS.ALLOWLIST;
-    },
-
-    personName(personId) {
-        const person = this.people.find(p => p.id === personId);
-        return (person && person.name) || null;
-    },
-
-    // Everyone not already picked, so the same person cannot be added twice.
-    get allowlistOptions() {
-        return this.people.filter(p => this.newAllowlist.indexOf(p.id) === -1);
-    },
 
     // ── Who does not serve ───────────────────────────────────────────────────
     //
@@ -851,6 +520,94 @@ window.RolesManager = () => ({
 
     get nonServers() {
         return this.people.filter(p => p.doesNotServe);
+    },
+
+    // ── Doesn't serve, for a whole tag or group (ADR 0086) ──────────────────
+    //
+    // Editors may mark a whole tag or group, but only from the tags they can
+    // see and the groups an elder has shared with editors: the pickers offer
+    // nothing else, so marking one never names something hidden from them.
+
+    nsKind: 'person',
+    nonServing: { tagIds: [], groupIds: [] },
+    servingTags: [],
+    servingGroups: [],
+    savingNonServing: false,
+
+    async loadNonServing() {
+        const where = RolesCore.NON_SERVING_DOC;
+        try {
+            const [doc, tags, groups] = await Promise.all([
+                db.collection(where.collection).doc(where.id).get(),
+                db.collection('people_tags').orderBy('name', 'asc').get(),
+                db.collection('relationship_groups').where('sharedWithEditors', '==', true).get()
+                    .catch(() => ({ docs: [] })),
+            ]);
+            this.nonServing = RolesCore.nonServingSetting(doc.exists ? doc.data() : null);
+            const all = tags.docs.map(d => ({
+                id: d.id, name: d.data().name || d.id, hiddenFromOthers: d.data().hiddenFromOthers === true,
+            }));
+            this.servingTags = RolesCore.visibleTags(all, this.account || this.currentPermissionLevel)
+                .map(t => ({ id: t.id, name: t.name }));
+            this.servingGroups = groups.docs.map(d => Object.assign({ id: d.id }, d.data()));
+        } catch (e) {
+            console.error('Could not read who does not serve:', e);
+        }
+    },
+
+    // The tags and groups marked, as rows. One the viewer cannot see (hidden
+    // since, or a group no longer shared) still shows — unnamed — so it can be
+    // taken off rather than lingering unseen.
+    get nonServingEntries() {
+        const tags = this.nonServing.tagIds.map(id => {
+            const tag = this.servingTags.find(t => t.id === id);
+            return { kind: 'tag', id: id, name: tag ? tag.name : 'A tag you cannot see' };
+        });
+        const groups = this.nonServing.groupIds.map(id => {
+            const group = this.servingGroups.find(g => g.id === id);
+            return { kind: 'group', id: id, name: group ? (group.name || 'A group') : 'A group you cannot see' };
+        });
+        return tags.concat(groups).map(entry => Object.assign(entry, {
+            count: RolesCore.coveredByNonServing(this.people, entry, this.servingGroups).length,
+        }));
+    },
+
+    // Everybody no rota offers, once each: their own mark, a tag, or a group.
+    get nonServingCount() {
+        const ids = RolesCore.nonServingIds(this.people, this.nonServing, this.servingGroups);
+        this.nonServers.forEach(p => ids.add(p.id));
+        return ids.size;
+    },
+
+    get nsOptions() {
+        if (this.nsKind === 'tag') return this.servingTags.filter(t => this.nonServing.tagIds.indexOf(t.id) === -1);
+        if (this.nsKind === 'group') {
+            return this.servingGroups.filter(g => this.nonServing.groupIds.indexOf(g.id) === -1)
+                .map(g => ({ id: g.id, name: g.name || g.id }));
+        }
+        return [];
+    },
+
+    async setNonServing(kind, id, on) {
+        if (!id || this.savingNonServing || !this.canSetDoesNotServe) return;
+        const field = kind === 'group' ? 'groupIds' : 'tagIds';
+        const list = this.nonServing[field].filter(x => x !== id).concat(on ? [id] : []);
+        const next = Object.assign({}, this.nonServing, { [field]: list });
+        const where = RolesCore.NON_SERVING_DOC;
+        this.savingNonServing = true;
+        try {
+            await db.collection(where.collection).doc(where.id).set({
+                doesNotServeTagIds: next.tagIds,
+                doesNotServeGroupIds: next.groupIds,
+            }, { merge: true });
+            this.nonServing = next;
+            if (window.NonServing) window.NonServing.forget();
+        } catch (e) {
+            console.error('Could not save that:', e);
+            this.showToast('Could not save that — nothing was changed', 'error');
+        } finally {
+            this.savingNonServing = false;
+        }
     },
 
     // A search rather than a dropdown of the whole church, because the list this
@@ -881,366 +638,13 @@ window.RolesManager = () => ({
         }
     },
 
-    get newAllowlistNames() {
-        return this.newAllowlist.map(id => this.personName(id) || 'Someone no longer in the directory');
-    },
-
-    addToNewAllowlist() {
-        const id = this.newAllowlistPick;
-        if (!id || this.newAllowlist.indexOf(id) !== -1) return;
-        this.newAllowlist = this.newAllowlist.concat([id]);
-        this.newAllowlistPick = '';
-    },
-
-    removeFromNewAllowlist(personId) {
-        this.newAllowlist = this.newAllowlist.filter(id => id !== personId);
-    },
-
-    // Written as ONE rule holding everyone, not a rule per person: an allowlist
-    // is a single statement about the Role, and roles-core refuses an empty one
-    // rather than letting it become a Role nobody can ever fill.
-    addAllowlistRule() {
-        if (!this.draft) return;
-        if (!this.newAllowlist.length) {
-            this.showToast('Add at least one person, or the Role could never be filled', 'error');
-            return;
-        }
-        const existing = this.draftRestrictions
-            .filter(rule => rule.kind !== RolesCore.RESTRICTIONS.ALLOWLIST);
-        this.draft = Object.assign({}, this.draft, {
-            restrictions: existing.concat([{
-                kind: RolesCore.RESTRICTIONS.ALLOWLIST,
-                personIds: this.newAllowlist.slice(),
-            }]),
-        });
-        this.newAllowlist = [];
-        this.newAllowlistPick = '';
-    },
-
-    // ── Editing the list that is already on the Role ─────────────────────────
-    //
-    // An allowlist is the one rule made of MANY things, so it is the one rule
-    // that can be half-wrong later. Every other rule names a single tag or type
-    // — if it is wrong you remove it and add the right one. A list of eleven
-    // people with one person missing is not a rule to replace, it is a rule to
-    // amend, and rebuilding it from memory is how the twelfth name gets left
-    // off and somebody quietly stops being offered the Role.
-    //
-    // So the list is edited where it sits, in the rules list, rather than in
-    // the composer above it. The composer still writes a NEW list (and still
-    // replaces any existing one, which is the "start over" route).
-
-    // The names on a rule's list, in order, for the chips. A person who has
-    // left the directory is SAID rather than dropped — same reasoning as
-    // ruleSentence, and now they can be cleared off.
-    allowlistNames(rule) {
-        return ((rule && rule.personIds) || [])
-            .map(id => this.personName(id) || 'Someone no longer in the directory');
-    },
-
-    // Everyone not already on THIS list. Per-rule, not the composer's picker:
-    // the two lists are being built at once when a Role already has one.
-    allowlistOptionsFor(rule) {
-        const on = (rule && rule.personIds) || [];
-        return this.people.filter(person => on.indexOf(person.id) === -1);
-    },
-
-    // The rule at `index`, but only if it really is an allowlist. The index
-    // comes from the rendered list, and a stale one must not turn a tag rule
-    // into a list of people.
-    allowlistRuleAt(index) {
-        const rule = this.draftRestrictions[index];
-        return (rule && rule.kind === RolesCore.RESTRICTIONS.ALLOWLIST) ? rule : null;
-    },
-
-    // Replace the rule at `index` with one holding `personIds`. Immutable, like
-    // every other edit here, so the session sees a changed field.
-    replaceAllowlistAt(index, personIds) {
-        this.draft = Object.assign({}, this.draft, {
-            restrictions: this.draftRestrictions.map((rule, i) => (
-                i === index ? Object.assign({}, rule, { personIds: personIds }) : rule
-            )),
-        });
-    },
-
-    addToAllowlistRule(index, personId) {
-        if (!this.draft || !personId) return;
-        const rule = this.allowlistRuleAt(index);
-        if (!rule) return;
-        const on = rule.personIds || [];
-        if (on.indexOf(personId) !== -1) return;
-        this.replaceAllowlistAt(index, on.concat([personId]));
-    },
-
-    removeFromAllowlistRule(index, personId) {
-        if (!this.draft) return;
-        const rule = this.allowlistRuleAt(index);
-        if (!rule) return;
-        const left = (rule.personIds || []).filter(id => id !== personId);
-        // An empty list is a Role nobody can ever fill. "Anyone" is said by
-        // removing the RULE, and that control is on the same row — so point at
-        // it rather than leaving behind a Role that cannot be saved.
-        if (!left.length) {
-            this.showToast('A list needs at least one person — remove the rule to let anyone fill this Role', 'error');
-            return;
-        }
-        this.replaceAllowlistAt(index, left);
-    },
-
-    // The picker is a <select> that fires on change; it has to fall back to its
-    // placeholder or the same person cannot be re-picked after being removed.
-    pickIntoAllowlistRule(index, event) {
-        const id = event && event.target && event.target.value;
-        this.addToAllowlistRule(index, id);
-        if (event && event.target) event.target.value = '';
-    },
-
-    get composingRelationshipRule() {
-        return this.newRuleKind === RolesCore.RESTRICTIONS.NOT_TOGETHER;
-    },
-
-    get composingGroupRule() {
-        return [RolesCore.RESTRICTIONS.SAME_GROUP, RolesCore.RESTRICTIONS.NOT_SAME_GROUP]
-            .indexOf(this.newRuleKind) !== -1;
-    },
-
-    get ruleValueOptions() {
-        let source = this.shepherdingTags;
-        if (this.composingGroupRule) source = this.groupRuleOptions;
-        else if (this.composingRelationshipRule) source = this.relationshipRuleOptions;
-        return source.map(item => ({ id: item.id, name: item.name }));
-    },
-
-    get ruleValuePlaceholder() {
-        if (this.composingGroupRule) return 'Choose a group type…';
-        if (this.composingRelationshipRule) return 'Choose a relationship…';
-        return 'Choose a tag…';
-    },
-
-    // The form's one action. The kind decides which rule is actually being
-    // built; both routes below still do their own checking, because the form is
-    // a convenience and they are the boundary.
-    addComposedRule() {
-        if (this.composingAllowlist) {
-            this.addAllowlistRule();
-            return;
-        }
-        if (!this.newRuleValue) {
-            if (this.composingGroupRule) this.showToast('Pick a group type from the list', 'error');
-            else if (this.composingRelationshipRule) this.showToast('Pick a relationship type from the list', 'error');
-            else this.showToast('Pick a tag from the list', 'error');
-            return;
-        }
-        if (this.composingGroupRule) {
-            this.addGroupRule(this.newRuleKind, this.newRuleValue);
-        } else if (this.composingRelationshipRule) {
-            this.addRelationshipRule(this.newRuleValue);
-        } else {
-            this.addTagRule(this.newRuleKind, this.newRuleValue);
-        }
-    },
-
-    hasRule(kind, key, value) {
-        return this.draftRestrictions.some(rule => rule.kind === kind && rule[key] === value);
-    },
-
-    addTagRule(kind, tagId) {
-        if (!this.draft) return;
-        if ([RolesCore.RESTRICTIONS.REQUIRE_TAG, RolesCore.RESTRICTIONS.EXCLUDE_TAG].indexOf(kind) === -1) return;
-        // Chosen from the church's own Tags — a typo'd tag id is a rule that
-        // silently matches nobody.
-        if (!this.shepherdingTags.some(tag => tag.id === tagId)) {
-            this.showToast('Pick a tag from the list', 'error');
-            return;
-        }
-        if (this.hasRule(kind, 'tagId', tagId)) return;
-        this.draft = Object.assign({}, this.draft, {
-            restrictions: this.draftRestrictions.concat([{ kind: kind, tagId: tagId }]),
-        });
-        this.newRuleValue = '';
-    },
-
-    addRelationshipRule(typeId) {
-        if (!this.draft) return;
-        // Only what is on offer — building a rule against a Type this page
-        // cannot read would produce a Role that can never be filled, with no
-        // clue why.
-        if (!this.relationshipRuleOptions.some(type => type.id === typeId)) {
-            this.showToast('Pick a shared relationship type from the list', 'error');
-            return;
-        }
-        const kind = RolesCore.RESTRICTIONS.NOT_TOGETHER;
-        if (this.hasRule(kind, 'typeId', typeId)) return;
-        this.draft = Object.assign({}, this.draft, {
-            restrictions: this.draftRestrictions.concat([{ kind: kind, typeId: typeId }]),
-        });
-        this.newRuleValue = '';
-    },
-
-    // "No two people from one house group", and its opposite. Both are rules
-    // about a roster, so only a Group-kind Shared Type will do — RolesCore calls
-    // the mismatch a mistake, not a no-op, and the picker never offers one.
-    addGroupRule(kind, typeId) {
-        if (!this.draft) return;
-        if ([RolesCore.RESTRICTIONS.SAME_GROUP, RolesCore.RESTRICTIONS.NOT_SAME_GROUP].indexOf(kind) === -1) return;
-        if (!this.groupRuleOptions.some(type => type.id === typeId)) {
-            this.showToast('Pick a shared group type from the list', 'error');
-            return;
-        }
-        if (this.hasRule(kind, 'typeId', typeId)) return;
-        this.draft = Object.assign({}, this.draft, {
-            restrictions: this.draftRestrictions.concat([{ kind: kind, typeId: typeId }]),
-        });
-        this.newRuleValue = '';
-    },
-
-    removeRule(index) {
-        if (!this.draft) return;
-        this.draft = Object.assign({}, this.draft, {
-            restrictions: this.draftRestrictions.filter((_, i) => i !== index),
-        });
-    },
-
-    isRuleAvailable(rule) {
-        return RolesCore.validateRestriction(rule, this.knownRelationshipTypes).valid;
-    },
-
-    // ⚠ NOT the same question as availability, and drawing them the same is the
-    // fault this fixes. A rule built on a tag an elder keeps private is
-    // perfectly valid — `validateRestriction` only asks that a tagId is there —
-    // so it used to render identically to a working rule while `ruleSentence`
-    // said something the editor could do nothing about. It gets its own edge,
-    // and the edge is gold: red says "remove this", and removing it would throw
-    // away a rule an elder still means.
-    isRulePrivate(rule) {
-        const kind = rule && rule.kind;
-        if (kind !== RolesCore.RESTRICTIONS.REQUIRE_TAG && kind !== RolesCore.RESTRICTIONS.EXCLUDE_TAG) return false;
-        return this.hiddenTagIds.indexOf(rule.tagId) !== -1;
-    },
-
-    // ── Liturgical intensity ─────────────────────────────────────────────────
-    //
-    // The ONE thing about a liturgical Role an editor may change, and it is not
-    // part of the Role's definition — it is a fairness weight. Preparing a
-    // sermon and reading a prayer are not the same work, and fairness has to be
-    // able to know that.
-    //
-    // Written to the Sunday Service series, NEVER to /roles: that collection is
-    // editor-writable, so a document there would make a locked Role editable —
-    // the exact invariant that makes these Roles locked (ADR-0016). RolesCore
-    // refuses such a document and this page quarantines it.
-
-    liturgicalIntensity(slug) {
-        return EventsCore.roleIntensity(this.series, slug);
-    },
-
-    // The unit beside that box. It was static text — so a Role owed one week
-    // read "1 weeks' rest" — and the UnitField takes it as content precisely so
-    // it can be said properly.
-    liturgicalRestUnit(slug) {
-        return this.liturgicalIntensity(slug) === 1 ? "week's rest" : "weeks' rest";
-    },
-
-    async setLiturgicalIntensity(slug, raw) {
-        if (!this.canSetLiturgicalRest) return;
-        const value = Number(raw);
-        if (!Number.isFinite(value) || value < 0) {
-            this.showToast('Rest between turns has to be zero or more weeks', 'error');
-            return;
-        }
-        const map = Object.assign({}, (this.series && this.series.liturgicalIntensity) || {});
-        map[slug] = value;
-
-        this.savingIntensity = slug;
-        try {
-            await db.collection('events').doc(EventsCore.SUNDAY_SERVICE_ID)
-                .set({ liturgicalIntensity: map }, { merge: true });
-            this.series = Object.assign({}, this.series || {}, { liturgicalIntensity: map });
-        } catch (e) {
-            console.error('Could not save the intensity:', e);
-            this.showToast('Could not save that — nothing was changed', 'error');
-            await this.loadSeries();
-        } finally {
-            this.savingIntensity = '';
-        }
-    },
-
-    tagName(tagId) {
-        const tag = this.shepherdingTags.find(t => t.id === tagId);
-        return tag ? tag.name : null;
-    },
-
-    // A glyph per kind, so a list of rules can be scanned before it is read —
-    // a required tag must never look like an excluded one.
-    ruleIcon(rule) {
-        const kind = rule && rule.kind;
-        if (kind === RolesCore.RESTRICTIONS.REQUIRE_TAG) return 'sell';
-        if (kind === RolesCore.RESTRICTIONS.EXCLUDE_TAG) return 'block';
-        if (kind === RolesCore.RESTRICTIONS.SAME_GROUP) return 'groups';
-        if (kind === RolesCore.RESTRICTIONS.NOT_SAME_GROUP) return 'group_remove';
-        if (kind === RolesCore.RESTRICTIONS.ALLOWLIST) return 'how_to_reg';
-        return 'hub';
-    },
-
-    // A rule the user can check by reading it. Never a data structure, and never
-    // the name of a Relationship Type this page was not given — a rule whose
-    // Type has been unshared says only that it is unavailable.
-    ruleSentence(rule) {
-        const kind = rule && rule.kind;
-        if (kind === RolesCore.RESTRICTIONS.REQUIRE_TAG || kind === RolesCore.RESTRICTIONS.EXCLUDE_TAG) {
-            // A hidden tag is not a missing one, and must not be reported as
-            // one: "no longer exists" reads as a dead rule to clear out, and
-            // the editor would be deleting a rule an elder still means.
-            if (this.hiddenTagIds.indexOf(rule.tagId) !== -1) {
-                return 'This rule uses a tag an elder keeps private. It still applies — ask an elder if it needs changing.';
-            }
-            const name = this.tagName(rule.tagId);
-            if (kind === RolesCore.RESTRICTIONS.REQUIRE_TAG) {
-                return name
-                    ? `Must be tagged "${name}"`
-                    : 'Must carry a tag that no longer exists — remove this rule';
-            }
-            return name
-                ? `Cannot be tagged "${name}"`
-                : 'Excludes a tag that no longer exists — remove this rule';
-        }
-        // The one rule whose sentence does NOT carry its own contents: the list
-        // is rendered under it as chips, each removable, so naming everybody
-        // here as well would print the same eleven names twice. The chips are
-        // where "names, never ids" now lives (allowlistNames), including saying
-        // a person who has left rather than dropping them — a shorter list than
-        // the editor believes they have is how a Role stops being fillable.
-        if (kind === RolesCore.RESTRICTIONS.ALLOWLIST) {
-            const ids = rule.personIds || [];
-            if (!ids.length) return 'This list is empty, so nobody could ever fill this Role — remove it or add someone';
-            return ids.length === 1
-                ? 'Only this person can fill this Role'
-                : 'Only these people can fill this Role';
-        }
-
-        const type = this.relationshipTypeById(rule.typeId);
-        if (!type) {
-            return 'This rule is unavailable — an elder is no longer sharing the relationship type it uses ' +
-                'with editors. Remove it, or ask an elder to share that type again.';
-        }
-        if (kind === RolesCore.RESTRICTIONS.NOT_TOGETHER) {
-            return `Two people connected by "${type.name}" cannot serve in this Role together`;
-        }
-        if (kind === RolesCore.RESTRICTIONS.NOT_SAME_GROUP) {
-            return `No two people from the same "${type.name}" group can serve in this Role together`;
-        }
-        if (kind === RolesCore.RESTRICTIONS.SAME_GROUP) {
-            return `Everyone in this Role must be from one "${type.name}" group`;
-        }
-        return 'This rule is unavailable — remove it.';
-    },
 
     // ── What is wrong with the draft ─────────────────────────────────────────
 
     // Every problem at once, so the editor fixes them together rather than one
     // save at a time. The same check the session refuses a save by.
     get draftErrors() {
-        return RoleEditorCore.errorsFor(this.draft, this.knownRelationshipTypes);
+        return RoleEditorCore.errorsFor(this.draft);
     },
 
     // Retry, and blur/Enter: send what is waiting now.

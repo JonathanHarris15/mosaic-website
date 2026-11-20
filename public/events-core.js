@@ -88,11 +88,74 @@
                 ((series && series.name) || '?') + '": it is a locked Role of this Event.'
             );
         }
-        // The rules naming it go with it — see withoutRulesNaming.
-        return withoutRulesNaming(
+        // The rules naming it, and its own settings here, go with it — see
+        // withoutRulesNaming.
+        return withoutRoleSettings(withoutRulesNaming(
             withRoles(series, rolesOf(series).filter(slug => slug !== roleSlug)),
             roleSlug
-        );
+        ), roleSlug);
+    }
+
+    // ── A Role's settings on this Event ──────────────────────────────────────
+    //
+    // Who a Role needs (its slots), who may fill it (its restrictions), how much
+    // rest it owes (intensity) and whether it uses up the morning
+    // (allowsAnotherRole) belong to the EVENT that runs it: Setup needs two men
+    // on a Sunday and one of anybody on a Wednesday. The Role itself keeps only
+    // its name and what it involves.
+    //
+    // ⚠ RESOLVE THROUGH effectiveRole AND NOWHERE ELSE. Everything that seats,
+    // checks or counts a Role takes a definition-shaped object; this is what
+    // makes that object this Event's version of it.
+    //
+    // A field the Event has not set falls back to the Role Definition's old
+    // value. That is the migration: on the day this ships every Event reads
+    // exactly what it read before, and an Event takes over a Role the first
+    // time an editor changes it there.
+    const SETTING_FIELDS = ['slots', 'nextSlotSeq', 'restrictions', 'intensity', 'allowsAnotherRole'];
+
+    /** @param {*} series */
+    const roleSettingsMapOf = series => (
+        series && series.roleSettings && typeof series.roleSettings === 'object'
+            ? series.roleSettings : {}
+    );
+
+    /** @param {*} series @param {*} roleSlug */
+    function roleSettingsOf(series, roleSlug) {
+        const own = roleSettingsMapOf(series)[roleSlug];
+        return own && typeof own === 'object' ? own : null;
+    }
+
+    /** @param {*} series @param {*} definition */
+    function effectiveRole(series, definition) {
+        if (!definition) return definition;
+        const own = roleSettingsOf(series, definition.slug);
+        if (!own) return definition;
+        const out = Object.assign({}, definition);
+        SETTING_FIELDS.forEach((/** @type {*} */ field) => {
+            if (own[field] !== undefined) out[field] = own[field];
+        });
+        return out;
+    }
+
+    /** @param {*} series @param {*} definitions */
+    function rolesFor(series, definitions) {
+        return (definitions || []).map((/** @type {*} */ def) => effectiveRole(series, def));
+    }
+
+    /** @param {*} series @param {*} roleSlug @param {*} settings */
+    function withRoleSettings(series, roleSlug, settings) {
+        const map = Object.assign({}, roleSettingsMapOf(series));
+        map[roleSlug] = settings;
+        return Object.assign({}, series, { roleSettings: map });
+    }
+
+    /** @param {*} series @param {*} roleSlug */
+    function withoutRoleSettings(series, roleSlug) {
+        const map = Object.assign({}, roleSettingsMapOf(series));
+        if (!(roleSlug in map)) return series;
+        delete map[roleSlug];
+        return Object.assign({}, series, { roleSettings: map });
     }
 
     // ── Cross-Role Rules on a series (MS-221) ────────────────────────────────
@@ -104,32 +167,45 @@
     //
     // Each is { kind, typeId, roleSlugs: [a, b] }; RolesCore.validateCrossRoleRule
     // says whether one is well-formed, and this module only arranges them.
+    /** @param {*} series */
     const crossRoleRulesOf = series => (
         series && Array.isArray(series.crossRoleRules) ? series.crossRoleRules : []
     );
 
+    /** @param {*} series @param {*} rules */
     function withCrossRoleRules(series, rules) {
         return Object.assign({}, series, { crossRoleRules: rules });
-    }
-
-    function addCrossRoleRule(series, rule) {
-        return withCrossRoleRules(series, crossRoleRulesOf(series).concat([rule]));
-    }
-
-    function removeCrossRoleRule(series, index) {
-        return withCrossRoleRules(
-            series, crossRoleRulesOf(series).filter((_, i) => i !== index)
-        );
     }
 
     // ⚠ Dropping a Role from an Event drops the rules that named it. A rule
     // about a Role that is no longer here can never fire, and one left lying
     // about is worse than absent: put the Role back a year later and a rule
     // nobody remembers writing starts refusing people.
+    /** @param {*} series @param {*} roleSlug */
     function withoutRulesNaming(series, roleSlug) {
         return withCrossRoleRules(series, crossRoleRulesOf(series).filter(
-            rule => ((rule && rule.roleSlugs) || []).indexOf(roleSlug) === -1
+            rule => rolesNamedBy(rule).indexOf(roleSlug) === -1
         ));
+    }
+
+    // Every Role a rule across Roles names — a plain pair rule's two, or any
+    // Role named by a condition in any option of an OR rule.
+    /** @param {*} rule */
+    function rolesNamedBy(rule) {
+        const out = [];
+        /** @param {*} slug */
+        /** @param {*} slug */
+        const add = slug => { if (slug && out.indexOf(slug) === -1) out.push(slug); };
+        /** @param {*} cond */
+        /** @param {*} cond */
+        const visit = cond => {
+            if (!cond) return;
+            ((cond.roleSlugs) || []).forEach(add);
+            add(cond.roleSlug);
+        };
+        visit(rule);
+        ((rule && rule.options) || []).forEach((/** @type {*} */ option) => ((option && option.conditions) || []).forEach(visit));
+        return out;
     }
 
     function assertSeriesDeletable(series) {
@@ -311,6 +387,14 @@
         // definition saying 4, with the Manager showing one number and fairness
         // using another. Only a Role with NO definition falls through to the
         // map, which is exactly the liturgical case the map exists for.
+        //
+        // A Servant Role's rest now belongs to the Event that runs it, so the
+        // Event's own setting comes first and the definition only stands in
+        // until the Event has one (see effectiveRole).
+        const settings = roleSettingsOf(series, roleSlug);
+        const fromEvent = !opts.oneOff && opts.definition && settings
+            ? intensityValue(settings.intensity) : null;
+        if (fromEvent !== null) return fromEvent;
         const own = opts.oneOff
             ? intensityValue(opts.oneOff.intensity)
             : intensityValue(opts.definition && opts.definition.intensity);
@@ -357,6 +441,27 @@
             }
         });
 
+        const settingsMap = roleSettingsMapOf(s);
+        Object.keys(settingsMap).forEach(slug => {
+            const own = settingsMap[slug] || {};
+            if (slugs.indexOf(slug) === -1) {
+                errors.push('There are settings for "' + slug + '", which is not carried by this Event.');
+            }
+            if (own.slots !== undefined) {
+                if (!Array.isArray(own.slots) || !own.slots.length) {
+                    errors.push('"' + slug + '" needs at least one person.');
+                } else if (own.slots.some(slot => !slot || ['male', 'female', 'either'].indexOf(slot.requirement) === -1)) {
+                    errors.push('Each place on "' + slug + '" must ask for a man, a woman or either.');
+                }
+            }
+            if (own.intensity !== undefined && own.intensity !== null && !usableNumber(own.intensity, 0)) {
+                errors.push('The rest for "' + slug + '" must be a number of weeks, and cannot be negative.');
+            }
+            if (own.restrictions !== undefined && !Array.isArray(own.restrictions)) {
+                errors.push('The rules for "' + slug + '" must be a list.');
+            }
+        });
+
         return { valid: errors.length === 0, errors: errors };
     }
 
@@ -376,12 +481,17 @@
         addRole,
         removeRole,
         assertSeriesDeletable,
+        // a Role's settings on this Event
+        roleSettingsOf,
+        effectiveRole,
+        rolesFor,
+        withRoleSettings,
+        withoutRoleSettings,
         // cross-Role rules on a series (MS-221)
         crossRoleRulesOf,
         withCrossRoleRules,
-        addCrossRoleRule,
-        removeCrossRoleRule,
         withoutRulesNaming,
+        rolesNamedBy,
         // occurrences
         occurrenceRef,
         // involvement's series
