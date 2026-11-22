@@ -65,11 +65,11 @@ Helpers are two men, and the Leader is a woman)".
 - A Role is created with only its name, slug, family and description; the
   security rules no longer let any write add or change the old fields. An
   Event that adds a Role writes its own settings for it at once.
-- Moving what is stored is `scripts/migrate-role-settings-to-events.js`, in
-  two phases: copy onto every series, then strip the old fields off every
-  Role ([ops note](../ops/adr-0085-role-settings-migration.md)). The copy ran
-  on 2026-11-21. The follow-up then took out the fallback to the Role's old
-  values, every reader of the old rule shapes (loose rules, plain pair rules,
-  a sex on a seat) and the copy phase itself; only the strip is left.
+- What was stored moved on 2026-11-21, in two phases: a copy onto every
+  series, then a strip of the old fields off every Role
+  ([ops note](../ops/adr-0085-role-settings-migration.md)). Between them a
+  follow-up took out the fallback to the Role's old values and every reader of
+  the old rule shapes (loose rules, plain pair rules, a sex on a seat). The
+  one-off script was deleted once both phases had run.
 - A Try rule is invisible to a member taking a place themselves: they are not
   refused and not told. That is deliberate; a preference is the rota's to keep.
