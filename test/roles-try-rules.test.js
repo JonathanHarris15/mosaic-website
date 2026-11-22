@@ -22,7 +22,7 @@ const cat = person('cat', 'female');
 const PEOPLE = [ann, bob, cat];
 
 /** @param {*} id */
-const slot = id => ({ id: id, requirement: 'either' });
+const slot = id => ({ id: id });
 const role = (restrictions, count) => ({
     slug: 'welcome',
     name: 'Welcome',

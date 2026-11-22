@@ -79,11 +79,11 @@
     const ONE_OFF_DEF = Object.freeze({
         id: null,
         name: 'One-off',
-        slots: [{ id: 'one_off', requirement: Roles.REQUIREMENTS.EITHER }],
+        slots: [{ id: 'one_off' }],
         restrictions: [],
     });
     const ONE_OFF_SLOT = Object.freeze({
-        id: 'one_off', requirement: Roles.REQUIREMENTS.EITHER,
+        id: 'one_off',
     });
 
     // Ask RolesCore about exactly one Person. `candidatesFor` judges a whole

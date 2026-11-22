@@ -39,7 +39,7 @@ suite('taking a place whose Role or slot has gone', () => {
         await H.wipe();
         await Promise.all([ANN, SAM].map(id => H.seedPerson(db, id)));
         await db.collection('users').doc('uid-sam').set({ personId: SAM, accountLevelId: 'level_member' });
-        await H.seedRole(db, { slug: 'ushers', name: 'Ushers', slots: [{ id: 's1', requirement: 'either' }], restrictions: [] });
+        await H.seedRole(db, { slug: 'ushers', name: 'Ushers', slots: [{ id: 's1' }], restrictions: [] });
         await H.seedOccurrence(db, { id: OCC, date: '2026-03-14', visibility: 'member', roster: [
             row('elders_only', 's1', ANN, 'declined'),
             row('ushers', 's9', ANN, 'declined'),

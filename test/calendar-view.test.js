@@ -244,7 +244,7 @@ test('every ineligibility the model can produce yields a reason, never a boolean
     Object.keys(Roles.REASONS).forEach(key => {
         const reason = View.blockReason(
             { personId: 'p1', eligible: false, reason: Roles.REASONS[key] },
-            { people: [], requirement: 'female' }
+            { people: [] }
         );
         assert.strictEqual(typeof reason, 'string', Roles.REASONS[key] + ' produced no words');
         assert.ok(reason.length > 3, Roles.REASONS[key] + ' produced an empty subtitle');
@@ -256,15 +256,21 @@ test('a reason the model does not know still gets words', () => {
     assert.strictEqual(reason, 'Cannot take this place');
 });
 
-test('the sex requirement is named as the design words it', () => {
+test('a sex rule is named by the sex it asked for, which rides on the reason', () => {
     assert.strictEqual(
-        View.blockReason({ eligible: false, reason: Roles.REASONS.SEX_MISMATCH }, { requirement: 'female' }),
-        'This place needs a woman'
+        View.blockReason({ eligible: false, reason: Roles.REASONS.SEX_MISMATCH, wantsSex: 'female' }, {}),
+        'This Role needs a woman'
     );
     assert.strictEqual(
-        View.blockReason({ eligible: false, reason: Roles.REASONS.SEX_MISMATCH }, { requirement: 'male' }),
-        'This place needs a man'
+        View.blockReason({ eligible: false, reason: Roles.REASONS.SEX_MISMATCH, wantsSex: 'male' }, {}),
+        'This Role needs a man'
     );
+});
+
+test('a woman refused by a rule for men is told it needs a man, from RolesCore itself', () => {
+    const role = { slug: 'r', slots: [{ id: 's1' }], restrictions: [{ kind: Roles.RESTRICTIONS.SEX, sex: 'female' }] };
+    const verdict = Roles.candidatesFor(role, role.slots[0], { people: [{ id: 'm', name: 'M', sex: 'male' }] })[0];
+    assert.strictEqual(View.blockReason(verdict, {}), 'This Role needs a woman');
 });
 
 // The two "already busy" reasons are deliberately separate (ADR-0020).

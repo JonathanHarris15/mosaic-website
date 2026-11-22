@@ -70,7 +70,7 @@ suite('what a settlement kills, and who hears about it', () => {
         await Promise.all(['kids', 'coffee', 'setup'].map(slug =>
             H.seedRole(db, {
                 slug: slug, name: slug,
-                slots: [{ id: 's1', requirement: 'either' }], restrictions: [],
+                slots: [{ id: 's1' }], restrictions: [],
             })));
 
         // Bob has declined Kids on the 14th and is asking around.
@@ -247,8 +247,8 @@ suite('an editor filling a place ends every Trade about it', () => {
         await H.seedRole(db, {
             slug: 'kids', name: 'Kids Ministry',
             slots: [
-                { id: 's1', requirement: 'either' },
-                { id: 's2', requirement: 'either' },
+                { id: 's1' },
+                { id: 's2' },
             ],
             restrictions: [],
         });

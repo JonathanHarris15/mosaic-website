@@ -21,10 +21,7 @@ const Roles = require('../public/roles-core.js');
 // is permitted everywhere; what the app owes the editor is to say so.
 
 const person = (id, extra) => Object.assign({ id: id, name: id, tags: [] }, extra);
-const slot = (n, requirement) => ({
-    id: 's' + n,
-    requirement: requirement || Roles.REQUIREMENTS.EITHER,
-});
+const slot = n => ({ id: 's' + n });
 
 const role = (slug, slots, extra) => Object.assign({
     slug: slug,
@@ -80,8 +77,10 @@ test('an empty place is not a warning', () => {
 
 // ── Each rule an editor authored ─────────────────────────────────────────────
 
-test('a slot that asks for a man warns when it holds a woman', () => {
-    const menOnly = role('setup', [slot(1, Roles.REQUIREMENTS.MALE)]);
+test('a Role kept to men warns when it holds a woman', () => {
+    const menOnly = role('setup', [slot(1)], {
+        restrictions: [{ kind: Roles.RESTRICTIONS.SEX, sex: 'male' }],
+    });
     const warnings = ask([seat('setup', 's1', 'ann')], { roles: [menOnly] });
 
     assert.equal(warnings.length, 1);
@@ -218,8 +217,11 @@ test('the roster pass and candidatesFor agree about every seat', () => {
     // `candidatesFor` would have said about that person, in that place, with
     // everyone else already sitting there, is exactly what the roster pass must
     // say — or the two have drifted and one surface starts lying.
-    const kids = role('kids', [slot(1), slot(2, Roles.REQUIREMENTS.FEMALE)], {
-        restrictions: [{ kind: Roles.RESTRICTIONS.NOT_TOGETHER, typeId: 'spouse' }],
+    const kids = role('kids', [slot(1), slot(2)], {
+        restrictions: [
+            { kind: Roles.RESTRICTIONS.NOT_TOGETHER, typeId: 'spouse' },
+            { kind: Roles.RESTRICTIONS.ANY_OF, scope: 'team', options: [{ conditions: [{ kind: Roles.RESTRICTIONS.LINEUP, sexes: ['either', 'female'] }] }] },
+        ],
     });
     const roles = [kids, SETUP, COFFEE];
     const people = [ANN, BEN, CARA];

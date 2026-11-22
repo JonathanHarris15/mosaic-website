@@ -80,7 +80,6 @@
             return {
                 roleSlug: role.slug,
                 slotId: slot.id,
-                requirement: slot.requirement || null,
                 filled: !!assignment,
                 card: assignment ? cardFor(assignment, o) : null,
             };
@@ -142,7 +141,6 @@
                                 roleSlug: job.id,
                                 slotId: null,
                                 oneOffId: job.id,
-                                requirement: null,
                                 filled: true,
                                 card: cardFor(a, o),
                             }))

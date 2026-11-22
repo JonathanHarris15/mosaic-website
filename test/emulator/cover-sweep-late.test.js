@@ -34,7 +34,7 @@ suite('the cover sweep, when its trigger is late', () => {
     beforeEach(async () => {
         await H.wipe();
         await H.seedPerson(db, ANN);
-        await H.seedRole(db, { slug: 'ushers', name: 'Ushers', slots: [{ id: 's1', requirement: 'either' }], restrictions: [] });
+        await H.seedRole(db, { slug: 'ushers', name: 'Ushers', slots: [{ id: 's1' }], restrictions: [] });
         await H.seedOccurrence(db, { id: OCC, date: '2026-03-14', visibility: 'member', roster: [row('pending')] });
     });
 

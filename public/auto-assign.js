@@ -898,11 +898,6 @@
                     Object.assign({ eligible: false }, detail),
                     {
                         people: this.people,
-                        // ⚠ THE REQUIREMENT IS NOT ON THE WARNING. It belongs
-                        // to the SLOT, and without looking it up every sex
-                        // mismatch falls to the default and tells a woman in a
-                        // woman's place that the place needs a man.
-                        requirement: this.requirementAt(ctx.roleSlug, ctx.slotId),
                         tagName: this.tagNames[detail.tagId] || '',
                         groupName: detail.groupName || '',
                         otherRoles: other.concat(
@@ -915,12 +910,6 @@
                             ? this.roleName(detail.pairedRoleSlug) : '',
                     }
                 );
-            },
-
-            requirementAt(roleSlug, slotId) {
-                const def = this.roleDefinitions.filter(d => d.slug === roleSlug)[0];
-                const slot = ((def && def.slots) || []).filter(s => s.id === slotId)[0];
-                return (slot && slot.requirement) || null;
             },
 
             // ── The range strip ──────────────────────────────────────────────
@@ -1459,7 +1448,6 @@
                         ? this.roleName(s.roleSlug) + ' · ' + Core.dayMonth(s.date)
                         : 'Across the whole range',
                     card: place ? place.card : null,
-                    wants: place ? place.wants : '',
                     load: this.gridLoadAt(at, s.personId),
                     budget: this.windowSize,
                     serves: Panel.servesInWindow({

@@ -11,7 +11,7 @@ const Roles = require('../public/roles-core.js');
 const { loadRoleRegistry } = require('../functions/roles-read.js');
 
 const def = (id, name, extra) => Object.assign({
-    id, name, family: 'servant', slots: [{ id: 's1', requirement: 'either' }], restrictions: [],
+    id, name, family: 'servant', slots: [{ id: 's1' }], restrictions: [],
 }, extra || {});
 
 test('a Role stored without a slug resolves by its name, as it does in the browser', () => {

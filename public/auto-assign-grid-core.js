@@ -36,18 +36,6 @@
 (function (global) {
     'use strict';
 
-    const MALE = 'male';
-    const FEMALE = 'female';
-
-    // What a place asks for, in the words the editor reads. `either` is the
-    // common case and says "Anyone" rather than staying silent, because a blank
-    // where the other two carry a word reads as missing data.
-    function wantsOf(requirement) {
-        if (requirement === MALE) return 'A man';
-        if (requirement === FEMALE) return 'A woman';
-        return 'Anyone';
-    }
-
     // Two letters at most, from the first and last word of the name. A stand-in
     // until real photographs land, so the card's shape never changes when they
     // do.
@@ -129,8 +117,6 @@
             return {
                 roleSlug: role.slug,
                 slotId: slot.id,
-                requirement: slot.requirement || null,
-                wants: wantsOf(slot.requirement),
                 filled: !!seat,
                 card: seat ? cardFor(seat, o, date, role.slug) : null,
                 // Only when the solve TRIED and could not. A place left empty
@@ -228,8 +214,6 @@
                                 roleSlug: job.id,
                                 slotId: null,
                                 oneOffId: job.id,
-                                requirement: null,
-                                wants: 'Anyone',
                                 filled: true,
                                 card: cardFor({
                                     personId: a.personId,
@@ -352,7 +336,6 @@
 
     const AutoAssignGridCore = {
         // words
-        wantsOf,
         initialsOf,
         recencyLabel,
         // the grid

@@ -16,7 +16,7 @@ const RoleRules = require('../public/role-rules-core.js');
 const stored = extra => Object.assign({
     slug: 'helper',
     name: 'Kids Helper',
-    slots: [{ id: 's1', requirement: 'either' }, { id: 's2', requirement: 'either' }],
+    slots: [{ id: 's1' }, { id: 's2' }],
     nextSlotSeq: 3,
     restrictions: [],
     intensity: 5,
@@ -37,31 +37,16 @@ test('count, rest and "another role that day" come straight across', () => {
     assert.deepEqual(form.team, []);
 });
 
-test('the old per-seat sexes become one line-up rule', () => {
-    // "Person 1: a man, Person 2: a man" said the same thing as a line-up of
-    // two men, minus the seat order nobody meant.
+test('only OR rules are read; the shapes from before ADR 0085 are not', () => {
+    // Every series was copied into the OR shape on 2026-11-21, so a loose rule
+    // or a sex on a seat can only be a leftover, and reading it back would
+    // bring it to life again the next time somebody saves.
     const form = RoleRules.formFrom(stored({
         slots: [{ id: 's1', requirement: 'male' }, { id: 's2', requirement: 'male' }],
+        restrictions: [{ kind: 'requireTag', tagId: 'cleared' }, { kind: 'notSameGroup', typeId: 'family' }],
     }));
-    assert.equal(form.team.length, 1);
-    assert.equal(form.team[0].strength, 'must');
-    assert.deepEqual(form.team[0].options[0].conditions[0].sexes, ['male', 'male']);
-});
-
-test('old person rules join one option of "who can do it" — all of them, as before', () => {
-    const form = RoleRules.formFrom(stored({ restrictions: [
-        { kind: 'requireTag', tagId: 'cleared' },
-        { kind: 'excludeTag', tagId: 'new' },
-    ] }));
-    assert.deepEqual(conds(form), [['requireTag', 'excludeTag']]);
-});
-
-test('old team rules each become a team rule of their own', () => {
-    const form = RoleRules.formFrom(stored({ restrictions: [
-        { kind: 'notSameGroup', typeId: 'family' },
-    ] }));
-    assert.equal(form.team.length, 1);
-    assert.equal(form.team[0].options[0].conditions[0].kind, 'notSameGroup');
+    assert.deepEqual(form.who.options, []);
+    assert.deepEqual(form.team, []);
 });
 
 test('stored OR rules come back as they were written', () => {
@@ -85,7 +70,7 @@ test('settings keep the slot ids that exist and add new ones after them', () => 
     const settings = RoleRules.settingsFrom(form, stored());
     assert.deepEqual(settings.slots.map((/** @type {*} */ s) => s.id), ['s1', 's2', 's3']);
     assert.equal(settings.nextSlotSeq, 4);
-    assert.ok(settings.slots.every((/** @type {*} */ s) => s.requirement === 'either'));
+    assert.ok(settings.slots.every((/** @type {*} */ s) => Object.keys(s).join() === 'id'), 'a seat is only its id');
 });
 
 test('fewer people drops the last seats, and ids are never reused', () => {
@@ -110,16 +95,25 @@ test('who-can-do-it and the team are stored as OR rules, with no screen-only ids
 });
 
 test('round trip: what is written reads back the same', () => {
-    const form = RoleRules.formFrom(stored({ restrictions: [{ kind: 'requireTag', tagId: 'x' }] }));
+    const form = RoleRules.formFrom(stored({ restrictions: [
+        { kind: 'anyOf', scope: 'person', options: [{ conditions: [{ kind: 'requireTag', tagId: 'x' }] }] },
+    ] }));
+    assert.deepEqual(conds(form), [['requireTag']]);
     const again = RoleRules.formFrom(Object.assign(stored(), RoleRules.settingsFrom(form, stored())));
     assert.deepEqual(conds(again), conds(form));
 });
 
 // ── Rules across Roles ───────────────────────────────────────────────────────
 
-test('an old pair rule reads as an OR rule with one option', () => {
-    const forms = RoleRules.crossFormsFrom([{ kind: 'notSameGroup', typeId: 'marriage', roleSlugs: ['a', 'b'] }]);
-    assert.equal(forms[0].options[0].conditions[0].kind, 'notSameGroup');
+test('a pair rule from before OR rules is not read', () => {
+    assert.deepEqual(RoleRules.crossFormsFrom([{ kind: 'notSameGroup', typeId: 'marriage', roleSlugs: ['a', 'b'] }]), []);
+});
+
+test('a stored OR rule across Roles reads back with its strength', () => {
+    const forms = RoleRules.crossFormsFrom([{ kind: 'anyOf', strength: 'try', options: [
+        { conditions: [{ kind: 'notSameGroup', typeId: 'marriage', roleSlugs: ['a', 'b'] }] },
+    ] }]);
+    assert.equal(forms[0].strength, 'try');
     assert.deepEqual(forms[0].options[0].conditions[0].roleSlugs, ['a', 'b']);
 });
 

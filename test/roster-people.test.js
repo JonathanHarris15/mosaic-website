@@ -52,7 +52,7 @@ const church = (settings, cross) => ({
     events: { sun: { name: 'Sunday', roleSlugs: ['helper', 'leader'], roleSettings: { helper: settings }, crossRoleRules: cross || [] } },
     relationship_groups: { g1: { typeId: 'family', memberIds: ['ann', 'bob'] } },
 });
-const seat = { slots: [{ id: 's1', requirement: 'either' }, { id: 's2', requirement: 'either' }] };
+const seat = { slots: [{ id: 's1' }, { id: 's2' }] };
 
 test('a line-up rule gets the team on the roster, once each', async () => {
     const db = fakeDb(church(Object.assign({ restrictions: [anyOf({ kind: 'lineup', sexes: ['male', 'female'] })] }, seat)));

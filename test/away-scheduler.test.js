@@ -23,7 +23,7 @@ const Saved = require('../public/auto-assign-saved-core.js');
 // ineligibility REASON: the picker draws reasons, the solve refuses them.
 
 const person = (id, extra) => Object.assign({ id: id, name: id, tags: [] }, extra);
-const either = n => ({ id: 's' + n, requirement: Roles.REQUIREMENTS.EITHER });
+const either = n => ({ id: 's' + n });
 const role = (slug, slots) => ({
     slug: slug, name: slug, family: Roles.FAMILIES.SERVANT, slots: slots, restrictions: [],
 });
@@ -60,7 +60,9 @@ test('Away outranks every rule about the roster', () => {
     // Somebody who will not be there cannot meaningfully be told that this place
     // wants a woman. Being absent explains everything else about them, which is
     // why it sits directly under Inactive in the order.
-    const menOnly = role('coffee', [{ id: 's1', requirement: Roles.REQUIREMENTS.MALE }]);
+    const menOnly = Object.assign(role('coffee', [{ id: 's1' }]), {
+        restrictions: [{ kind: 'anyOf', scope: 'person', options: [{ conditions: [{ kind: 'sex', sex: 'male' }] }] }],
+    });
     const judged = Roles.candidatesFor(menOnly, menOnly.slots[0], {
         people: [person('sarah', { sex: 'female' })],
         awayPersonIds: ['sarah'],

@@ -20,7 +20,7 @@ const alice = person('alice', { sex: 'female' });
 const brenda = person('brenda', { sex: 'female' });
 const carl = person('carl', { sex: 'male' });
 
-const eitherSlot = { id: 's1', requirement: Roles.REQUIREMENTS.EITHER };
+const eitherSlot = { id: 's1' };
 
 const roleWith = extra => Object.assign({
     id: 'r1',
@@ -207,14 +207,17 @@ test('a Role with no allowlist rule is open to everyone', () => {
 
 test('the allowlist composes with other restrictions rather than replacing them', () => {
     const role = roleWith({
-        slots: [{ id: 's1', requirement: Roles.REQUIREMENTS.FEMALE }],
-        restrictions: [{ kind: Roles.RESTRICTIONS.ALLOWLIST, personIds: ['alice', 'carl'] }],
+        slots: [{ id: 's1' }],
+        restrictions: [
+            { kind: Roles.RESTRICTIONS.SEX, sex: 'female' },
+            { kind: Roles.RESTRICTIONS.ALLOWLIST, personIds: ['alice', 'carl'] },
+        ],
     });
     const results = Roles.candidatesFor(role, role.slots[0], {
         people: [alice, brenda, carl],
         assigned: [],
     });
-    // Carl is allowlisted but the slot needs a woman; Brenda is a woman but not
+    // Carl is allowlisted but the Role needs a woman; Brenda is a woman but not
     // allowlisted. Only Alice satisfies both.
     assert.deepEqual(eligibleIds(results), ['alice']);
 });
@@ -286,7 +289,7 @@ test('being busy elsewhere is a different reason from being in this Role twice',
         assigned: [],
         assignedElsewhere: elsewhere([{ personId: 'alice', roleSlug: 'sound' }]),
     });
-    const twice = Roles.candidatesFor(roleWith({ slots: [eitherSlot, { id: 's2', requirement: 'either' }] }), eitherSlot, {
+    const twice = Roles.candidatesFor(roleWith({ slots: [eitherSlot, { id: 's2' }] }), eitherSlot, {
         people: [alice],
         assigned: [{ slotId: 's2', personId: 'alice' }],
     });

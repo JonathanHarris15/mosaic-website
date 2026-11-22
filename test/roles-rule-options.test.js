@@ -32,7 +32,7 @@ const PEOPLE = [ann, bea, cal, dev, eli];
 
 const opt = (...conditions) => ({ conditions: conditions });
 /** @param {*} id */
-const either = id => ({ id: id, requirement: 'either' });
+const either = id => ({ id: id });
 const role = (slug, count, restrictions) => ({
     slug: slug,
     name: slug,

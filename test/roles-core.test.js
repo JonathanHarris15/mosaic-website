@@ -3,21 +3,15 @@ const assert = require('node:assert');
 
 const Roles = require('../public/roles-core.js');
 
-// A Role Definition is the editable specification of a Servant Role (ADR-0016
-// §3): a name plus an ordered set of slots, each requiring male, female, or
-// either. Three people needed means three slots — the slot is the unit of
-// assignment, not a count paired with a separate sex rule.
+// A Role Definition is a Servant Role's name and what it involves (ADR 0085).
+// Who it needs (its slots), its rules and its rest are each Event's, and the
+// Role an Event seats is EventsCore.effectiveRole of the two.
 
 const kidsTeam = () => ({
     id: 'r1',
     name: 'Kids Ministry',
+    slug: 'kids_ministry',
     family: Roles.FAMILIES.SERVANT,
-    slots: [
-        { id: 's1', requirement: Roles.REQUIREMENTS.FEMALE },
-        { id: 's2', requirement: Roles.REQUIREMENTS.EITHER },
-        { id: 's3', requirement: Roles.REQUIREMENTS.EITHER },
-    ],
-    restrictions: [],
 });
 
 // ── Validation ────────────────────────────────────────────────────────────────
@@ -36,38 +30,11 @@ test('a Role Definition needs a non-empty name', () => {
     }
 });
 
-test('a Role Definition needs at least one slot', () => {
-    const result = Roles.validateDefinition({ ...kidsTeam(), slots: [] });
-    assert.equal(result.valid, false);
-    assert.ok(result.errors.some(e => /slot/i.test(e)));
-});
-
-test('every slot requirement must be male, female, or either', () => {
-    const def = kidsTeam();
-    def.slots[1].requirement = 'any';
-    const result = Roles.validateDefinition(def);
-    assert.equal(result.valid, false);
-    assert.ok(result.errors.some(e => /requirement/i.test(e)));
-});
-
-test('a slot with no requirement is rejected rather than silently defaulted', () => {
-    const def = kidsTeam();
-    delete def.slots[0].requirement;
-    assert.equal(Roles.validateDefinition(def).valid, false);
-});
-
-test('slots must carry an identifier, so assignments can point at one', () => {
-    const def = kidsTeam();
-    delete def.slots[2].id;
-    const result = Roles.validateDefinition(def);
-    assert.equal(result.valid, false);
-    assert.ok(result.errors.some(e => /id/i.test(e)));
-});
-
-test('duplicate slot ids are rejected', () => {
-    const def = kidsTeam();
-    def.slots[2].id = def.slots[0].id;
-    assert.equal(Roles.validateDefinition(def).valid, false);
+test('a Role Definition is not judged on seats it no longer owns', () => {
+    // A Role stored before ADR 0085 may still carry old slots until they are
+    // stripped; they are the Event's business now, and say nothing here.
+    assert.equal(Roles.validateDefinition({ ...kidsTeam(), slots: [] }).valid, true);
+    assert.equal(Roles.validateDefinition({ ...kidsTeam(), slots: [{ requirement: 'any' }] }).valid, true);
 });
 
 // ── The two families ──────────────────────────────────────────────────────────
@@ -95,19 +62,10 @@ test('a new Role Definition is its name and what it involves, and validates', ()
     assert.equal(Roles.validateDefinition(def).valid, true);
 });
 
-// ── Slot helpers: ordered, stable, non-mutating ───────────────────────────────
-
-test('a slot requirement cannot be set to something outside the three values', () => {
-    assert.throws(
-        () => Roles.setSlotRequirement(kidsTeam(), 's2', 'any'),
-        /requirement/i
-    );
-});
-
 // ── How many people a Role needs ──────────────────────────────────────────────
 
 test('the number of people a Role needs is its slot count', () => {
-    assert.equal(Roles.slotCount(kidsTeam()), 3);
+    assert.equal(Roles.slotCount({ slots: [{ id: 's1' }, { id: 's2' }, { id: 's3' }] }), 3);
 });
 
 // ── Who may even be offered for a Role ────────────────────────────────────────

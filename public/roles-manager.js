@@ -189,8 +189,7 @@ window.RolesManager = () => ({
     },
 
     // Where a Role runs: each event carrying it, and how many people that
-    // event needs on it (its own answer, or the Role's old one until it has
-    // given one).
+    // event needs on it. An event that has not set the Role up says so.
     usesOf(slug) {
         const def = this.roleDefinitions.find(d => d.slug === slug) || { slug: slug };
         return this.allSeries
@@ -198,7 +197,8 @@ window.RolesManager = () => ({
             .map(s => {
                 const role = EventsCore.effectiveRole(s, def);
                 const count = RolesCore.slotCount(role);
-                return { id: s.id, name: s.name || s.id, count: count === 1 ? '1 person' : count + ' people' };
+                const label = count === 0 ? 'Not set up' : count === 1 ? '1 person' : count + ' people';
+                return { id: s.id, name: s.name || s.id, count: label };
             })
             .sort((a, b) => (a.id === EventsCore.SUNDAY_SERVICE_ID ? -1 : b.id === EventsCore.SUNDAY_SERVICE_ID ? 1
                 : String(a.name).localeCompare(String(b.name))));

@@ -1,75 +1,20 @@
 /**
- * Who a Role needs, its rules and its rest move onto each Event that runs it
+ * Who a Role needs, its rules and its rest moved onto each Event that runs it
  * (ADR 0085). The pure plan behind scripts/migrate-role-settings-to-events.js.
  *
- * Two phases, run in this order:
- *
- *   1. COPY  — every series gets its own `roleSettings[slug]` for every Servant
- *              Role it runs, from that Role's stored values, in the new rule
- *              shape: per-seat sexes become one line-up rule, person rules one
- *              OR rule, team rules a rule each. A series that already has its
- *              own settings keeps them, converted to the new shape. Its rules
- *              across Roles are converted to the OR shape too.
- *   2. STRIP — the old fields come off each Role Definition. Refused while any
- *              series still runs a Role it has no settings for.
- *
- * Slot ids are kept throughout: an Assignment names its seat by id.
+ * The COPY onto every series ran on production on 2026-11-21 and was retired
+ * once the app stopped reading the Role's own copies; git history has it.
+ * What is left is the STRIP: the old fields come off each Role Definition,
+ * refused while any series still runs a Role it has no settings for.
  */
 
 const Roles = require('../public/roles-core.js');
 const Events = require('../public/events-core.js');
-const RoleRules = require('../public/role-rules-core.js');
 
 const OLD_ROLE_FIELDS = ['slots', 'nextSlotSeq', 'restrictions', 'intensity', 'allowsAnotherRole'];
 
 /** @param {*} slug */
 const isServant = slug => Roles.LITURGICAL_SLUGS.indexOf(slug) === -1;
-/** @param {*} a @param {*} b */
-const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
-
-// The new-shape settings for one Role on one series.
-/** @param {*} series @param {*} definition */
-function settingsFor(series, definition) {
-    const role = Events.effectiveRole(series, definition);
-    return RoleRules.settingsFrom(RoleRules.formFrom(role), role);
-}
-
-/**
- * @param {Record<string, *>} series the stored series (with `id`)
- * @param {Record<string, Record<string, *>>} definitionsBySlug every stored Role, by slug
- * @return {{ roleSettings: Object, crossRoleRules: Array, changed: boolean,
- *            seeded: string[], converted: string[], missing: string[] }}
- */
-function planSeries(series, definitionsBySlug) {
-    const s = series || {};
-    const before = s.roleSettings || {};
-    /** @type {Record<string, *>} */
-    const roleSettings = {};
-    /** @type {string[]} */
-    const seeded = [];
-    /** @type {string[]} */
-    const converted = [];
-    /** @type {string[]} */
-    const missing = [];
-
-    (s.roleSlugs || []).filter(isServant).forEach((/** @type {*} */ slug) => {
-        const def = definitionsBySlug[slug];
-        if (!def) {
-            // A Role the series names but nobody defines: nothing to copy, and
-            // its own settings (if any) are kept as they are.
-            if (before[slug]) roleSettings[slug] = before[slug];
-            missing.push(slug);
-            return;
-        }
-        roleSettings[slug] = settingsFor(s, Object.assign({ slug: slug }, def));
-        if (!before[slug]) seeded.push(slug);
-        else if (!same(before[slug], roleSettings[slug])) converted.push(slug);
-    });
-
-    const crossRoleRules = RoleRules.crossRulesFrom(RoleRules.crossFormsFrom(s.crossRoleRules || []));
-    const changed = !same(before, roleSettings) || !same(s.crossRoleRules || [], crossRoleRules);
-    return { roleSettings, crossRoleRules, changed, seeded, converted, missing };
-}
 
 /**
  * Which old fields a Role Definition still carries.
@@ -96,4 +41,4 @@ function unmigrated(seriesList, definitionsBySlug) {
     return out;
 }
 
-module.exports = { OLD_ROLE_FIELDS, planSeries, planRoleStrip, unmigrated };
+module.exports = { OLD_ROLE_FIELDS, planRoleStrip, unmigrated };

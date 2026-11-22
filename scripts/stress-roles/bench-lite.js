@@ -15,7 +15,7 @@ for (const n of [200,1000,5000,10000]) {
   if (mode==='noSame') c.roles = c.roles.filter(r => !r.restrictions.some(x => x.kind === 'sameGroup'));
   const elsewhere = c.people.slice(10,70).map((p,i)=>({personId:p.id, roleSlug:'role'+(i%30), allowsAnotherRole:false}));
   const base = { people:c.people, relationships:c.relationships, groups:c.groups, assigned:[{slotId:'s1',personId:'p5'}], assignedElsewhere:elsewhere, crossRoleRules:c.crossRoleRules, awayPersonIds:c.awayByDate[c.dates[0]] };
-  const s9 = {id:'s9', requirement:'either'};
+  const s9 = {id:'s9'};
   /** @type {Object<string, number | string>} */
   const row = { n };
   for (const slug of ['role0','role1','role3','role4','role6']) {

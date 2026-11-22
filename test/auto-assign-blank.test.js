@@ -20,7 +20,7 @@ const SERIES = 'sunday_service';
 const RANGE = ['2026-10-04', '2026-10-11', '2026-10-18'];
 
 const person = (id) => ({ id: id, name: id, tags: [] });
-const either = n => ({ id: 's' + n, requirement: Roles.REQUIREMENTS.EITHER });
+const either = n => ({ id: 's' + n });
 
 const role = (slug, slotCount) => ({
     slug: slug,

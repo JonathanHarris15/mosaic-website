@@ -57,7 +57,7 @@ test('a Role with fewer people than places does not re-solve once per member (MS
     const def = {
         slug: 'communion', name: 'Communion', family: 'servant', intensity: 1,
         restrictions: [{ kind: 'allowlist', personIds: people.slice(795).map(p => p.id) }],
-        slots: Array.from({ length: 6 }, (_, i) => ({ id: 's' + (i + 1), requirement: 'either' })),
+        slots: Array.from({ length: 6 }, (_, i) => ({ id: 's' + (i + 1) })),
     };
     const { result, calls } = solve(people, def);
 
@@ -71,7 +71,7 @@ test('a Role whose rule nobody meets stops at once (MS-814)', () => {
     const def = {
         slug: 'readers', name: 'Readers', family: 'servant', intensity: 1,
         restrictions: [{ kind: 'requireTag', tagId: 'nobody-has-this' }],
-        slots: [{ id: 's1', requirement: 'either' }, { id: 's2', requirement: 'either' }],
+        slots: [{ id: 's1' }, { id: 's2' }],
     };
     const { result, calls } = solve(people, def);
 
@@ -92,7 +92,7 @@ test('widening still reaches the one person far down the ranking who can fill it
     const def = {
         slug: 'sound', name: 'Sound', family: 'servant', intensity: 1,
         restrictions: [{ kind: 'allowlist', personIds: [only] }],
-        slots: [{ id: 's1', requirement: 'either' }],
+        slots: [{ id: 's1' }],
     };
     const result = Fairness.solve({
         seriesId: 's', date: '2026-11-01', roles: [def], people, history,

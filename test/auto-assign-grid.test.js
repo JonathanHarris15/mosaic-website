@@ -13,11 +13,11 @@ const Grid = require('../public/auto-assign-grid-core.js');
 
 const COFFEE = {
     slug: 'coffee', name: 'Coffee', allowsAnotherRole: false,
-    slots: [{ id: 's1', requirement: 'either' }, { id: 's2', requirement: 'female' }],
+    slots: [{ id: 's1' }, { id: 's2' }],
 };
 const WELCOME = {
     slug: 'welcome', name: 'Welcome', allowsAnotherRole: true,
-    slots: [{ id: 's1', requirement: 'male' }],
+    slots: [{ id: 's1' }],
 };
 
 const PEOPLE = {
@@ -65,16 +65,6 @@ test('a Role with three places shows three, however few the solve filled', () =>
     assert.equal(places.length, 3, 'the two nobody filled are the whole reason to draft ahead');
     assert.deepEqual(places.map(p => p.filled), [true, false, false]);
     assert.deepEqual(places.map(p => p.slotId), ['s1', 's2', 's3']);
-});
-
-test('a place says whether it wants a man, a woman, or anyone', () => {
-    const grid = Grid.gridFrom(options({
-        roles: [COFFEE, WELCOME],
-        dates: [day('2026-10-04')],
-    }));
-
-    assert.deepEqual(grid.roleRows[0].cells[0].places.map(p => p.wants), ['Anyone', 'A woman']);
-    assert.deepEqual(grid.roleRows[1].cells[0].places.map(p => p.wants), ['A man']);
 });
 
 test('an empty place the solve tried and failed says why', () => {

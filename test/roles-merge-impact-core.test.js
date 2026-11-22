@@ -85,7 +85,7 @@ test('a Role from the Roles page passes the shape check; a broken one names why'
     const RolesCore = require('../public/roles-core.js');
     assert.deepEqual(Core.roleShapeProblems(RolesCore.newDefinition('Greeters')), []);
     assert.deepEqual(Core.roleShapeProblems({ name: 'Ushers', family: 'servant', slug: 'ushers',
-        slots: [{ id: 's1', requirement: 'either' }] }), []);
+        slots: [{ id: 's1' }] }), []);
     const bad = Core.roleShapeProblems({ name: '', family: 'liturgical', slots: [],
         slug: 'Bad Slug', description: 'x'.repeat(601), intensity: -1 });
     // Slots are each Event's now (ADR 0085): an empty list is not a problem.

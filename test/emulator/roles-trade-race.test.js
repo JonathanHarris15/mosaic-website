@@ -72,8 +72,8 @@ suite('a Trade withdrawn while it is being accepted', () => {
         await H.wipe();
         await Promise.all([BOB, SARAH].map(id => Promise.all([H.seedPerson(db, id),
             db.collection('users').doc('uid-' + id).set({ personId: id, accountLevelId: 'level_member' })])));
-        await H.seedRole(db, { slug: 'kids', name: 'Kids', slots: [{ id: 's1', requirement: 'either' }], restrictions: [] });
-        await H.seedRole(db, { slug: 'coffee', name: 'Coffee', slots: [{ id: 's1', requirement: 'either' }], restrictions: [] });
+        await H.seedRole(db, { slug: 'kids', name: 'Kids', slots: [{ id: 's1' }], restrictions: [] });
+        await H.seedRole(db, { slug: 'coffee', name: 'Coffee', slots: [{ id: 's1' }], restrictions: [] });
         await H.seedOccurrence(db, { id: OCC_A, date: KIDS.date, visibility: 'member', roster: [row('kids', BOB, 'declined')] });
         await H.seedOccurrence(db, { id: OCC_B, date: COFFEE.date, visibility: 'member', roster: [row('coffee', SARAH, 'confirmed')] });
     });

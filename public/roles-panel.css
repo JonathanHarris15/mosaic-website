@@ -37,7 +37,6 @@ html.shell-mobile .cal-row-actions { opacity: 1; }
 html.shell-mobile .cal-slot-row { min-height: 48px; flex-wrap: wrap; }
 html.shell-mobile .cal-slot-index,
 html.shell-mobile .cal-slot-avatar { display: none; }
-html.shell-mobile .cal-slot-req { width: 62px; }
 html.shell-mobile .cal-row-actions,
 html.shell-mobile .cal-slot-actions { width: 100%; justify-content: flex-end; }
 

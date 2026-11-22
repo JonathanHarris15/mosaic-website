@@ -118,9 +118,9 @@ const kidsDefinition = () => ({
     slug: 'kids_ministry',
     family: Roles.FAMILIES.SERVANT,
     slots: [
-        { id: 's1', requirement: Roles.REQUIREMENTS.FEMALE },
-        { id: 's2', requirement: Roles.REQUIREMENTS.EITHER },
-        { id: 's3', requirement: Roles.REQUIREMENTS.EITHER },
+        { id: 's1' },
+        { id: 's2' },
+        { id: 's3' },
     ],
     restrictions: [],
 });
@@ -129,7 +129,7 @@ const coffeeDefinition = () => ({
     name: 'Coffee',
     slug: 'coffee',
     family: Roles.FAMILIES.SERVANT,
-    slots: [{ id: 's1', requirement: Roles.REQUIREMENTS.EITHER }],
+    slots: [{ id: 's1' }],
     restrictions: [],
 });
 
@@ -199,7 +199,7 @@ test('a stored definition that would take a liturgical slug is quarantined, not 
     // liturgical slug. allRoles rightly throws on that; the page must still open.
     const page = await mountPage({
         roles: {
-            bad: { name: 'Preacher', slug: 'preacher', family: Roles.FAMILIES.SERVANT, slots: [{ id: 's1', requirement: 'either' }], restrictions: [] },
+            bad: { name: 'Preacher', slug: 'preacher', family: Roles.FAMILIES.SERVANT, slots: [{ id: 's1' }], restrictions: [] },
             r1: coffeeDefinition(),
         },
     });
@@ -1132,13 +1132,13 @@ test('the ledger says where each Role runs, through to that event\'s rules', asy
     page.allSeries = [
         { id: 'midweek', name: 'Midweek', roleSlugs: [slug] },
         { id: 'sunday_service', name: 'Sunday Service', roleSlugs: [slug],
-          roleSettings: { [slug]: { slots: [{ id: 's1', requirement: 'either' }] } } },
+          roleSettings: { [slug]: { slots: [{ id: 's1' }] } } },
         { id: 'prayer', name: 'Prayer', roleSlugs: ['coffee'] },
     ];
     const uses = page.usesOf(slug);
     assert.deepStrictEqual(uses.map(u => u.id), ['sunday_service', 'midweek'], 'the Sunday comes first');
     assert.equal(uses[0].count, '1 person', 'the event\'s own answer wins');
-    assert.equal(uses[1].count, '3 people', 'with no answer of its own, the Role\'s old one stands');
+    assert.equal(uses[1].count, 'Not set up', 'the Role\'s own old slots are never read');
     assert.match(rolesManagerHtml(), /recurring-events\.html\?series=' \+ encodeURIComponent\(use\.id\) \+ '&role='/);
 });
 

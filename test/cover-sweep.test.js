@@ -72,7 +72,7 @@ const occurrence = (/** @type {any=} */ extra) => Object.assign({
 const declined = (/** @type {string} */ personId, /** @type {any=} */ extra) => Object.assign({
     roleSlug: 'coffee', slotId: 's1', personId, state: aa.STATES.DECLINED,
 }, extra || {});
-const ROLES = { 'roles/r1': { name: 'Coffee', slug: 'coffee', family: 'servant', slots: [{ id: 's1', requirement: 'either' }] } };
+const ROLES = { 'roles/r1': { name: 'Coffee', slug: 'coffee', family: 'servant', slots: [{ id: 's1' }] } };
 const coverDocs = (/** @type {any} */ db) => Object.keys(db._data).filter(k => k.startsWith('cover/')).sort();
 const COFFEE = 'cover/' + Place.coverIdFor(OCC, { roleSlug: 'coffee', slotId: 's1' });
 
