@@ -1563,24 +1563,19 @@
         if (!stored) throw new Error('No such event series: ' + seriesId);
 
         const slugs = stored.roleSlugs || [];
-        // Two shapes: a plain pair rule, or an OR rule whose conditions each
-        // name the Role they are about (RolesCore — rules that can say OR).
-        const list = (rules || []).map(rule => (rule && rule.kind === 'anyOf'
-            ? JSON.parse(JSON.stringify({
+        // Each an OR rule whose conditions name the Role they are about
+        // (ADR 0085).
+        const list = (rules || []).map(rule => {
+            if (!rule || rule.kind !== 'anyOf') throw new Error('A rule across Roles is an OR rule.');
+            return JSON.parse(JSON.stringify({
                 kind: 'anyOf',
                 strength: rule.strength === 'try' ? 'try' : 'must',
                 options: rule.options || [],
-            }))
-            : {
-                kind: rule.kind,
-                typeId: rule.typeId,
-                roleSlugs: ((rule && rule.roleSlugs) || []).slice(),
             }));
+        });
 
         list.forEach(rule => {
-            const pairs = rule.kind === 'anyOf'
-                ? [].concat(...rule.options.map(o => (o.conditions || []).filter(c => c && c.roleSlugs).map(c => c.roleSlugs)))
-                : [rule.roleSlugs];
+            const pairs = [].concat(...rule.options.map(o => (o.conditions || []).filter(c => c && c.roleSlugs).map(c => c.roleSlugs)));
             pairs.forEach(pair => {
                 if (pair.length !== 2 || pair[0] === pair[1]) {
                     throw new Error('A cross-Role rule names two different Roles.');

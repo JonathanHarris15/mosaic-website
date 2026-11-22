@@ -33,14 +33,16 @@ const kidsMinistry = (restrictions) => ({
     name: 'Kids Ministry',
     family: Roles.FAMILIES.SERVANT,
     slots: [
-        { id: 's1', requirement: Roles.REQUIREMENTS.EITHER },
-        { id: 's2', requirement: Roles.REQUIREMENTS.FEMALE },
+        { id: 's1' },
+        { id: 's2' },
     ],
     restrictions: restrictions || [],
 });
 
-const eitherSlot = { id: 's1', requirement: Roles.REQUIREMENTS.EITHER };
-const femaleSlot = { id: 's2', requirement: Roles.REQUIREMENTS.FEMALE };
+const eitherSlot = { id: 's1' };
+// A Role kept to women: who may do it is a rule (ADR 0085), not a seat's sex.
+const womenOnly = kidsMinistry([{ kind: Roles.RESTRICTIONS.ANY_OF, scope: 'person',
+    options: [{ conditions: [{ kind: Roles.RESTRICTIONS.SEX, sex: 'female' }] }] }]);
 
 // A member-rung occurrence — the ordinary case, visible to any signed-in member.
 const openEvent = {
@@ -72,15 +74,15 @@ test('a member eligible for the place may take it', () => {
 
 // ── The Role's rules refuse a member and advise an editor ────────────────────
 
-test('a slot wanting a woman refuses a man — this is the wall ADR-0030 puts up', () => {
-    const verdict = ask({ slot: femaleSlot });
+test('a Role kept to women refuses a man — this is the wall ADR-0030 puts up', () => {
+    const verdict = ask({ roleDef: womenOnly });
     assert.equal(verdict.permitted, false);
     assert.equal(verdict.reason, Roles.REASONS.SEX_MISMATCH);
 });
 
 test('the same inputs asked for an editor permit it — one function, one flag', () => {
-    const asMember = ask({ slot: femaleSlot });
-    const asEditor = ask({ slot: femaleSlot, asEditor: true });
+    const asMember = ask({ roleDef: womenOnly });
+    const asEditor = ask({ roleDef: womenOnly, asEditor: true });
 
     assert.equal(asMember.permitted, false);
     assert.equal(asEditor.permitted, true);
@@ -137,8 +139,8 @@ const MARRIAGE = 'type-marriage';
 const EVERY_REFUSAL = [
     {
         reason: Roles.REASONS.SEX_UNKNOWN,
-        note: 'sex never recorded, and the slot wants one',
-        over: { person: person('erin', { tags: ['kids-cleared'] }), slot: femaleSlot },
+        note: 'sex never recorded, and the Role asks for one',
+        over: { person: person('erin', { tags: ['kids-cleared'] }), roleDef: womenOnly },
     },
     {
         reason: Roles.REASONS.EXCLUDED_BY_TAG,
@@ -254,7 +256,7 @@ test('your own Away warns and lets you through — you are changing your mind', 
 // Away rule would seat him in a place the Role refuses.
 test('Away does not launder a real refusal hiding behind it', () => {
     const verdict = ask({
-        slot: femaleSlot,
+        roleDef: womenOnly,
         context: {
             people: EVERYONE, assigned: [], assignedElsewhere: [],
             awayPersonIds: ['carl'],
@@ -278,7 +280,7 @@ test('an Event your rank cannot see refuses you before eligibility is consulted'
 test('visibility outranks eligibility — an ineligible person is told the real cause', () => {
     const verdict = ask({
         occurrence: Object.assign({}, openEvent, { visibility: 'elder' }),
-        slot: femaleSlot,
+        roleDef: womenOnly,
     });
     assert.equal(verdict.reason, Cover.REASONS.NOT_VISIBLE,
         'not sexMismatch — they should not learn the Role wanted a woman');
@@ -369,9 +371,12 @@ const carlAndAlice = {
 };
 
 const marriedPairRule = {
-    kind: Roles.RESTRICTIONS.NOT_SAME_GROUP,
-    typeId: PAIR_MARRIAGE,
-    roleSlugs: ['kids_ministry', 'kids_helper'],
+    kind: Roles.RESTRICTIONS.ANY_OF,
+    options: [{ conditions: [{
+        kind: Roles.RESTRICTIONS.NOT_SAME_GROUP,
+        typeId: PAIR_MARRIAGE,
+        roleSlugs: ['kids_ministry', 'kids_helper'],
+    }] }],
 };
 
 const askAcross = (over) => ask(Object.assign({

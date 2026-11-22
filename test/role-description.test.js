@@ -20,7 +20,7 @@ const read = (...p) => fs.readFileSync(path.join(ROOT, ...p), 'utf8');
 
 const coffee = extra => Object.assign({
     name: 'Coffee', slug: 'coffee', family: Roles.FAMILIES.SERVANT,
-    slots: [{ id: 's1', requirement: Roles.REQUIREMENTS.EITHER }],
+    slots: [{ id: 's1' }],
     restrictions: [],
 }, extra || {});
 

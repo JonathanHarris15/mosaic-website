@@ -7,7 +7,7 @@ for (const n of [100, 200, 400, 800]) for (const [allow, slots] of [[3,4],[5,6]]
   const people = Array.from({length:n},(_,i)=>({id:'p'+i, name:'p'+i, sex:'male', tags:[], membership:{}}));
   const def = { slug:'communion', name:'Communion', family:'servant', intensity:1,
     restrictions:[{kind:'allowlist', personIds: people.slice(n-allow).map(p=>p.id)}],
-    slots: Array.from({length:slots},(_,i)=>({id:'s'+(i+1), requirement:'either'})) };
+    slots: Array.from({length:slots},(_,i)=>({id:'s'+(i+1)})) };
   let calls=0; const deadline=Date.now()+20000;
   /** @type {CandidatesFor} */
   const cf=(d,s,x)=>{ if(Date.now()>deadline) throw new Error('>20s'); calls++; return Roles.candidatesFor(d,s,x); };

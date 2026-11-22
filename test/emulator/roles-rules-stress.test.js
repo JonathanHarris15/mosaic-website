@@ -45,7 +45,7 @@ suite('Roles: what the rules actually let through', () => {
             await db.doc('people/p-bob').set({ name: 'Bob', tags: [] });
             await db.doc('people/p-ann/involvement/i1').set({ type: 'ushers', date: '2026-01-04' });
             await db.doc('roles/ushers').set({ slug: 'ushers', name: 'Ushers', family: 'servant',
-                slots: [{ id: 's1', requirement: 'either' }],
+                slots: [{ id: 's1' }],
                 restrictions: [{ kind: 'allowlist', personIds: ['p-ann', 'p-bob'] }] });
             await db.doc('event_occurrences/o1').set({ date: '2026-03-14', visibility: 'member', participantIds: ['p-ann', 'p-bob'], rosterShared: false });
             await db.doc('event_occurrences/o1/roster/ushers__s1__p-ann').set({ roleSlug: 'ushers', slotId: 's1', personId: 'p-ann', state: 'pending' });
@@ -104,7 +104,9 @@ suite('Roles: what the rules actually let through', () => {
         await RT.assertSucceeds(anon.doc('roles/ushers').get());
     });
 
-    test('a Role write is held to the model (servant family, a slot, the description cap)', async () => {
+    // Who a Role needs, its rules and its rest are each Event's (ADR 0085), so
+    // a Role write that carries any of them is refused like any unknown field.
+    test('a Role write is held to the model (servant family, its own fields, the description cap)', async () => {
         const db = ctx('uid-rolesmgr');
         const ok = RolesCore.newDefinition('Greeters');
         await RT.assertFails(db.doc('roles/preacher').set({
@@ -126,27 +128,22 @@ suite('Roles: what the rules actually let through', () => {
         const def = RolesCore.newDefinition('Greeters');
         // Create, as roles-manager.js does.
         await RT.assertSucceeds(db.doc('roles/g1').set(def));
-        // A live save of a few fields, with the slot counter beside the slots.
-        const grown = RolesCore.addSlot(def, RolesCore.REQUIREMENTS.EITHER);
-        await RT.assertSucceeds(db.doc('roles/g1').update({
-            description: 'x'.repeat(600), slots: grown.slots, nextSlotSeq: grown.nextSlotSeq,
-        }));
+        // A live save of one field.
+        await RT.assertSucceeds(db.doc('roles/g1').update({ description: 'x'.repeat(600) }));
         // A whole save from the editor.
-        await RT.assertSucceeds(db.doc('roles/g1').set({ ...grown, name: 'Front door greeters', intensity: 0.5 }));
+        await RT.assertSucceeds(db.doc('roles/g1').set({ ...def, name: 'Front door greeters' }));
         // An older Role with no slug, counter or description still saves.
         await RT.assertSucceeds(db.doc('roles/ushers').update({ name: 'Ushers team', slug: 'ushers' }));
         await RT.assertSucceeds(db.doc('roles/g1').delete());
     });
 
-    test('a new Role must carry its slug, and the slot counter never goes back', async () => {
+    test('a new Role must carry its slug', async () => {
         const db = ctx('uid-rolesmgr');
         const def = RolesCore.newDefinition('Car park');
         const noSlug = Object.assign({}, def);
         delete noSlug.slug;
         await RT.assertFails(db.doc('roles/cp').set(noSlug));
         await RT.assertSucceeds(db.doc('roles/cp').set(def));
-        await RT.assertFails(db.doc('roles/cp').update({ nextSlotSeq: 1 }));
-        await RT.assertSucceeds(db.doc('roles/cp').update({ nextSlotSeq: 5 }));
         await RT.assertSucceeds(db.doc('roles/cp').delete());
     });
 
@@ -156,7 +153,7 @@ suite('Roles: what the rules actually let through', () => {
         await RT.assertFails(db.doc('roles/ushers').update({ notes: 'anything' }));
         await env.withSecurityRulesDisabled(async (c) => {
             await c.firestore().doc('roles/old').set({ slug: 'old', name: 'Old', family: 'servant',
-                slots: [{ id: 's1', requirement: 'either' }], legacyField: 1 });
+                slots: [{ id: 's1' }], legacyField: 1 });
         });
         // A field an older Role already carries does not block its save.
         await RT.assertSucceeds(db.doc('roles/old').update({ name: 'Older' }));

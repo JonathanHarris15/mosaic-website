@@ -19,7 +19,7 @@
 // place properly needs that Event's whole roster — who else is seated, who is
 // serving elsewhere that morning — and reading every roster on the list is both
 // slow and something the rules would refuse. So the page checks what it can see
-// (the rung, your tags, the slot's requirement, the allowlist, your own Away)
+// (the rung, your tags, the Role's rules about each person, your own Away)
 // and `takeAssignment` re-checks everything with the full picture. A "Take it"
 // the server then refuses is not a bug: it is the one place that could know
 // telling you so.
@@ -41,8 +41,8 @@
     const REASONS = {
         notVisible: 'This one is not open to you.',
         inactive: 'Your record is not active.',
-        sexMismatch: 'This place is set aside for somebody else.',
-        sexUnknown: 'This place asks for a man or a woman, and your record does not say.',
+        sexMismatch: 'This Role is set aside for somebody else.',
+        sexUnknown: 'This Role asks for a man or a woman, and your record does not say.',
         missingRequiredTag: 'This Role asks for something your record does not carry yet.',
         excludedByTag: 'This Role is not one you are offered.',
         notOnAllowlist: 'Only people on this Role’s list may take it.',

@@ -116,10 +116,10 @@
     // checks or counts a Role takes a definition-shaped object; this is what
     // makes that object this Event's version of it.
     //
-    // A field the Event has not set falls back to the Role Definition's old
-    // value. That is the migration: on the day this ships every Event reads
-    // exactly what it read before, and an Event takes over a Role the first
-    // time an editor changes it there.
+    // Only the Event's own settings count. A Role Definition may still carry
+    // the old copies of these fields until they are stripped (ADR 0085), and
+    // they are dropped here so nothing can read them by accident: a Role this
+    // Event has not set up yet needs nobody and has no rules.
     const SETTING_FIELDS = ['slots', 'nextSlotSeq', 'restrictions', 'intensity', 'allowsAnotherRole'];
 
     /** @param {*} series */
@@ -137,10 +137,10 @@
     /** @param {*} series @param {*} definition */
     function effectiveRole(series, definition) {
         if (!definition) return definition;
-        const own = roleSettingsOf(series, definition.slug);
-        if (!own) return definition;
+        const own = roleSettingsOf(series, definition.slug) || {};
         const out = Object.assign({}, definition);
         SETTING_FIELDS.forEach((/** @type {*} */ field) => {
+            delete out[field];
             if (own[field] !== undefined) out[field] = own[field];
         });
         return out;
@@ -173,8 +173,8 @@
     // It lives on the Event that runs both — which is also the only place that
     // knows they run together at all — and RolesCore judges it.
     //
-    // Each is { kind, typeId, roleSlugs: [a, b] }; RolesCore.validateCrossRoleRule
-    // says whether one is well-formed, and this module only arranges them.
+    // Each is an OR rule whose conditions name the Roles they are about;
+    // RolesCore judges them, and this module only arranges them.
     /** @param {*} series */
     const crossRoleRulesOf = series => (
         series && Array.isArray(series.crossRoleRules) ? series.crossRoleRules : []
@@ -196,8 +196,8 @@
         ));
     }
 
-    // Every Role a rule across Roles names — a plain pair rule's two, or any
-    // Role named by a condition in any option of an OR rule.
+    // Every Role a rule across Roles names: any Role named by a condition in
+    // any of its options.
     /** @param {*} rule */
     function rolesNamedBy(rule) {
         const out = [];
@@ -211,7 +211,6 @@
             ((cond.roleSlugs) || []).forEach(add);
             add(cond.roleSlug);
         };
-        visit(rule);
         ((rule && rule.options) || []).forEach((/** @type {*} */ option) => ((option && option.conditions) || []).forEach(visit));
         return out;
     }
@@ -372,7 +371,9 @@
     //                       make a locked Role editable, which is the invariant
     //                       ADR-0016 exists to protect. `RolesCore.allRoles`
     //                       refuses such a document outright.
-    //   • Servant Role    — its own definition, supplied by the caller.
+    //   • Servant Role    — the Event's own settings for it (effectiveRole).
+    //                       The caller passes its definition only to say it
+    //                       IS one.
     //
     // Absent anywhere reads as 1. A stored value that is not a usable number also
     // reads as 1: one bad field must not poison every load in the church. That
@@ -389,25 +390,16 @@
         const opts = options || {};
 
         // A one-off Role IS the whole Role, so its own value is the only one
-        // there is. A Servant Role has a definition, and that definition is the
-        // Roles Manager's answer — it must win over the series map, or a stray
-        // `liturgicalIntensity: { setup: 3 }` would silently override a Setup
-        // definition saying 4, with the Manager showing one number and fairness
-        // using another. Only a Role with NO definition falls through to the
-        // map, which is exactly the liturgical case the map exists for.
-        //
-        // A Servant Role's rest now belongs to the Event that runs it, so the
-        // Event's own setting comes first and the definition only stands in
-        // until the Event has one (see effectiveRole).
-        const settings = roleSettingsOf(series, roleSlug);
-        const fromEvent = !opts.oneOff && opts.definition && settings
-            ? intensityValue(settings.intensity) : null;
-        if (fromEvent !== null) return fromEvent;
-        const own = opts.oneOff
-            ? intensityValue(opts.oneOff.intensity)
-            : intensityValue(opts.definition && opts.definition.intensity);
-        if (own !== null) return own;
-        if (opts.oneOff || opts.definition) return DEFAULT_INTENSITY;
+        // there is. A Servant Role's rest belongs to the Event that runs it
+        // (ADR 0085), and that answer must win over the series map, or a stray
+        // `liturgicalIntensity: { setup: 3 }` would silently override the
+        // Event's 4 for Setup. Only a Role with NO definition falls through to
+        // the map, which is exactly the liturgical case the map exists for.
+        if (opts.oneOff || opts.definition) {
+            const settings = opts.oneOff ? opts.oneOff : roleSettingsOf(series, roleSlug);
+            const own = settings ? intensityValue(settings.intensity) : null;
+            return own === null ? DEFAULT_INTENSITY : own;
+        }
 
         const liturgical = intensityValue(
             ((series && series.liturgicalIntensity) || {})[roleSlug]
@@ -458,8 +450,8 @@
             if (own.slots !== undefined) {
                 if (!Array.isArray(own.slots) || !own.slots.length) {
                     errors.push('"' + slug + '" needs at least one person.');
-                } else if (own.slots.some(slot => !slot || ['male', 'female', 'either'].indexOf(slot.requirement) === -1)) {
-                    errors.push('Each place on "' + slug + '" must ask for a man, a woman or either.');
+                } else if (own.slots.some(slot => !slot || !slot.id)) {
+                    errors.push('Each place on "' + slug + '" needs an id.');
                 }
             }
             if (own.intensity !== undefined && own.intensity !== null && !usableNumber(own.intensity, 0)) {

@@ -313,10 +313,8 @@
     // combination rules here would be the solver forming its own opinion about
     // eligibility, which it is not allowed to do (see the injection above).
     //
-    // A Role's slots can ask for different sexes, so the question is asked once
-    // per distinct requirement and the answers pooled — judging everyone against
-    // the first slot alone would keep men out of a Role whose second slot is
-    // open to either.
+    // Every seat on a Role asks the same of a person (a line-up is a rule about
+    // the team, which this leaves to the search), so the first seat answers.
     function reachFor(roles, ranked, byId, o, candidatesFor) {
         const people = ranked.map(c => byId[c.personId]).filter(Boolean);
 
@@ -325,25 +323,19 @@
             const seen = {};
             const reach = [];
 
-            const asked = {};
-            if (people.length) {
-                slots.forEach(slot => {
-                    if (asked[slot.requirement]) return;
-                    asked[slot.requirement] = true;
-
-                    candidatesFor(role, slot, {
-                        people: people,
-                        relationships: o.relationships,
-                        groups: o.groups,
-                        assigned: [],
-                        assignedElsewhere: [],
-                        crossRoleRules: o.crossRoleRules,
-                        awayPersonIds: o.awayPersonIds,
-                    }).forEach(verdict => {
-                        if (!verdict.eligible || seen[verdict.personId]) return;
-                        seen[verdict.personId] = true;
-                        reach.push(verdict.personId);
-                    });
+            if (people.length && slots.length) {
+                candidatesFor(role, slots[0], {
+                    people: people,
+                    relationships: o.relationships,
+                    groups: o.groups,
+                    assigned: [],
+                    assignedElsewhere: [],
+                    crossRoleRules: o.crossRoleRules,
+                    awayPersonIds: o.awayPersonIds,
+                }).forEach(verdict => {
+                    if (!verdict.eligible || seen[verdict.personId]) return;
+                    seen[verdict.personId] = true;
+                    reach.push(verdict.personId);
                 });
             }
 

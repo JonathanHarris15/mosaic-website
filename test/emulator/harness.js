@@ -20,6 +20,10 @@ const HOST = process.env.FIRESTORE_EMULATOR_HOST || '';
 // into the church's actual database.
 const PROJECT_ID = 'demo-mosaic-ms20';
 
+// The series every seeded Event belongs to unless it says otherwise.
+const HARNESS_SERIES = 'harness_series';
+const SETTING_FIELDS = ['slots', 'nextSlotSeq', 'restrictions', 'intensity', 'allowsAnotherRole'];
+
 // Why the suite is skipping, or false when it is not.
 //
 // ⚠ FALSE, NOT NULL. node:test skips on any `skip` value that is not
@@ -93,7 +97,9 @@ async function seedOccurrence(db, spec) {
         date: spec.date,
         visibility: spec.visibility || 'member',
         name: spec.name || 'Morning Service',
-        seriesId: null,
+        // Every Servant Role is run by a series (ADR 0085), so an Event with
+        // places on it belongs to one: the one seedRole sets its Roles up on.
+        seriesId: spec.seriesId === undefined ? HARNESS_SERIES : spec.seriesId,
         participantIds: roster.map(a => a.personId),
         needsAttention: roster.some(a => a.state === 'declined'),
         outForCover: false,
@@ -158,16 +164,29 @@ async function assertUnlinked(db, personId) {
 }
 
 /**
- * One Role definition. The collection is `roles` — named wrongly, every Role
- * rule silently stops being checked, which is a bug this project has already
- * shipped once.
+ * One Role, as an Event runs it. The definition (its name) goes in `roles` —
+ * named wrongly, every Role rule silently stops being checked, which is a bug
+ * this project has already shipped once — and who it needs, its rules and its
+ * rest go on the series that runs it (ADR 0085), because that is the only
+ * place anything reads them now.
  * @param {object} db the Firestore handle
- * @param {object} def the Role
+ * @param {object} def the Role, with its settings for the series
+ * @param {string} [seriesId] the series running it
  * @return {Promise<void>}
  */
-function seedRole(db, def) {
-    return db.collection('roles').doc(def.slug).set(Object.assign(
-        { name: def.slug, slots: [], restrictions: [] }, def));
+async function seedRole(db, def, seriesId) {
+    const definition = { name: def.slug, family: 'servant' };
+    const settings = { slots: [], restrictions: [] };
+    Object.keys(def).forEach(key => {
+        if (SETTING_FIELDS.indexOf(key) !== -1) settings[key] = def[key];
+        else definition[key] = def[key];
+    });
+    const FieldValue = require('firebase-admin').firestore.FieldValue;
+    await db.collection('roles').doc(def.slug).set(definition);
+    const series = db.collection('events').doc(seriesId || HARNESS_SERIES);
+    await series.set({ roleSlugs: FieldValue.arrayUnion(def.slug) }, { merge: true });
+    // A field path, so seeding a Role again replaces its settings whole.
+    await series.update({ ['roleSettings.' + def.slug]: settings });
 }
 
 // ── Reading back ────────────────────────────────────────────────────────────
@@ -303,6 +322,7 @@ module.exports = {
     seedPerson,
     assertUnlinked,
     seedRole,
+    HARNESS_SERIES,
     rosterIdFor,
     rosterOf,
     occurrenceOf,

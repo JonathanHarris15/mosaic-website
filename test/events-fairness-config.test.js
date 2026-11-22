@@ -52,9 +52,17 @@ test('the window is measured in occurrences, so it is the same number for any ca
 
 // ── Resolving intensity across its three homes ───────────────────────────────
 
-test('a Servant Role takes its intensity from its own definition', () => {
+// A Servant Role's rest is the Event's (ADR 0085): its settings for the Role.
+const restOf = (slug, intensity, extra) => series(Object.assign({ roleSettings: { [slug]: { intensity: intensity } } }, extra));
+
+test('a Servant Role takes its intensity from the Event that runs it', () => {
+    const definition = { slug: 'setup', name: 'Setup' };
+    assert.equal(EventsCore.roleIntensity(restOf('setup', 4), 'setup', { definition: definition }), 4);
+});
+
+test('a value left on the Role Definition itself is never read', () => {
     const definition = { slug: 'setup', name: 'Setup', intensity: 4 };
-    assert.equal(EventsCore.roleIntensity(series(), 'setup', { definition: definition }), 4);
+    assert.equal(EventsCore.roleIntensity(series(), 'setup', { definition: definition }), 1);
 });
 
 test('a liturgical Role takes its intensity from the series map', () => {
@@ -84,16 +92,16 @@ test('a slug absent from the liturgical map reads as 1, not as missing', () => {
 test('intensity 0 survives resolution — it is a real value, not an absent one', () => {
     const s = series({ liturgicalIntensity: { prayer: 0 } });
     assert.equal(EventsCore.roleIntensity(s, 'prayer'), 0);
-    assert.equal(EventsCore.roleIntensity(series(), 'greet', { definition: { intensity: 0 } }), 0);
+    assert.equal(EventsCore.roleIntensity(restOf('greet', 0), 'greet', { definition: { slug: 'greet' } }), 0);
     assert.equal(EventsCore.roleIntensity(series(), 'one_off', { oneOff: { intensity: 0 } }), 0);
 });
 
-test('a Role Definition wins over a stray entry in the liturgical map', () => {
+test("the Event's setting wins over a stray entry in the liturgical map", () => {
     // The map is for Roles that have NO definition. A stray `setup` key in it
-    // must not quietly override the Roles Manager, or the Manager would show 4
-    // while fairness used 3 and nothing would say which was real.
-    const s = series({ liturgicalIntensity: { setup: 3 } });
-    const definition = { slug: 'setup', name: 'Setup', intensity: 4 };
+    // must not quietly override the Event's own rest for Setup, or the Roles &
+    // rules tab would show 4 while fairness used 3.
+    const s = restOf('setup', 4, { liturgicalIntensity: { setup: 3 } });
+    const definition = { slug: 'setup', name: 'Setup' };
     assert.equal(EventsCore.roleIntensity(s, 'setup', { definition: definition }), 4);
 });
 
@@ -111,7 +119,7 @@ test('a one-off Role wins over anything else, because it is the whole Role', () 
 test('a bad stored value resolves to the default rather than poisoning every load', () => {
     const s = series({ liturgicalIntensity: { preacher: 'heavy' } });
     assert.equal(EventsCore.roleIntensity(s, 'preacher'), 1);
-    assert.equal(EventsCore.roleIntensity(series(), 'x', { definition: { intensity: -2 } }), 1);
+    assert.equal(EventsCore.roleIntensity(restOf('x', -2), 'x', { definition: { slug: 'x' } }), 1);
 });
 
 // ── The two modules must agree about what a valid intensity is ───────────────
@@ -124,10 +132,9 @@ test('a bad stored value resolves to the default rather than poisoning every loa
 test('the servant path agrees with RolesCore.intensityOf for every case', () => {
     const cases = [undefined, null, 0, 1, 4, 1.25, -1, 'heavy', NaN];
     cases.forEach(value => {
-        const definition = { slug: 'setup', intensity: value };
         assert.equal(
-            EventsCore.roleIntensity(series(), 'setup', { definition: definition }),
-            RolesCore.intensityOf(definition),
+            EventsCore.roleIntensity(restOf('setup', value), 'setup', { definition: { slug: 'setup' } }),
+            RolesCore.intensityOf({ slug: 'setup', intensity: value }),
             'disagreed about intensity ' + String(value)
         );
     });

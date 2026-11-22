@@ -25,6 +25,25 @@ const PUBLIC = path.join(__dirname, '..', 'public');
 // about a slot row would quietly pass by finding nothing at all.
 const RolesPanel = require('../public/roles-panel.js');
 
+// What a Role needs on an Event is the Event's own (ADR 0085): its seats,
+// rules and rest live on the series under `roleSettings`, and nothing reads
+// them off the Role. The fixtures here describe each Role as the Event runs
+// it, so this files those parts under the series they are run by — leaving
+// alone any setting the series already gives itself.
+const SETTING_FIELDS = ['slots', 'nextSlotSeq', 'restrictions', 'intensity', 'allowsAnotherRole'];
+function settingsOf(defs, existing) {
+    const out = Object.assign({}, existing || {});
+    (defs || []).forEach(d => {
+        const own = {};
+        SETTING_FIELDS.forEach(f => { if (d && d[f] !== undefined) own[f] = d[f]; });
+        if (d && d.slug && !out[d.slug] && Object.keys(own).length) out[d.slug] = own;
+    });
+    return out;
+}
+function runBy(series, defs) {
+    return series && Object.assign({}, series, { roleSettings: settingsOf(defs, series.roleSettings) });
+}
+
 function readPage(htmlFile) {
     const html = fs.readFileSync(path.join(PUBLIC, htmlFile), 'utf8');
     return html.replace(
@@ -786,7 +805,7 @@ test('liturgical Roles are never offered on an Event', () => {
     const Roles = require('../public/roles-core.js');
     const page = seriesPage({ id: 'x', roleSlugs: [] });
     page.roleDefinitions = [
-        { slug: 'kids', name: 'Kids Ministry', slots: [{ id: 's1', requirement: 'either' }] },
+        { slug: 'kids', name: 'Kids Ministry', slots: [{ id: 's1' }] },
         { slug: 'preacher', name: 'Preacher', slots: [] },
     ];
 
@@ -920,7 +939,7 @@ function eventPageWithRole() {
     page.rank = 'editor';
     page.occurrence = { id: 'x', date: '2026-07-15', seriesRoleSlugs: ['kids'], oneOffRoles: [{ id: 'o1', label: 'Unlock the hall' }] };
     page.people = [{ id: 'p1', name: 'Dave Rowe' }, { id: 'p2', name: 'Sarah Kent' }];
-    page.roleDefinitions = [{ slug: 'kids', name: 'Kids Ministry', slots: [{ id: 's1', requirement: 'either' }] }];
+    page.roleDefinitions = [{ slug: 'kids', name: 'Kids Ministry', slots: [{ id: 's1' }] }];
     page.saved = 0;
     page.persist = async () => { page.saved++; };
     return page;
@@ -1634,13 +1653,13 @@ function eventPageOn(occurrence, series, defs) {
     const page = loadComponent('calendar-event.js', 'eventDetailPage');
     page.rank = 'editor';
     page.occurrence = occurrence;
-    page.series = series;
+    page.series = runBy(series, defs);
     page.roleDefinitions = defs;
     return page;
 }
 
-const SOUND = { slug: 'sound_desk', name: 'Sound desk', slots: [{ id: 's1', requirement: 'either' }] };
-const COFFEE = { slug: 'coffee', name: 'Coffee', slots: [{ id: 'c1', requirement: 'either' }] };
+const SOUND = { slug: 'sound_desk', name: 'Sound desk', slots: [{ id: 's1' }] };
+const COFFEE = { slug: 'coffee', name: 'Coffee', slots: [{ id: 'c1' }] };
 
 test('a Role added to the Event shows on every date of it, ready to fill', () => {
     const page = eventPageOn(
@@ -1832,7 +1851,7 @@ function sundayPicker(holders) {
     const page = loadComponent('calendar-event.js', 'eventDetailPage');
     page.rank = 'editor';
     page.occurrence = { id: 'sunday_service_2026-08-02', seriesId: 'sunday_service', date: '2026-08-02' };
-    page.series = { id: 'sunday_service', roleSlugs: ['sound_desk'], lockedRoleSlugs: [] };
+    page.series = runBy({ id: 'sunday_service', roleSlugs: ['sound_desk'], lockedRoleSlugs: [] }, [SOUND]);
     page.roleDefinitions = [SOUND];
     page.people = [
         { id: 'p1', name: 'Dave Rowe', status: 'active' },
@@ -1882,7 +1901,7 @@ test('a midweek event never consults the liturgy', () => {
     const page = loadComponent('calendar-event.js', 'eventDetailPage');
     page.rank = 'editor';
     page.occurrence = { id: 'midweek_2026-08-05', seriesId: 'midweek', date: '2026-08-05' };
-    page.series = { id: 'midweek', roleSlugs: ['sound_desk'] };
+    page.series = runBy({ id: 'midweek', roleSlugs: ['sound_desk'] }, [SOUND]);
     page.roleDefinitions = [SOUND];
     page.people = [{ id: 'p2', name: 'Sam Hale', status: 'active' }];
     // Even if something put holders here, a non-Sunday must not act on them.
@@ -1898,7 +1917,7 @@ function pickerWith(people, extra) {
     const page = loadComponent('calendar-event.js', 'eventDetailPage');
     page.rank = (extra && extra.rank) || 'editor';
     page.occurrence = { id: 'midweek_2026-08-05', seriesId: 'midweek', date: '2026-08-05' };
-    page.series = { id: 'midweek', roleSlugs: ['sound_desk'] };
+    page.series = runBy({ id: 'midweek', roleSlugs: ['sound_desk'] }, [SOUND]);
     page.roleDefinitions = [SOUND];
     page.people = people;
     page.hidingTags = (extra && extra.hidingTags) || [];
@@ -2644,22 +2663,22 @@ test('a liturgical Role on the Event screen is named, not slugged', () => {
 });
 
 test('a Role row starts from how many people the Event needs on it', () => {
-    // How many people is the Event's to say (EventsCore.effectiveRole); until
-    // it has said, the Role's own old answer stands in.
+    // How many people is the Event's to say (EventsCore.effectiveRole). A Role
+    // it has not set up starts at one person and no rules: the Role's own old
+    // seats are never read.
     const page = seriesPage({
         id: 'x', roleSlugs: ['coffee', 'kids'], lockedRoleSlugs: [],
-        roleSettings: { coffee: { slots: [{ id: 's1', requirement: 'either' }, { id: 's2', requirement: 'either' }, { id: 's3', requirement: 'either' }] } },
+        roleSettings: { coffee: { slots: [{ id: 's1' }, { id: 's2' }, { id: 's3' }] } },
     });
     page.roleDefinitions = [
-        { slug: 'coffee', name: 'Coffee', slots: [{ id: 's1', requirement: 'either' }] },
+        { slug: 'coffee', name: 'Coffee', slots: [{ id: 's1' }] },
         { slug: 'kids', name: "Children's Ministry", slots: [{ id: 's1', requirement: 'male' }, { id: 's2', requirement: 'female' }] },
     ];
     page.buildRoleForms();
 
     assert.strictEqual(page.countOf('coffee'), 3);
-    assert.strictEqual(page.countOf('kids'), 2);
-    // The old "Person 1: a man, Person 2: a woman" reads as one line-up rule.
-    assert.deepStrictEqual(Array.from(page.formFor('kids').team[0].options[0].conditions[0].sexes), ['male', 'female']);
+    assert.strictEqual(page.countOf('kids'), 1);
+    assert.deepStrictEqual(Array.from(page.formFor('kids').team), []);
 });
 
 // ── The Calendar on a phone ───────────────────────────────────────────────────
@@ -2952,8 +2971,8 @@ test('a signed-out page has no "you" to answer about', () => {
 
 test('only an editor is shown the places still to fill', () => {
     // A member cannot fill one. A count they can do nothing about is weather.
-    const date = { id: 'x', date: '2026-08-09', seriesRoleSlugs: ['sound_desk'] };
     const defs = [{ slug: 'sound_desk', name: 'Sound desk', slots: [{ id: 's1' }] }];
+    const date = { id: 'x', date: '2026-08-09', seriesRoleSlugs: ['sound_desk'], seriesRoleSettings: settingsOf(defs) };
 
     const member = loadComponent('calendar.js', 'calendarPage');
     member.rank = 'member';
@@ -2993,7 +3012,7 @@ test('an unfilled chip goes amber, and a decline still outranks it', () => {
     page.rank = 'editor';
     page.roleDefinitions = [{ slug: 'sound_desk', name: 'Sound desk', slots: [{ id: 's1' }] }];
 
-    const open = { id: 'x', date: '2026-08-09', seriesRoleSlugs: ['sound_desk'] };
+    const open = { id: 'x', date: '2026-08-09', seriesRoleSlugs: ['sound_desk'], seriesRoleSettings: settingsOf(page.roleDefinitions) };
     assert.strictEqual(page.chipKind(open), 'unfilled');
     assert.strictEqual(
         page.stripDots({ events: [open] })[0],
@@ -3012,7 +3031,7 @@ test('an amber chip still says you are on it', () => {
     page.rank = 'editor';
     page.roleDefinitions = [{ slug: 'sound_desk', name: 'Sound desk', slots: [{ id: 's1' }] }];
 
-    const open = { id: 'x', date: '2026-08-09', seriesRoleSlugs: ['sound_desk'], mine: { label: 'Setup' } };
+    const open = { id: 'x', date: '2026-08-09', seriesRoleSlugs: ['sound_desk'], seriesRoleSettings: settingsOf(page.roleDefinitions), mine: { label: 'Setup' } };
     assert.strictEqual(page.chipKind(open), 'unfilled');
     assert.strictEqual(page.showsYou(open), true);
 
@@ -3318,7 +3337,7 @@ test('a phone card carries one notice about the event, not five', () => {
     page.rank = 'editor';
     page.roleDefinitions = [{ slug: 'sound', slots: [{ id: 's1' }] }];
 
-    const short = { seriesRoleSlugs: ['sound'], assignments: [], date: '2026-08-23' };
+    const short = { seriesRoleSlugs: ['sound'], seriesRoleSettings: settingsOf(page.roleDefinitions), assignments: [], date: '2026-08-23' };
     assert.strictEqual(page.phoneNotice({ needsAttention: true, outForCover: true }), 'sorting',
         'out for cover shouted over somebody actually saying no');
     assert.strictEqual(page.phoneNotice(Object.assign({ outForCover: true }, short)), 'places',
@@ -3334,7 +3353,7 @@ test('a member is never shown a count of places they cannot fill', () => {
     page.rank = 'member';
     page.roleDefinitions = [{ slug: 'sound', slots: [{ id: 's1' }] }];
 
-    const short = { seriesRoleSlugs: ['sound'], assignments: [], date: '2026-08-23' };
+    const short = { seriesRoleSlugs: ['sound'], seriesRoleSettings: settingsOf(page.roleDefinitions), assignments: [], date: '2026-08-23' };
     assert.strictEqual(page.placesToFill(short), 0, 'a member was told how many places are open');
     assert.strictEqual(page.chipKind(short), 'other', 'a member got an amber chip');
     assert.strictEqual(page.phoneNotice(short), '', 'a member got the amber line on a phone card');
@@ -4396,13 +4415,14 @@ function draftedPage(overrides, sandbox) {
     page.toDate = '2026-10-25';
     page.roleDefinitions = [{
         slug: 'coffee', name: 'Coffee', intensity: 1,
-        slots: [{ id: 's1', requirement: 'either' }, { id: 's2', requirement: 'female' }],
+        slots: [{ id: 's1' }, { id: 's2' }],
     }];
     page.people = [
         { id: 'p1', name: 'Alice Brown', sex: 'female' },
         { id: 'p2', name: 'Bob Carter', sex: 'male' },
     ];
     Object.assign(page, overrides || {});
+    page.series = page.series.map(s => runBy(s, page.storedRoleDefinitions));
     return page;
 }
 
@@ -4430,7 +4450,6 @@ test('the grid turns the draft inside out — Roles down, dates across', () => {
     assert.equal(row.cells.length, 4);
     assert.deepEqual(row.cells[0].places.map(p => p.filled), [true, false]);
     assert.equal(row.cells[0].places[0].card.name, 'Alice Brown');
-    assert.equal(row.cells[0].places[1].wants, 'A woman');
     // The words come from the same place the Roles tab gets them.
     assert.match(row.cells[0].places[1].reason, /sex on file/);
 });
@@ -4478,9 +4497,16 @@ test('a held place still gets its history, though the solve never scored it', ()
     assert.equal(card.load, 1);
 });
 
+// On this Event, Coffee is done by women; Bob is a man, so anywhere he sits
+// in it breaks a rule.
+const coffeeForWomen = () => ({ roleDefinitions: [{
+    slug: 'coffee', name: 'Coffee', intensity: 1,
+    slots: [{ id: 's1' }, { id: 's2' }],
+    restrictions: [{ kind: 'anyOf', scope: 'person', options: [{ conditions: [{ kind: 'sex', sex: 'female' }] }] }],
+}] });
+
 test('a drafted roster that breaks a rule says so, same as a hand-made one', () => {
-    const page = draftedPage();
-    // Both places need a woman by way of a second slot; Bob is a man.
+    const page = draftedPage(coffeeForWomen());
     page.draft = {
         dates: [drafted('2026-10-04', [
             { roleSlug: 'coffee', slotId: 's2', personId: 'p2', recency: 4 },
@@ -4495,12 +4521,12 @@ test('a drafted roster that breaks a rule says so, same as a hand-made one', () 
 });
 
 // Same class of bug as the card above, on the other path: an unfillable place
-// is phrased from the slot's requirement, which is not on the reason either.
+// names the sex its rule asked for, which RolesCore puts on the reason.
 test('an unfillable place names the sex it actually asked for', () => {
     const page = draftedPage();
     page.draft = {
         dates: [drafted('2026-10-04', [], [
-            { roleSlug: 'coffee', slotId: 's2', detail: { reason: 'sexMismatch' } },
+            { roleSlug: 'coffee', slotId: 's2', detail: { reason: 'sexMismatch', wantsSex: 'female' } },
         ])],
     };
     page.buildGrid();
@@ -4711,14 +4737,14 @@ test('the panel lists the serves the load is made of, not an invented split', ()
 });
 
 test('the panel offers who could take the place instead, and what is wrong with each', () => {
-    const page = draftedPage();
+    const page = draftedPage(coffeeForWomen());
     page.draft = {
         dates: [drafted('2026-10-04', [
             { roleSlug: 'coffee', slotId: 's2', personId: 'p1' },
         ])],
     };
     page.buildGrid();
-    // Slot s2 wants a woman; Bob is a man.
+    // Coffee wants women here; Bob is a man.
     page.selectPlace('2026-10-04', page.grid.roleRows[0].cells[0].places[1]);
 
     const others = page.placement.replacements;
@@ -5012,11 +5038,11 @@ test('seeding a serve drifts the whole range, not just what comes after a date',
 // ── The bottom bar and accepting (MS-183) ───────────────────────────────────
 
 test('the bar counts problems and can take you to the first one', () => {
-    const page = draftedPage();
+    const page = draftedPage(coffeeForWomen());
     page.draft = {
         dates: [
             drafted('2026-10-04'),
-            // Bob is a man; s2 wants a woman.
+            // Bob is a man; Coffee wants women here.
             drafted('2026-10-11', [{ roleSlug: 'coffee', slotId: 's2', personId: 'p2' }]),
         ],
     };
@@ -5072,7 +5098,7 @@ test('accepting is allowed with empty places, and writes what it drew', async ()
 
 test('accepting blind is refused; accepting after looking is not', async () => {
     let calls = 0;
-    const page = draftedPage(null, {
+    const page = draftedPage(coffeeForWomen(), {
         EventsStore: Object.assign({}, require('../public/events-store.js'), {
             acceptDraft: async () => { calls++; return { dates: [], occurrences: 0, assignments: 0 }; },
         }),
@@ -5655,8 +5681,8 @@ function tradeablePage() {
     const page = draftedPage({
         series: [{ id: 'sunday_service', name: 'Sunday Service', roleSlugs: ['coffee', 'setup'] }],
         roleDefinitions: [
-            { slug: 'coffee', name: 'Coffee', intensity: 1, slots: [{ id: 's1', requirement: 'either' }] },
-            { slug: 'setup', name: 'Setup', intensity: 1, slots: [{ id: 's1', requirement: 'either' }] },
+            { slug: 'coffee', name: 'Coffee', intensity: 1, slots: [{ id: 's1' }] },
+            { slug: 'setup', name: 'Setup', intensity: 1, slots: [{ id: 's1' }] },
         ],
     });
     page.draft = {

@@ -35,47 +35,49 @@ const roleWith = (slots, restrictions) => ({
     restrictions: restrictions || [],
 });
 
-const eitherSlot = { id: 's1', requirement: Roles.REQUIREMENTS.EITHER };
-const femaleSlot = { id: 's2', requirement: Roles.REQUIREMENTS.FEMALE };
-const maleSlot = { id: 's3', requirement: Roles.REQUIREMENTS.MALE };
+const eitherSlot = { id: 's1' };
+const femaleSlot = { id: 's2' };
+const maleSlot = { id: 's3' };
+// Who may do a Role is a rule about each person (ADR 0085), never a sex on a seat.
+const onlyA = sex => [{ kind: Roles.RESTRICTIONS.ANY_OF, scope: 'person', options: [{ conditions: [{ kind: Roles.RESTRICTIONS.SEX, sex: sex }] }] }];
 
 // Convenience: the ids judged eligible, in candidate order.
 const eligibleIds = results => results.filter(r => r.eligible).map(r => r.personId);
 const resultFor = (results, id) => results.find(r => r.personId === id);
 
-// ── A slot's sex requirement ──────────────────────────────────────────────────
+// ── A rule about sex ─────────────────────────────────────────────────────────
 
-test('an either-slot admits people of either recorded sex', () => {
+test('a Role with no sex rule admits people of either recorded sex', () => {
     const results = Roles.candidatesFor(roleWith([eitherSlot]), eitherSlot, {
         people: [alice, carl],
     });
     assert.deepEqual(eligibleIds(results), ['alice', 'carl']);
 });
 
-test('a female slot admits only women', () => {
-    const results = Roles.candidatesFor(roleWith([femaleSlot]), femaleSlot, {
+test('a Role for women admits only women', () => {
+    const results = Roles.candidatesFor(roleWith([femaleSlot], onlyA('female')), femaleSlot, {
         people: [alice, carl],
     });
     assert.deepEqual(eligibleIds(results), ['alice']);
     assert.equal(resultFor(results, 'carl').reason, Roles.REASONS.SEX_MISMATCH);
 });
 
-test('a male slot admits only men', () => {
-    const results = Roles.candidatesFor(roleWith([maleSlot]), maleSlot, {
+test('a Role for men admits only men', () => {
+    const results = Roles.candidatesFor(roleWith([maleSlot], onlyA('male')), maleSlot, {
         people: [alice, carl],
     });
     assert.deepEqual(eligibleIds(results), ['carl']);
 });
 
-test('a Person with no recorded sex is ineligible for a sexed slot', () => {
-    const results = Roles.candidatesFor(roleWith([femaleSlot]), femaleSlot, {
+test('a Person with no recorded sex is ineligible where a rule asks for one', () => {
+    const results = Roles.candidatesFor(roleWith([femaleSlot], onlyA('female')), femaleSlot, {
         people: [erin],
     });
     assert.equal(resultFor(results, 'erin').eligible, false);
     assert.equal(resultFor(results, 'erin').reason, Roles.REASONS.SEX_UNKNOWN);
 });
 
-test('a Person with no recorded sex is still eligible for an either-slot', () => {
+test('a Person with no recorded sex is still eligible where no rule asks', () => {
     const results = Roles.candidatesFor(roleWith([eitherSlot]), eitherSlot, {
         people: [erin],
     });

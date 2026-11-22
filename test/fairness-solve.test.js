@@ -27,7 +27,7 @@ const serve = (personId, type, serviceDate) => ({
     personId: personId, type: type, serviceDate: serviceDate, seriesId: 'sunday_service',
 });
 
-const either = n => ({ id: 's' + n, requirement: Roles.REQUIREMENTS.EITHER });
+const either = n => ({ id: 's' + n });
 
 const role = (slug, slots, extra) => Object.assign({
     slug: slug,
@@ -408,9 +408,12 @@ const COUPLES = [
 ];
 
 const noMarriedPair = {
-    kind: Roles.RESTRICTIONS.NOT_SAME_GROUP,
-    typeId: CROSS_MARRIAGE,
-    roleSlugs: ['kids_leader', 'kids_helper'],
+    kind: Roles.RESTRICTIONS.ANY_OF,
+    options: [{ conditions: [{
+        kind: Roles.RESTRICTIONS.NOT_SAME_GROUP,
+        typeId: CROSS_MARRIAGE,
+        roleSlugs: ['kids_leader', 'kids_helper'],
+    }] }],
 };
 
 test('the solve never drafts a married couple into a paired Role', () => {

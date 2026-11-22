@@ -25,7 +25,7 @@ const pick = a => a[Math.floor(rnd() * a.length)];
   await Promise.all(people.map(id => Promise.all([H.seedPerson(db, id),
     db.collection('users').doc('uid-' + id).set({ personId: id, accountLevelId: 'level_member' })])));
   await Promise.all(ROLES.map(slug => H.seedRole(db, { slug, name: slug,
-    slots: SLOTS.map(id => ({ id, requirement: 'either' })), restrictions: [] })));
+    slots: SLOTS.map(id => ({ id })), restrictions: [] })));
   const roster = [];
   let k = 0;
   for (const r of ROLES) for (const s of SLOTS) roster.push({ roleSlug: r, slotId: s, personId: people[k++], state: 'pending', stateSetBy: null, stateSetAt: null });

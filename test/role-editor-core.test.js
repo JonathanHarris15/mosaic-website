@@ -17,7 +17,7 @@ const RoleEditor = require('../public/role-editor-core.js');
 
 const def = (id, name, extra) => Object.assign({
     id, name, slug: Roles.slugify(name), family: 'servant',
-    slots: [{ id: 's1', requirement: 'either' }], nextSlotSeq: 2,
+    slots: [{ id: 's1' }], nextSlotSeq: 2,
     restrictions: [], intensity: 1, allowsAnotherRole: false, description: name + ' notes',
 }, extra || {});
 

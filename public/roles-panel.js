@@ -192,8 +192,6 @@
                                                 ? 'bg-error-container border-l-[3px] border-l-error'
                                                 : 'bg-surface'">
                                             <span class="cal-slot-index font-display text-[15px] text-outline w-[18px] shrink-0" x-text="row.index"></span>
-                                            <span class="cal-slot-req w-[74px] shrink-0 text-[10px] font-label-md tracking-[.12em] uppercase text-on-surface-variant"
-                                                  x-text="row.requirementLabel"></span>
 
                                             <template x-if="row.assignment">
                                                 <div class="flex items-center gap-2 flex-grow min-w-0">
@@ -469,18 +467,10 @@
                      x-text="pickerTitle"></div>
                 <h3 class="font-display text-[21px] text-primary mt-1">Who's taking this place?</h3>
                 <div class="mt-2 flex items-center gap-2 flex-wrap">
-                    <span x-show="pickerSlot && pickerSlot.requirement === 'female'"
-                          class="inline-flex items-center gap-1 rounded-md bg-tertiary-container text-on-tertiary-container px-2 py-1 text-[11px] font-label-md">
-                        <span class="material-symbols-outlined text-[13px]">woman</span> Needs a woman
-                    </span>
-                    <span x-show="pickerSlot && pickerSlot.requirement === 'male'"
-                          class="inline-flex items-center gap-1 rounded-md bg-tertiary-container text-on-tertiary-container px-2 py-1 text-[11px] font-label-md">
-                        <span class="material-symbols-outlined text-[13px]">person</span> Needs a man
-                    </span>
-                    <template x-for="rule in (pickerRole && pickerRole.restrictions) || []" :key="rule.kind + (rule.typeId||rule.tagId||'')">
+                    <template x-for="(rule, i) in (pickerRole && pickerRole.restrictions) || []" :key="i">
                         <span class="inline-flex items-center gap-1 rounded-md bg-surface-container text-on-surface-variant px-2 py-1 text-[11px] font-label-md">
                             <span class="material-symbols-outlined text-[13px]">rule</span>
-                            <span x-text="rule.kind"></span>
+                            <span x-text="ruleSentence(rule)"></span>
                         </span>
                     </template>
                 </div>

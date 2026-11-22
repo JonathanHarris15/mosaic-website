@@ -37,7 +37,6 @@ const Family = require(REPO + 'family-core.js');
 /**
  * @typedef {object} Slot
  * @property {string} id
- * @property {string} requirement
  */
 /**
  * @typedef {object} Restriction
@@ -150,7 +149,6 @@ function sundays(startIso, count, step) {
 
 const TAGS = Array.from({ length: 20 }, (_, i) => 'tag' + i);
 const R = Roles.RESTRICTIONS;
-const Q = Roles.REQUIREMENTS;
 
 // opts: { n, seed, unfillable }
 /** @param {ChurchOptions} opts */
@@ -244,13 +242,20 @@ function church(opts) {
         const count = 1 + Math.floor(rand() * 4);
         /** @type {Slot[]} */
         const slots = [];
+        /** @type {string[]} */
+        const sexes = [];
         for (let s = 0; s < count; s++) {
             const x = rand();
-            slots.push({ id: 's' + (s + 1), requirement: x < 0.7 ? Q.EITHER : (x < 0.85 ? Q.MALE : Q.FEMALE) });
+            slots.push({ id: 's' + (s + 1) });
+            sexes.push(x < 0.7 ? 'either' : (x < 0.85 ? 'male' : 'female'));
         }
+        // Who a team needs is a line-up rule now, not a sex on each seat.
+        const lineup = sexes.some(sex => sex !== 'either')
+            ? [{ kind: R.ANY_OF, scope: 'team', options: [{ conditions: [{ kind: R.LINEUP, sexes: sexes }] }] }]
+            : [];
         roles.push({
             slug: 'role' + r, name: 'Role ' + r, family: Roles.FAMILIES.SERVANT,
-            slots: slots, restrictions: roleKinds[r % roleKinds.length](),
+            slots: slots, restrictions: roleKinds[r % roleKinds.length]().concat(lineup),
             intensity: [1, 1, 1.25, 2, 4][r % 5],
             allowsAnotherRole: r % 7 === 0,
         });
@@ -259,7 +264,7 @@ function church(opts) {
         // A realistic misconfiguration: a Role wanting a tag nobody carries.
         roles.push({
             slug: 'roleX', name: 'Unfillable', family: Roles.FAMILIES.SERVANT,
-            slots: [{ id: 's1', requirement: Q.EITHER }],
+            slots: [{ id: 's1' }],
             restrictions: [{ kind: R.REQUIRE_TAG, tagId: 'nobody-has-this' }],
             intensity: 1,
         });

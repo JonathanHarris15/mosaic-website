@@ -36,7 +36,7 @@ const PAST = [
 ];
 
 const person = (id, extra) => Object.assign({ id: id, name: id, tags: [] }, extra);
-const either = n => ({ id: 's' + n, requirement: Roles.REQUIREMENTS.EITHER });
+const either = n => ({ id: 's' + n });
 
 const role = (slug, slotCount, extra) => Object.assign({
     slug: slug,

@@ -15,4 +15,4 @@ const t=Date.now();
 try { G.AutoAssign.draft(G.draftOptions(c, { solve, candidatesFor: cf })); console.log('done', Date.now()-t); }
 catch(e){ console.log('aborted on', cur, /** @type {Error} */ (e).message, Date.now()-t); }
 console.log(JSON.stringify(perDate));
-console.log('calls', calls, Object.entries(perRole).sort((a,b)=>b[1]-a[1]).slice(0,4).map(([s,k])=>{const d=/** @type {Role} */ (c.roles.find(r=>r.slug===s));return s+' calls='+k+' slots='+JSON.stringify(d.slots.map(x=>x.requirement))+' '+JSON.stringify(d.restrictions).slice(0,90);}).join('\n'));
+console.log('calls', calls, Object.entries(perRole).sort((a,b)=>b[1]-a[1]).slice(0,4).map(([s,k])=>{const d=/** @type {Role} */ (c.roles.find(r=>r.slug===s));return s+' calls='+k+' slots='+d.slots.length+' '+JSON.stringify(d.restrictions).slice(0,90);}).join('\n'));

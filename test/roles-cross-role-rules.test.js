@@ -36,7 +36,7 @@ const GROUPS = [adamAndEve, noahAndRuth, north];
 const LEADER = 'kids_leader';
 const HELPER = 'kids_helper';
 
-const slot = { id: 's1', requirement: Roles.REQUIREMENTS.EITHER };
+const slot = { id: 's1' };
 
 // ⚠ `allowsAnotherRole` on purpose. Exclusivity (ADR-0020) would otherwise
 // refuse anybody already holding the paired Role, and every test below would
@@ -49,17 +49,21 @@ const role = (slug, name) => ({
 const leader = role(LEADER, 'Kids Leader');
 const helper = role(HELPER, 'Kids Helper');
 
-const notSameMarriage = {
+// A rule across Roles is an OR rule (ADR 0085); these each have one option
+// holding one condition about the pair.
+const pair = cond => ({ kind: Roles.RESTRICTIONS.ANY_OF, options: [{ conditions: [cond] }] });
+
+const notSameMarriage = pair({
     kind: Roles.RESTRICTIONS.NOT_SAME_GROUP,
     typeId: MARRIAGE,
     roleSlugs: [LEADER, HELPER],
-};
+});
 
-const sameHouse = {
+const sameHouse = pair({
     kind: Roles.RESTRICTIONS.SAME_GROUP,
     typeId: HOUSE,
     roleSlugs: [LEADER, HELPER],
-};
+});
 
 // Judge candidates for the Helper slot, with `holding` already in other Roles.
 const judgeHelper = (holding, rules) => Roles.candidatesFor(helper, slot, {
@@ -170,7 +174,7 @@ test('a rule naming one Role twice is ignored, not judged against itself', () =>
     // would mean two places to look for why somebody was refused.
     const results = judgeHelper(
         [{ personId: 'adam', roleSlug: HELPER, allowsAnotherRole: true }],
-        [{ kind: Roles.RESTRICTIONS.NOT_SAME_GROUP, typeId: MARRIAGE, roleSlugs: [HELPER, HELPER] }]
+        [pair({ kind: Roles.RESTRICTIONS.NOT_SAME_GROUP, typeId: MARRIAGE, roleSlugs: [HELPER, HELPER] })]
     );
     assert.deepStrictEqual(eligibleIds(results), ['adam', 'eve', 'noah', 'ruth']);
 });
@@ -178,7 +182,7 @@ test('a rule naming one Role twice is ignored, not judged against itself', () =>
 test('a rule naming neither of the Roles being filled does nothing', () => {
     const results = judgeHelper(
         [{ personId: 'adam', roleSlug: LEADER, allowsAnotherRole: true }],
-        [{ kind: Roles.RESTRICTIONS.NOT_SAME_GROUP, typeId: MARRIAGE, roleSlugs: ['coffee', 'setup'] }]
+        [pair({ kind: Roles.RESTRICTIONS.NOT_SAME_GROUP, typeId: MARRIAGE, roleSlugs: ['coffee', 'setup'] })]
     );
     assert.deepStrictEqual(eligibleIds(results), ['adam', 'eve', 'noah', 'ruth']);
 });
@@ -187,7 +191,7 @@ test('an unknown rule kind is skipped, never a blanket refusal', () => {
     // A typo in the config must not empty a rota.
     const results = judgeHelper(
         [{ personId: 'adam', roleSlug: LEADER, allowsAnotherRole: true }],
-        [{ kind: 'notMarriedToEachOther', typeId: MARRIAGE, roleSlugs: [LEADER, HELPER] }]
+        [pair({ kind: 'notMarriedToEachOther', typeId: MARRIAGE, roleSlugs: [LEADER, HELPER] })]
     );
     assert.deepStrictEqual(eligibleIds(results), ['adam', 'eve', 'noah', 'ruth']);
 });
@@ -282,12 +286,12 @@ test('dropping a Role from the Event drops the rules that named it', () => {
     // lying about is worse than absent: put the Role back a year later and a
     // rule nobody remembers writing starts refusing people.
     let s = addRule(series(), notSameMarriage);
-    s = addRule(s, {
+    s = addRule(s, pair({
         kind: Roles.RESTRICTIONS.NOT_SAME_GROUP, typeId: MARRIAGE, roleSlugs: ['coffee', HELPER],
-    });
+    }));
 
     const after = Events.removeRole(s, LEADER);
-    assert.deepStrictEqual(Events.crossRoleRulesOf(after).map(r => r.roleSlugs), [['coffee', HELPER]]);
+    assert.deepStrictEqual(Events.crossRoleRulesOf(after).map(r => Events.rolesNamedBy(r)), [['coffee', HELPER]]);
     assert.deepStrictEqual(after.roleSlugs, [HELPER, 'coffee']);
 });
 

@@ -32,8 +32,8 @@ const study = { id: 'g3', typeId: STUDY, name: 'Tuesday Study', leaderId: null, 
 
 const GROUPS = [north, south, study];
 
-const slot = { id: 's1', requirement: Roles.REQUIREMENTS.EITHER };
-const slot2 = { id: 's2', requirement: Roles.REQUIREMENTS.EITHER };
+const slot = { id: 's1' };
+const slot2 = { id: 's2' };
 
 const roleWith = restrictions => ({
     id: 'r1', name: 'Kids Ministry', family: Roles.FAMILIES.SERVANT,
@@ -195,11 +195,11 @@ test('the leader satisfies same-group as fully as a member', () => {
 test('a candidate must share a group with EVERYONE seated, not just someone', () => {
     const threeSlots = {
         id: 'r2', name: 'Setup', family: Roles.FAMILIES.SERVANT,
-        slots: [slot, slot2, { id: 's3', requirement: Roles.REQUIREMENTS.EITHER }],
+        slots: [slot, slot2, { id: 's3' }],
         restrictions: [{ kind: Roles.RESTRICTIONS.SAME_GROUP, typeId: STUDY }],
     };
     // Anna and Cara are both in the Tuesday Study. Beth is not.
-    const results = Roles.candidatesFor(threeSlots, { id: 's3', requirement: Roles.REQUIREMENTS.EITHER }, {
+    const results = Roles.candidatesFor(threeSlots, { id: 's3' }, {
         people: [beth], groups: GROUPS,
         assigned: [{ slotId: 's1', personId: 'anna' }, { slotId: 's2', personId: 'cara' }],
     });
@@ -231,14 +231,17 @@ test('the same-group reason names the requirement, not the internals', () => {
 test('group rules combine with sex and tag rules', () => {
     const combined = {
         id: 'r3', name: 'Kids', family: Roles.FAMILIES.SERVANT,
-        slots: [slot, { id: 's2', requirement: Roles.REQUIREMENTS.MALE }],
-        restrictions: [{ kind: Roles.RESTRICTIONS.SAME_GROUP, typeId: HOUSE }],
+        slots: [slot, { id: 's2' }],
+        restrictions: [
+            { kind: Roles.RESTRICTIONS.SAME_GROUP, typeId: HOUSE },
+            { kind: Roles.RESTRICTIONS.SEX, sex: 'male' },
+        ],
     };
-    const results = Roles.candidatesFor(combined, { id: 's2', requirement: Roles.REQUIREMENTS.MALE }, {
+    const results = Roles.candidatesFor(combined, { id: 's2' }, {
         people: [beth], groups: GROUPS,
         assigned: [{ slotId: 's1', personId: 'anna' }],
     });
-    // Beth shares North with Anna but is female, so the sexed slot still wins.
+    // Beth shares North with Anna but is female, so the sex rule still refuses her.
     assert.equal(resultFor(results, 'beth').reason, Roles.REASONS.SEX_MISMATCH);
 });
 

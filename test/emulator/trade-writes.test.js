@@ -77,11 +77,11 @@ suite('the five ways a Trade moves', () => {
         await Promise.all([
             H.seedRole(db, {
                 slug: 'kids', name: 'Kids Ministry',
-                slots: [{ id: 's1', requirement: 'either' }], restrictions: [],
+                slots: [{ id: 's1' }], restrictions: [],
             }),
             H.seedRole(db, {
                 slug: 'coffee', name: 'Coffee',
-                slots: [{ id: 's1', requirement: 'either' }], restrictions: [],
+                slots: [{ id: 's1' }], restrictions: [],
             }),
         ]);
 
@@ -623,7 +623,9 @@ suite('the five ways a Trade moves', () => {
             // Kids now asks for a woman, and Sarah's record does not say.
             await H.seedRole(db, {
                 slug: 'kids', name: 'Kids Ministry',
-                slots: [{ id: 's1', requirement: 'female' }], restrictions: [],
+                slots: [{ id: 's1' }],
+                restrictions: [{ kind: 'anyOf', scope: 'person',
+                    options: [{ conditions: [{ kind: 'sex', sex: 'female' }] }] }],
             });
 
             const one = await invite(SARAH);

@@ -76,6 +76,6 @@ gh workflow run "Prod ops script" --ref main \
 | `migrate-service-dotted-keys.js` | [MS-780–782 — legacy Services cleanup](./ms-780-782-legacy-services-cleanup.md) (second; dry-run, then `commit=true`) |
 | `backfill-involvement-series.js` | [MS-780–782 — legacy Services cleanup](./ms-780-782-legacy-services-cleanup.md) (third; dry-run, then `commit=true`) |
 | `migrate-reminders-to-tasks.js` | [MS-791 — reminders → tasks](./ms-791-shepherding-reminders.md) (dry-run, then `commit=true`) |
-| `migrate-role-settings-to-events.js` | [ADR 0085 — Role settings onto events](./adr-0085-role-settings-migration.md) (empty `args` copies, dry-run then `commit=true`; `--strip` afterwards, once the cleanup is deployed) |
+| `migrate-role-settings-to-events.js` | [ADR 0085 — Role settings onto events](./adr-0085-role-settings-migration.md) (`args=--strip`, dry-run then `commit=true`; the copy phase ran on 2026-11-21 and was retired) |
 | `delete-shepherding-reminders.js` | [MS-791 — delete migrated reminders](./ms-791-shepherding-reminders.md) (after migrate; dry-run, then `commit=true`) |
 | `migrate-meeting-mentions.js` | [MS-792 — meeting mention JSON](./ms-792-meeting-mentions.md) (dry-run, then `commit=true`) |

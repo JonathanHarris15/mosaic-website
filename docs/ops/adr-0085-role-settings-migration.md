@@ -5,6 +5,10 @@ each Event that runs it ([ADR 0085](../adr/0085-a-roles-needs-and-rules-belong-t
 `scripts/migrate-role-settings-to-events.js` moves what is stored. It runs
 through the **Prod ops script** workflow ([how](./prod-ops-script.md)).
 
+**Where it stands:** steps 1–3 done on 2026-11-21 (copy wrote 2 series; a
+second dry run found nothing left). Step 5 retired the copy phase from the
+script, so it now runs only with `--strip`.
+
 ## Order — do not reorder
 
 | Step | What | How |

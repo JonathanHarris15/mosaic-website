@@ -100,7 +100,7 @@ test('an unavailable rule does not stop the Role validating', () => {
     // The Role is still a legitimate Role; one of its rules just can't run.
     const role = {
         id: 'r1', name: 'Kids', family: Roles.FAMILIES.SERVANT, slug: 'kids',
-        slots: [{ id: 's1', requirement: Roles.REQUIREMENTS.EITHER }],
+        slots: [{ id: 's1' }],
         restrictions: [groupRule('type-study')],
     };
     assert.equal(Roles.validateDefinition(role).valid, true);

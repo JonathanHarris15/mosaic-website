@@ -470,12 +470,12 @@
                 return 'Not on the list of people who do this Role';
 
             case R.SEX_MISMATCH:
-                return ctx.requirement === Roles.REQUIREMENTS.FEMALE
-                    ? 'This place needs a woman'
-                    : 'This place needs a man';
+                return candidate.wantsSex === 'female'
+                    ? 'This Role needs a woman'
+                    : 'This Role needs a man';
 
             case R.SEX_UNKNOWN:
-                return 'We do not have their sex on file, and this place asks for one';
+                return 'We do not have their sex on file, and this Role asks for one';
 
             case R.MISSING_REQUIRED_TAG:
                 return 'Not in the ' + (ctx.tagName || 'required') + ' group';

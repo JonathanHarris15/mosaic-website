@@ -9,7 +9,7 @@ const K = Number(process.argv[2] || 20);
   const db = H.connect(); await H.wipe();
   const people = Array.from({ length: K }, (_, i) => 'p' + i);
   await Promise.all(people.map(id => H.seedPerson(db, id)));
-  await H.seedRole(db, { slug: 'team', name: 'team', slots: people.map((_, i) => ({ id: 's' + i, requirement: 'either' })), restrictions: [] });
+  await H.seedRole(db, { slug: 'team', name: 'team', slots: people.map((_, i) => ({ id: 's' + i })), restrictions: [] });
   await H.seedOccurrence(db, { id: 'o', date: '2026-03-14', visibility: 'member',
     roster: people.map((p, i) => ({ roleSlug: 'team', slotId: 's' + i, personId: p, state: 'pending', stateSetBy: null, stateSetAt: null })) });
   const t0 = Date.now();

@@ -58,7 +58,7 @@ suite('an editor page left open does not undo a member', () => {
         await Promise.all([ANN, RAY].map(id => H.seedPerson(db, id)));
         await H.seedRole(db, {
             slug: 'ushers', name: 'Ushers',
-            slots: [{ id: 's1', requirement: 'either' }, { id: 's2', requirement: 'either' }],
+            slots: [{ id: 's1' }, { id: 's2' }],
             restrictions: [],
         });
         await H.seedOccurrence(db, {

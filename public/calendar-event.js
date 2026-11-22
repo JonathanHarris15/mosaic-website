@@ -849,7 +849,6 @@
                         slots: (def.slots || []).map((slot, i) => ({
                             index: i + 1,
                             slot: slot,
-                            requirementLabel: this.requirementLabel(slot.requirement),
                             assignment: this.assignmentAt(def.slug, slot.id),
                             warning: this.warningAt(def.slug, slot.id),
                         })),
@@ -877,12 +876,6 @@
 
             assignmentAt(roleSlug, slotId) {
                 return this.assignments.find(a => a.roleSlug === roleSlug && a.slotId === slotId && !a.oneOffId) || null;
-            },
-
-            requirementLabel(requirement) {
-                if (requirement === Roles.REQUIREMENTS.MALE) return 'A man';
-                if (requirement === Roles.REQUIREMENTS.FEMALE) return 'A woman';
-                return 'Either';
             },
 
             // ── Writing ──────────────────────────────────────────────────────
@@ -1248,6 +1241,15 @@
                 return this.roleDefinitions.find(d => d.slug === this.picker.roleSlug) || null;
             },
 
+            // One of this Role's rules, as the Event's Roles & rules tab says it.
+            ruleSentence(rule) {
+                return window.RoleRulesCore.sentence(rule, rule && rule.scope === 'person' ? 'who' : 'team', {
+                    tag: id => this.tagNames[id],
+                    role: slug => this.roleName(slug),
+                    person: id => this.personName(id),
+                });
+            },
+
             get pickerSlot() {
                 const def = this.pickerRole;
                 if (!def) return null;
@@ -1271,6 +1273,8 @@
             // the page says it could not check, rather than quietly showing
             // people it should not.
             hidingTags: [],
+            // The same read names the tags a rule asks for, in the picker.
+            tagNames: {},
 
             async loadHidingTags() {
                 try {
@@ -1278,6 +1282,9 @@
                     this.hidingTags = snap.docs
                         .filter(d => (d.data() || {}).hidePeople === true)
                         .map(d => d.id);
+                    const names = {};
+                    snap.docs.forEach(d => { names[d.id] = (d.data() || {}).name || d.id; });
+                    this.tagNames = names;
                 } catch (e) {
                     console.error('Could not read which tags hide people:', e);
                     this.hidingTags = [];
@@ -1498,7 +1505,6 @@
                                 })
                                 : View.blockReason(c, {
                                     people: this.people,
-                                    requirement: slot.requirement,
                                     otherRoles: otherRoles,
                                     groupName: this.groupNameFor(c.personId),
                                     awayNote: this.awayNoteFor(c.personId),
@@ -1563,7 +1569,6 @@
                     reason: found.reason,
                     text: View.blockReason(found, {
                         people: this.people,
-                        requirement: (this.slotAt(roleSlug, slotId) || {}).requirement,
                         otherRoles: found.heldRoleSlug ? [this.roleName(found.heldRoleSlug)] : [],
                         groupName: this.groupNameFor(found.personId),
                         pairedRoleName: found.pairedRoleSlug

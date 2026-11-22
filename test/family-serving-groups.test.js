@@ -73,7 +73,7 @@ test('a household reads by its people, never by its id', () => {
 
 test('a Role can refuse two people from the same Family', () => {
     const role = {
-        slug: 'kids', name: 'Kids', slots: [{ id: 's1', requirement: 'either' }, { id: 's2', requirement: 'either' }],
+        slug: 'kids', name: 'Kids', slots: [{ id: 's1' }, { id: 's2' }],
         restrictions: [{ kind: Roles.RESTRICTIONS.NOT_SAME_GROUP, typeId: 'family' }],
     };
     const groups = Family.servingGroups([WARDS], PEOPLE);
@@ -95,7 +95,7 @@ test('a Role can refuse two people from the same Family', () => {
 
 test('a Marriage rule stops the couple and leaves their children alone', () => {
     const role = {
-        slug: 'welcome', name: 'Welcome', slots: [{ id: 's1', requirement: 'either' }, { id: 's2', requirement: 'either' }],
+        slug: 'welcome', name: 'Welcome', slots: [{ id: 's1' }, { id: 's2' }],
         restrictions: [{ kind: Roles.RESTRICTIONS.NOT_SAME_GROUP, typeId: 'marriage' }],
     };
     const groups = Family.servingGroups([WARDS], PEOPLE);

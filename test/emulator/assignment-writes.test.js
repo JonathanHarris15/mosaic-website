@@ -86,8 +86,8 @@ suite('the writes under answering and taking', () => {
                 slug: USHERS,
                 name: 'Ushers',
                 slots: [
-                    { id: S1, requirement: 'either' },
-                    { id: S2, requirement: 'either' },
+                    { id: S1 },
+                    { id: S2 },
                 ],
                 restrictions: [],
             }),
@@ -381,11 +381,9 @@ suite('the writes under answering and taking', () => {
         await H.seedRole(db, {
             slug: USHERS,
             name: 'Ushers',
-            slots: [
-                { id: S1, requirement: 'female' },
-                { id: S2, requirement: 'either' },
-            ],
-            restrictions: [],
+            slots: [{ id: S1 }, { id: S2 }],
+            restrictions: [{ kind: 'anyOf', scope: 'person',
+                options: [{ conditions: [{ kind: 'sex', sex: 'female' }] }] }],
         });
         await H.seedPerson(db, CARA, { sex: 'male' });
         await decline(ANN, S1);
@@ -404,8 +402,8 @@ suite('the writes under answering and taking', () => {
             await H.seedRole(db, {
                 slug: USHERS,
                 name: 'Ushers',
-                slots: [{ id: S1, requirement: 'either' },
-                    { id: S2, requirement: 'either' }],
+                slots: [{ id: S1 },
+                    { id: S2 }],
                 restrictions: [{ kind: 'allowlist', personIds: [DAVE] }],
             });
             await decline(ANN, S1);

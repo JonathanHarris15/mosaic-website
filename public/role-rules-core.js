@@ -35,15 +35,11 @@
      * @typedef {{ tag?: (id: string) => *, role?: (slug: string) => *, type?: (id: string) => *, person?: (id: string) => * }} Names
      */
 
-    const SEXES = ['male', 'female'];
     let seq = 0;
     /** @param {string} prefix */
     const newId = prefix => prefix + (++seq).toString(36) + Math.random().toString(36).slice(2, 6);
     /** @param {*} value @returns {*} */
     const copy = value => JSON.parse(JSON.stringify(value === undefined ? null : value));
-
-    const PERSON_KINDS = ['requireTag', 'excludeTag', 'allowlist', 'sex'];
-    const TEAM_KINDS = ['lineup', 'atLeastTagged', 'notSameGroup', 'sameGroup', 'notTogether'];
 
     // ── Conditions, options, rules ─────────────────────────────────────────
     //
@@ -101,35 +97,13 @@
             team: [],
         };
 
-        /** @type {Condition[]} */
-        const looseWho = [];
-        (r.restrictions || []).forEach((/** @type {Rule & Condition} */ rule) => {
-            if (!rule) return;
-            if (rule.kind === 'anyOf') {
-                if (rule.scope === 'person') form.who.options = form.who.options.concat(withIds(rule.options));
-                else form.team.push({ id: newId('r'), strength: rule.strength === 'try' ? 'try' : 'must', options: withIds(rule.options) });
-                return;
-            }
-            // Rules written before options existed. A person rule held for
-            // every person, so they all go into ONE option together; a team
-            // rule becomes a rule of its own.
-            if (PERSON_KINDS.indexOf(rule.kind) !== -1) looseWho.push(Object.assign({ id: newId('c') }, copy(rule)));
-            else form.team.push({ id: newId('r'), strength: rule.strength === 'try' ? 'try' : 'must', options: withIds([{ conditions: [rule] }]) });
+        // Every stored rule is an OR rule (ADR 0085): the one about each
+        // person is "who can do it", every other is a rule about the team.
+        (r.restrictions || []).forEach((/** @type {Rule} */ rule) => {
+            if (!rule || rule.kind !== 'anyOf') return;
+            if (rule.scope === 'person') form.who.options = form.who.options.concat(withIds(rule.options));
+            else form.team.push({ id: newId('r'), strength: rule.strength === 'try' ? 'try' : 'must', options: withIds(rule.options) });
         });
-
-        if (looseWho.length) {
-            if (!form.who.options.length) form.who.options.push({ id: newId('o'), conditions: looseWho });
-            else form.who.options.forEach(option => {
-                option.conditions = option.conditions.concat(looseWho.map(c => Object.assign({}, c, { id: newId('c') })));
-            });
-        }
-
-        // "Person 1: a man, Person 2: a man" said what a line-up of two men
-        // says, minus a seat order nobody meant. Read across as one.
-        const sexes = slots.map((/** @type {*} */ s) => (s && SEXES.indexOf(s.requirement) !== -1 ? s.requirement : 'either'));
-        if (sexes.some((/** @type {string} */ sex) => sex !== 'either')) {
-            form.team.unshift({ id: newId('r'), strength: 'must', options: withIds([{ conditions: [{ kind: 'lineup', sexes: sexes }] }]) });
-        }
         return form;
     }
 
@@ -142,7 +116,7 @@
     function settingsFrom(form, previous) {
         const f = form || /** @type {Form} */ ({});
         const prev = previous || {};
-        /** @type {Array<{ id: string, requirement: string }>} */
+        /** @type {Array<{ id: string }>} */
         const prevSlots = Array.isArray(prev.slots) ? prev.slots : [];
         const highest = prevSlots.reduce((/** @type {number} */ max, s) => {
             const n = Number(String((s && s.id) || '').replace(/^s/, ''));
@@ -153,7 +127,7 @@
         const slots = [];
         for (let i = 0; i < count; i++) {
             const id = prevSlots[i] && prevSlots[i].id ? prevSlots[i].id : 's' + (next++);
-            slots.push({ id: id, requirement: 'either' });
+            slots.push({ id: id });
         }
 
         /** @type {Rule[]} */
@@ -179,11 +153,10 @@
 
     // ── Rules across Roles ─────────────────────────────────────────────────
 
-    /** @param {Array<Rule & Condition>} rules @returns {Rule[]} */
+    /** @param {Rule[]} rules @returns {Rule[]} */
     function crossFormsFrom(rules) {
-        return (rules || []).filter(Boolean).map((/** @type {Rule & Condition} */ rule) => (rule.kind === 'anyOf'
-            ? { id: newId('r'), strength: rule.strength === 'try' ? 'try' : 'must', options: withIds(rule.options) }
-            : { id: newId('r'), strength: 'must', options: withIds([{ conditions: [rule] }]) }));
+        return (rules || []).filter(rule => rule && rule.kind === 'anyOf')
+            .map(rule => ({ id: newId('r'), strength: rule.strength === 'try' ? 'try' : 'must', options: withIds(rule.options) }));
     }
 
     /** @param {Rule[]} forms @returns {Rule[]} */
@@ -320,8 +293,6 @@
     }
 
     const RoleRulesCore = {
-        PERSON_KINDS,
-        TEAM_KINDS,
         newCondition,
         newOption,
         newRule,

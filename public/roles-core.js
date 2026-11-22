@@ -30,24 +30,6 @@
         SERVANT: 'servant',
     });
 
-    // ── What a slot requires of the person filling it ─────────────────────────
-
-    const REQUIREMENTS = Object.freeze({
-        MALE: 'male',
-        FEMALE: 'female',
-        EITHER: 'either',
-    });
-
-    const REQUIREMENT_VALUES = Object.freeze([
-        REQUIREMENTS.MALE,
-        REQUIREMENTS.FEMALE,
-        REQUIREMENTS.EITHER,
-    ]);
-
-    function isRequirement(value) {
-        return REQUIREMENT_VALUES.indexOf(value) !== -1;
-    }
-
     // ── The locked, code-defined liturgical Roles ─────────────────────────────
     //
     // These five are the `type` values the app already writes as Involvement.
@@ -280,7 +262,7 @@
         // Rules that can say OR. An `anyOf` is a set of OPTIONS — any one will
         // do — each a list of conditions that must all hold. The conditions are
         // the kinds above, plus two that only make sense inside one:
-        ANY_OF: 'anyOf',                    // { options: [[cond, …], …] }
+        ANY_OF: 'anyOf',                    // { options: [{ conditions: [cond, …] }, …] }
         SEX: 'sex',                         // { sex: 'male' | 'female' } — this person
         LINEUP: 'lineup',                   // { sexes: [...], roleSlug? } — the team, unordered
         AT_LEAST_TAGGED: 'atLeastTagged',   // { tagId, atLeast } — the team has at least n tagged
@@ -729,8 +711,8 @@
     // either Role: it is stored on the series (`crossRoleRules`) and authored on
     // the recurring events page, where the Roles of an Event are already chosen.
     //
-    //   { kind, typeId, roleSlugs: [a, b] }
-    //
+    // Each is an `anyOf` (see judgeOptions) whose conditions name the Roles
+    // they are about. A pair condition is { kind, typeId, roleSlugs: [a, b] }:
     // `kind` is the same NOT_SAME_GROUP / SAME_GROUP vocabulary a Role already
     // uses, and `typeId` the same Relationship Group Type — Family, Marriage, a
     // house group. Deliberately the same words: an editor who has written "no
@@ -749,9 +731,9 @@
     //   seated  — everyone already in THIS Role (its other seats), which a
     //             line-up across Roles counts as part of this Role's team.
     //
-    // A rule may also be an `anyOf` (see judgeOptions): "(the Helpers are a
-    // woman and a man AND the Leader is a man) OR (the Helpers are two men AND
-    // the Leader is a woman)". Its conditions name the Role they are about —
+    // Options say OR: "(the Helpers are a woman and a man AND the Leader is a
+    // man) OR (the Helpers are two men AND the Leader is a woman)". Its
+    // conditions name the Role they are about —
     // a line-up by `roleSlug`, a group rule by its `roleSlugs` pair — and it
     // is this Role's business only if one of them names it.
     /** @param {Record<string, *>} def @param {Record<string, *>} candidate @param {Record<string, *>} context @param {Array<Record<string, *>>} holders @param {Array<Record<string, *>>} [seated] @returns {?Record<string, *>} */
@@ -785,10 +767,7 @@
             return judgeOptions(rule.options,
                 cond => judgeCrossCondition(cond, slug, candidate, context, others, own));
         }
-        // A plain pair rule: { kind, typeId, roleSlugs: [a, b] }.
-        const pair = (rule && rule.roleSlugs) || [];
-        if (pair.indexOf(slug) === -1) return null;
-        return judgeCrossCondition(rule, slug, candidate, context, others, own);
+        return null;
     }
 
     // How many Try rules this candidate would break by taking the place —
@@ -977,7 +956,7 @@
 
         if (rule.kind === RESTRICTIONS.SEX) {
             if (!candidate.sex) return { reason: REASONS.SEX_UNKNOWN };
-            if (candidate.sex !== rule.sex) return { reason: REASONS.SEX_MISMATCH };
+            if (candidate.sex !== rule.sex) return { reason: REASONS.SEX_MISMATCH, wantsSex: rule.sex };
         }
 
         if (rule.kind === RESTRICTIONS.LINEUP) {
@@ -1157,12 +1136,6 @@
 
         const clash = servingElsewhere(def, busy[candidate.id]);
         if (clash) return clash;
-
-        const requirement = slot && slot.requirement;
-        if (requirement !== REQUIREMENTS.EITHER) {
-            if (!candidate.sex) return { reason: REASONS.SEX_UNKNOWN };
-            if (candidate.sex !== requirement) return { reason: REASONS.SEX_MISMATCH };
-        }
 
         for (const rule of restrictionsOf(def)) {
             if (isTry(rule)) continue;
@@ -1536,36 +1509,12 @@
             }
         });
 
-        // Slots are each Event's now (ADR 0085). A Role stored before still
-        // carries them until the migration strips them, and those are checked.
-        const slots = slotsOf(def);
-        if (def && 'slots' in def && slots.length === 0) {
-            errors.push('A Role needs at least one slot.');
-        }
-
-        const seen = new Set();
-        slots.forEach((slot, i) => {
-            const position = 'Slot ' + (i + 1);
-            if (!slot || !slot.id) {
-                errors.push(position + ' needs an id.');
-            } else if (seen.has(slot.id)) {
-                errors.push(position + ' repeats the slot id "' + slot.id + '".');
-            } else {
-                seen.add(slot.id);
-            }
-            if (!slot || !isRequirement(slot.requirement)) {
-                errors.push(position + ' needs a requirement of male, female, or either.');
-            }
-        });
-
         return { valid: errors.length === 0, errors: errors };
     }
 
     const RolesCore = {
         // vocabulary
         FAMILIES,
-        REQUIREMENTS,
-        REQUIREMENT_VALUES,
         RESTRICTIONS,
         LINEUP_MARKS,
         STRENGTHS,
@@ -1575,7 +1524,6 @@
         LITURGICAL_SLUGS,
         DEFAULT_INTENSITY,
         MAX_ROLES_PER_PERSON,
-        isRequirement,
         assignablePeople,
         seesHidden,
         visibleTags,
